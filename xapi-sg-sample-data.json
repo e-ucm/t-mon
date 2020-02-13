@@ -1,0 +1,1567 @@
+[
+{
+	"actor": {
+		"name": "John Smith"
+	},
+	"verb": {
+		"id": "http://adlnet.gov/expapi/verbs/initialized"
+	},
+	"object": {
+		"id": "http://example.com/games/MyFirstGame",
+		"definition": {
+			"type": "http://curatr3.com/define/type/serious-game"
+		}
+	},
+	"timestamp": "2016-05-24T15:03:47Z"	
+},
+{
+	"actor": {
+		"name": "John Smith"
+	},
+	"verb": {
+		"id": "http://adlnet.gov/expapi/verbs/initialized"
+	},
+	"object": {
+		"id": "http://example.com/games/SuperMarioBros/Levels/World1-1",
+		"definition": {
+			"type": "http://curatr3.com/define/type/level"
+		}
+	},
+	"timestamp": "2016-05-24T15:03:47Z"	
+},
+{
+	"actor": {
+		"name": "John Smith"
+	},
+	"verb": {
+		"id": "http://adlnet.gov/expapi/verbs/progressed"
+	},
+	"object": {
+		"id": "http://example.com/games/SuperMarioBros/Levels/World1-1",
+		"definition": {
+			"type": "http://curatr3.com/define/type/level"
+		}
+	},
+	"result": {
+		"extensions": {
+			"https://rage.e-ucm.es/xapi/ext/progress": 0.5,
+			"progress": 0.5
+		}
+	},
+	"timestamp": "2016-05-24T15:05:49Z"	
+},
+{
+	"actor": {
+		"name": "John Smith"
+	},
+	"verb": {
+		"id": "http://adlnet.gov/expapi/verbs/progressed"
+	},
+	"object": {
+		"id": "http://example.com/games/MyFirstGame",
+		"definition": {
+			"type": "http://curatr3.com/define/type/serious-game"
+		}
+	},
+	"result": {
+		"extensions": {
+			"https://rage.e-ucm.es/xapi/ext/progress": 0.5,
+			"progress": 0.15
+		}
+	},
+	"timestamp": "2016-05-24T15:05:49Z"	
+},
+{
+	"actor": {
+		"name": "John Smith"
+	},
+	"verb": {
+		"id": "http://adlnet.gov/expapi/verbs/progressed"
+	},
+	"object": {
+		"id": "http://example.com/games/MyFirstGame",
+		"definition": {
+			"type": "http://curatr3.com/define/type/serious-game"
+		}
+	},
+	"result": {
+		"extensions": {
+			"https://rage.e-ucm.es/xapi/ext/progress": 0.5,
+			"progress": 0.5
+		}
+	},
+	"timestamp": "2016-05-24T15:15:49Z"	
+},
+{
+	"actor": {
+		"name": "John Smith"
+	},
+	"verb": {
+		"id": "http://adlnet.gov/expapi/verbs/progressed"
+	},
+	"object": {
+		"id": "http://example.com/games/MyFirstGame",
+		"definition": {
+			"type": "http://curatr3.com/define/type/serious-game"
+		}
+	},
+	"result": {
+		"extensions": {
+			"https://rage.e-ucm.es/xapi/ext/progress": 0.5,
+			"progress": 0.7
+		}
+	},
+	"timestamp": "2016-05-24T15:25:49Z"	
+},
+{
+	"actor": {
+		"name": "John Smith"
+	},
+	"verb": {
+		"id": "http://adlnet.gov/expapi/verbs/progressed"
+	},
+	"object": {
+		"id": "http://example.com/games/MyFirstGame",
+		"definition": {
+			"type": "http://curatr3.com/define/type/serious-game"
+		}
+	},
+	"result": {
+		"extensions": {
+			"https://rage.e-ucm.es/xapi/ext/progress": 0.5,
+			"progress": 0.9
+		}
+	},
+	"timestamp": "2016-05-24T15:35:49Z"	
+},
+{
+	"actor": {
+		"name": "John Smith"
+	},
+	"verb": {
+		"id": "http://adlnet.gov/expapi/verbs/completed"
+	},
+	"object": {
+		"id": "http://example.com/games/SuperMarioBros/Levels/World1-1",
+		"definition": {
+			"type": "http://curatr3.com/define/type/level"
+		}
+	},
+	"result": {
+		"extensions": {
+			"https://rage.e-ucm.es/xapi/ext/value": "Game Over",
+			"success": "True",
+			"score":50
+		}
+	},
+	"timestamp": "2016-05-24T15:40:13Z"
+},
+{
+	"actor": {
+		"name": "John Smith"
+	},
+	"verb": {
+		"id": "http://adlnet.gov/expapi/verbs/completed"
+	},
+	"object": {
+		"id": "http://example.com/games/SuperMarioBros/Levels/MyFirstGame",
+		"definition": {
+			"type": "http://curatr3.com/define/type/serious-game"
+		}
+	},
+	"result": {
+		"extensions": {
+			"https://rage.e-ucm.es/xapi/ext/value": "Game Over",
+			"success": "True",
+			"score":50
+		}
+	},
+	"timestamp": "2016-05-24T15:45:13Z"
+},
+{
+	"actor": {
+		"name": "John Smith"
+	},
+	"verb": {
+		"id": "http://activitystrea.ms/schema/1.0/accessed"
+	},
+	"object": {
+		"id": "http://example.com/games/SuperMarioBros/Screens/SoundMenu",
+		"definition": {
+			"type": "https://rage.e-ucm.es/xapi/seriousgames/activities/Screen"
+		}
+	},
+	"timestamp": "2016-05-24T07:47:47Z"
+},
+{
+	"actor": {
+		"name": "John Smith"
+	},
+	"verb": {
+		"id": "http://activitystrea.ms/schema/1.0/accessed"
+	},
+	"object": {
+		"id": "http://example.com/games/cutscenes/IntroVideo",
+		"definition": {
+			"type": "https://rage.e-ucm.es/xapi/seriousgames/activities/Cutscene"
+		}
+	},
+	"timestamp": "2016-05-24T07:47:47Z"
+},
+{
+	"actor": {
+		"name": "John Smith"
+	},
+	"verb": {
+		"id": "http://activitystrea.ms/schema/1.0/accessed"
+	},
+	"object": {
+		"id": "http://example.com/games/cutscenes/VideoTutorial",
+		"definition": {
+			"type": "https://rage.e-ucm.es/xapi/seriousgames/activities/Cutscene"
+		}
+	},
+	"timestamp": "2016-05-24T07:47:47Z"
+},
+{
+	"actor": {
+		"name": "John Smith"
+	},
+	"verb": {
+		"id": "http://id.tincanapi.com/verb/skipped"
+	},
+	"object": {
+		"id": "http://example.com/games/SuperMarioBros/Cutscenes/IntroVideo",
+		"definition": {
+			"type": "https://rage.e-ucm.es/xapi/seriousgames/activities/Cutscene"
+		}
+	},
+	"timestamp": "2016-05-24T09:17:37Z"
+},
+{
+	"actor": {
+		"name": "John Smith"
+	},
+	"verb": {
+		"id": "http://adlnet.gov/expapi/verbs/selected"
+	},
+	"object": {
+		"id": "http://example.com/games/Capitals/CapitalOfSpain",
+		"definition": {
+			"type": "https://rage.e-ucm.es/xapi/seriousgames/activities/Alternative"
+		}
+	},
+	"result": {
+		"response": "Lisbon",
+		"success": "False"
+	},
+	"timestamp": "2016-05-24T13:05:12Z"
+},
+{
+	"actor": {
+		"name": "John Smith"
+	},
+	"verb": {
+		"id": "http://adlnet.gov/expapi/verbs/selected"
+	},
+	"object": {
+		"id": "http://example.com/games/Capitals/CapitalOfSpain",
+		"definition": {
+			"type": "https://rage.e-ucm.es/xapi/seriousgames/activities/Alternative"
+		}
+	},
+	"result": {
+		"response": "Madrid",
+		"success": "True"
+	},
+	"timestamp": "2016-05-24T13:05:12Z"
+},
+{
+	"actor": {
+		"name": "John Smith"
+	},
+	"verb": {
+		"id": "http://adlnet.gov/expapi/verbs/selected"
+	},
+	"object": {
+		"id": "http://example.com/games/Capitals/CapitalOfFlorida",
+		"definition": {
+			"type": "https://rage.e-ucm.es/xapi/seriousgames/activities/Alternative"
+		}
+	},
+	"result": {
+		"response": "Miami",
+		"success": "False"
+	},
+	"timestamp": "2016-05-24T13:05:12Z"
+},
+{
+	"actor": {
+		"name": "John Smith"
+	},
+	"verb": {
+		"id": "http://adlnet.gov/expapi/verbs/selected"
+	},
+	"object": {
+		"id": "http://example.com/games/Capitals/CapitalOfFlorida",
+		"definition": {
+			"type": "https://rage.e-ucm.es/xapi/seriousgames/activities/Alternative"
+		}
+	},
+	"result": {
+		"response": "Orlando",
+		"success": "False"
+	},
+	"timestamp": "2016-05-24T13:05:12Z"
+},
+{
+	"actor": {
+		"name": "John Smith"
+	},
+	"verb": {
+		"id": "http://adlnet.gov/expapi/verbs/selected"
+	},
+	"object": {
+		"id": "http://example.com/games/Capitals/CapitalOfFlorida",
+		"definition": {
+			"type": "https://rage.e-ucm.es/xapi/seriousgames/activities/Alternative"
+		}
+	},
+	"result": {
+		"response": "Tampa",
+		"success": "False"
+	},
+	"timestamp": "2016-05-24T13:05:12Z"
+},
+{
+	"actor": {
+		"name": "John Smith"
+	},
+	"verb": {
+		"id": "http://adlnet.gov/expapi/verbs/selected"
+	},
+	"object": {
+		"id": "http://example.com/games/Capitals/CapitalOfFlorida",
+		"definition": {
+			"type": "https://rage.e-ucm.es/xapi/seriousgames/activities/Alternative"
+		}
+	},
+	"result": {
+		"response": "Tallahassee",
+		"success": "True"
+	},
+	"timestamp": "2016-05-24T13:05:12Z"
+},
+{
+	"actor": {
+		"name": "Sarah Connor"
+	},
+	"verb": {
+		"id": "http://adlnet.gov/expapi/verbs/initialized"
+	},
+	"object": {
+		"id": "http://example.com/games/MyFirstGame",
+		"definition": {
+			"type": "http://curatr3.com/define/type/serious-game"
+		}
+	},
+	"timestamp": "2016-05-24T15:05:47Z"	
+},
+{
+	"actor": {
+		"name": "Sarah Connor"
+	},
+	"verb": {
+		"id": "http://adlnet.gov/expapi/verbs/initialized"
+	},
+	"object": {
+		"id": "http://example.com/games/SuperMarioBros/Levels/World1-1",
+		"definition": {
+			"type": "http://curatr3.com/define/type/level"
+		}
+	},
+	"timestamp": "2016-05-24T15:05:47Z"	
+},
+{
+	"actor": {
+		"name": "Sarah Connor"
+	},
+	"verb": {
+		"id": "http://adlnet.gov/expapi/verbs/progressed"
+	},
+	"object": {
+		"id": "http://example.com/games/SuperMarioBros/Levels/World1-1",
+		"definition": {
+			"type": "http://curatr3.com/define/type/level"
+		}
+	},
+	"result": {
+		"extensions": {
+			"https://rage.e-ucm.es/xapi/ext/progress": 0.5,
+			"progress": 0.1
+		}
+	},
+	"timestamp": "2016-05-24T15:05:49Z"	
+},
+{
+	"actor": {
+		"name": "Sarah Connor"
+	},
+	"verb": {
+		"id": "http://adlnet.gov/expapi/verbs/progressed"
+	},
+	"object": {
+		"id": "http://example.com/games/MyFirstGame",
+		"definition": {
+			"type": "http://curatr3.com/define/type/serious-game"
+		}
+	},
+	"result": {
+		"extensions": {
+			"https://rage.e-ucm.es/xapi/ext/progress": 0.5,
+			"progress": 0.1
+		}
+	},
+	"timestamp": "2016-05-24T15:05:49Z"	
+},
+{
+	"actor": {
+		"name": "Sarah Connor"
+	},
+	"verb": {
+		"id": "http://adlnet.gov/expapi/verbs/progressed"
+	},
+	"object": {
+		"id": "http://example.com/games/MyFirstGame",
+		"definition": {
+			"type": "http://curatr3.com/define/type/serious-game"
+		}
+	},
+	"result": {
+		"extensions": {
+			"https://rage.e-ucm.es/xapi/ext/progress": 0.5,
+			"progress": 0.35
+		}
+	},
+	"timestamp": "2016-05-24T15:15:49Z"	
+},
+{
+	"actor": {
+		"name": "Sarah Connor"
+	},
+	"verb": {
+		"id": "http://adlnet.gov/expapi/verbs/progressed"
+	},
+	"object": {
+		"id": "http://example.com/games/MyFirstGame",
+		"definition": {
+			"type": "http://curatr3.com/define/type/serious-game"
+		}
+	},
+	"result": {
+		"extensions": {
+			"https://rage.e-ucm.es/xapi/ext/progress": 0.5,
+			"progress": 0.55
+		}
+	},
+	"timestamp": "2016-05-24T15:25:49Z"	
+},
+{
+	"actor": {
+		"name": "Sarah Connor"
+	},
+	"verb": {
+		"id": "http://adlnet.gov/expapi/verbs/progressed"
+	},
+	"object": {
+		"id": "http://example.com/games/MyFirstGame",
+		"definition": {
+			"type": "http://curatr3.com/define/type/serious-game"
+		}
+	},
+	"result": {
+		"extensions": {
+			"https://rage.e-ucm.es/xapi/ext/progress": 0.5,
+			"progress": 0.75
+		}
+	},
+	"timestamp": "2016-05-24T15:35:49Z"	
+},
+{
+	"actor": {
+		"name": "Sarah Connor"
+	},
+	"verb": {
+		"id": "http://adlnet.gov/expapi/verbs/completed"
+	},
+	"object": {
+		"id": "http://example.com/games/SuperMarioBros/Levels/World1-1",
+		"definition": {
+			"type": "http://curatr3.com/define/type/level"
+		}
+	},
+	"result": {
+		"extensions": {
+			"https://rage.e-ucm.es/xapi/ext/value": "Game Over",
+			"success": "False",
+			"score":17
+		}
+	},
+	"timestamp": "2016-05-24T15:48:13Z"
+},
+{
+	"actor": {
+		"name": "Sarah Connor"
+	},
+	"verb": {
+		"id": "http://adlnet.gov/expapi/verbs/completed"
+	},
+	"object": {
+		"id": "http://example.com/games/SuperMarioBros/Levels/MyFirstGame",
+		"definition": {
+			"type": "http://curatr3.com/define/type/serious-game"
+		}
+	},
+	"result": {
+		"extensions": {
+			"https://rage.e-ucm.es/xapi/ext/value": "Game Over",
+			"success": "False",
+			"score":33
+		}
+	},
+	"timestamp": "2016-05-24T15:55:13Z"
+},
+{
+	"actor": {
+		"name": "Sarah Connor"
+	},
+	"verb": {
+		"id": "http://activitystrea.ms/schema/1.0/accessed"
+	},
+	"object": {
+		"id": "http://example.com/games/SuperMarioBros/Screens/SoundMenu",
+		"definition": {
+			"type": "https://rage.e-ucm.es/xapi/seriousgames/activities/Screen"
+		}
+	},
+	"timestamp": "2016-05-24T07:47:47Z"
+},
+{
+	"actor": {
+		"name": "Sarah Connor"
+	},
+	"verb": {
+		"id": "http://activitystrea.ms/schema/1.0/accessed"
+	},
+	"object": {
+		"id": "http://example.com/games/cutscenes/IntroVideo",
+		"definition": {
+			"type": "https://rage.e-ucm.es/xapi/seriousgames/activities/Cutscene"
+		}
+	},
+	"timestamp": "2016-05-24T07:47:47Z"
+},
+{
+	"actor": {
+		"name": "Sarah Connor"
+	},
+	"verb": {
+		"id": "http://activitystrea.ms/schema/1.0/accessed"
+	},
+	"object": {
+		"id": "http://example.com/games/cutscenes/VideoTutorial",
+		"definition": {
+			"type": "https://rage.e-ucm.es/xapi/seriousgames/activities/Cutscene"
+		}
+	},
+	"timestamp": "2016-05-24T07:47:47Z"
+},
+{
+	"actor": {
+		"name": "Sarah Connor"
+	},
+	"verb": {
+		"id": "http://id.tincanapi.com/verb/skipped"
+	},
+	"object": {
+		"id": "http://example.com/games/SuperMarioBros/Cutscenes/IntroVideo",
+		"definition": {
+			"type": "https://rage.e-ucm.es/xapi/seriousgames/activities/Cutscene"
+		}
+	},
+	"timestamp": "2016-05-24T09:17:37Z"
+},
+{
+	"actor": {
+		"name": "Sarah Connor"
+	},
+	"verb": {
+		"id": "http://adlnet.gov/expapi/verbs/selected"
+	},
+	"object": {
+		"id": "http://example.com/games/Capitals/CapitalOfSpain",
+		"definition": {
+			"type": "https://rage.e-ucm.es/xapi/seriousgames/activities/Alternative"
+		}
+	},
+	"result": {
+		"response": "Lisbon",
+		"success": "False"
+	},
+	"timestamp": "2016-05-24T13:05:12Z"
+},
+{
+	"actor": {
+		"name": "Sarah Connor"
+	},
+	"verb": {
+		"id": "http://adlnet.gov/expapi/verbs/selected"
+	},
+	"object": {
+		"id": "http://example.com/games/Capitals/CapitalOfSpain",
+		"definition": {
+			"type": "https://rage.e-ucm.es/xapi/seriousgames/activities/Alternative"
+		}
+	},
+	"result": {
+		"response": "Mallorca",
+		"success": "False"
+	},
+	"timestamp": "2016-05-24T13:05:12Z"
+},
+{
+	"actor": {
+		"name": "Sarah Connor"
+	},
+	"verb": {
+		"id": "http://adlnet.gov/expapi/verbs/selected"
+	},
+	"object": {
+		"id": "http://example.com/games/Capitals/CapitalOfFlorida",
+		"definition": {
+			"type": "https://rage.e-ucm.es/xapi/seriousgames/activities/Alternative"
+		}
+	},
+	"result": {
+		"response": "Miami",
+		"success": "False"
+	},
+	"timestamp": "2016-05-24T13:05:12Z"
+},
+{
+	"actor": {
+		"name": "Sarah Connor"
+	},
+	"verb": {
+		"id": "http://adlnet.gov/expapi/verbs/selected"
+	},
+	"object": {
+		"id": "http://example.com/games/Capitals/CapitalOfFlorida",
+		"definition": {
+			"type": "https://rage.e-ucm.es/xapi/seriousgames/activities/Alternative"
+		}
+	},
+	"result": {
+		"response": "Orlando",
+		"success": "False"
+	},
+	"timestamp": "2016-05-24T13:05:12Z"
+},
+{
+	"actor": {
+		"name": "Sarah Connor"
+	},
+	"verb": {
+		"id": "http://adlnet.gov/expapi/verbs/selected"
+	},
+	"object": {
+		"id": "http://example.com/games/Capitals/CapitalOfFlorida",
+		"definition": {
+			"type": "https://rage.e-ucm.es/xapi/seriousgames/activities/Alternative"
+		}
+	},
+	"result": {
+		"response": "Tampa",
+		"success": "False"
+	},
+	"timestamp": "2016-05-24T13:05:12Z"
+},
+{
+	"actor": {
+		"name": "Sarah Connor"
+	},
+	"verb": {
+		"id": "http://adlnet.gov/expapi/verbs/selected"
+	},
+	"object": {
+		"id": "http://example.com/games/Capitals/CapitalOfFlorida",
+		"definition": {
+			"type": "https://rage.e-ucm.es/xapi/seriousgames/activities/Alternative"
+		}
+	},
+	"result": {
+		"response": "Jacksonville",
+		"success": "False"
+	},
+	"timestamp": "2016-05-24T13:05:12Z"
+},
+{
+	"actor": {
+		"name": "James Dean"
+	},
+	"verb": {
+		"id": "http://adlnet.gov/expapi/verbs/initialized"
+	},
+	"object": {
+		"id": "http://example.com/games/MyFirstGame",
+		"definition": {
+			"type": "http://curatr3.com/define/type/serious-game"
+		}
+	},
+	"timestamp": "2016-05-24T15:13:47Z"	
+},
+{
+	"actor": {
+		"name": "James Dean"
+	},
+	"verb": {
+		"id": "http://adlnet.gov/expapi/verbs/initialized"
+	},
+	"object": {
+		"id": "http://example.com/games/SuperMarioBros/Levels/World1-2",
+		"definition": {
+			"type": "http://curatr3.com/define/type/level"
+		}
+	},
+	"timestamp": "2016-05-24T15:03:47Z"	
+},
+{
+	"actor": {
+		"name": "James Dean"
+	},
+	"verb": {
+		"id": "http://adlnet.gov/expapi/verbs/progressed"
+	},
+	"object": {
+		"id": "http://example.com/games/SuperMarioBros/Levels/World1-2",
+		"definition": {
+			"type": "http://curatr3.com/define/type/level"
+		}
+	},
+	"result": {
+		"extensions": {
+			"https://rage.e-ucm.es/xapi/ext/progress": 0.5,
+			"progress": 0.5
+		}
+	},
+	"timestamp": "2016-05-24T15:05:49Z"	
+},
+{
+	"actor": {
+		"name": "James Dean"
+	},
+	"verb": {
+		"id": "http://adlnet.gov/expapi/verbs/progressed"
+	},
+	"object": {
+		"id": "http://example.com/games/MyFirstGame",
+		"definition": {
+			"type": "http://curatr3.com/define/type/serious-game"
+		}
+	},
+	"result": {
+		"extensions": {
+			"https://rage.e-ucm.es/xapi/ext/progress": 0.5,
+			"progress": 0.45
+		}
+	},
+	"timestamp": "2016-05-24T15:05:49Z"	
+},
+{
+	"actor": {
+		"name": "James Dean"
+	},
+	"verb": {
+		"id": "http://adlnet.gov/expapi/verbs/progressed"
+	},
+	"object": {
+		"id": "http://example.com/games/MyFirstGame",
+		"definition": {
+			"type": "http://curatr3.com/define/type/serious-game"
+		}
+	},
+	"result": {
+		"extensions": {
+			"https://rage.e-ucm.es/xapi/ext/progress": 0.5,
+			"progress": 0.8
+		}
+	},
+	"timestamp": "2016-05-24T15:15:49Z"	
+},
+{
+	"actor": {
+		"name": "James Dean"
+	},
+	"verb": {
+		"id": "http://adlnet.gov/expapi/verbs/progressed"
+	},
+	"object": {
+		"id": "http://example.com/games/MyFirstGame",
+		"definition": {
+			"type": "http://curatr3.com/define/type/serious-game"
+		}
+	},
+	"result": {
+		"extensions": {
+			"https://rage.e-ucm.es/xapi/ext/progress": 0.5,
+			"progress": 0.99
+		}
+	},
+	"timestamp": "2016-05-24T15:35:49Z"	
+},
+{
+	"actor": {
+		"name": "James Dean"
+	},
+	"verb": {
+		"id": "http://adlnet.gov/expapi/verbs/completed"
+	},
+	"object": {
+		"id": "http://example.com/games/SuperMarioBros/Levels/World1-2",
+		"definition": {
+			"type": "http://curatr3.com/define/type/level"
+		}
+	},
+	"result": {
+		"extensions": {
+			"https://rage.e-ucm.es/xapi/ext/value": "Game Over",
+			"success": "True",
+			"score":95
+		}
+	},
+	"timestamp": "2016-05-24T15:37:13Z"
+},
+{
+	"actor": {
+		"name": "James Dean"
+	},
+	"verb": {
+		"id": "http://adlnet.gov/expapi/verbs/completed"
+	},
+	"object": {
+		"id": "http://example.com/games/SuperMarioBros/Levels/MyFirstGame",
+		"definition": {
+			"type": "http://curatr3.com/define/type/serious-game"
+		}
+	},
+	"result": {
+		"extensions": {
+			"https://rage.e-ucm.es/xapi/ext/value": "Game Over",
+			"success": "True",
+			"score":95
+		}
+	},
+	"timestamp": "2016-05-24T15:37:13Z"
+},
+{
+	"actor": {
+		"name": "James Dean"
+	},
+	"verb": {
+		"id": "http://activitystrea.ms/schema/1.0/accessed"
+	},
+	"object": {
+		"id": "http://example.com/games/SuperMarioBros/Screens/SoundMenu",
+		"definition": {
+			"type": "https://rage.e-ucm.es/xapi/seriousgames/activities/Screen"
+		}
+	},
+	"timestamp": "2016-05-24T07:47:47Z"
+},
+{
+	"actor": {
+		"name": "James Dean"
+	},
+	"verb": {
+		"id": "http://activitystrea.ms/schema/1.0/accessed"
+	},
+	"object": {
+		"id": "http://example.com/games/cutscenes/IntroVideo",
+		"definition": {
+			"type": "https://rage.e-ucm.es/xapi/seriousgames/activities/Cutscene"
+		}
+	},
+	"timestamp": "2016-05-24T07:47:47Z"
+},
+{
+	"actor": {
+		"name": "James Dean"
+	},
+	"verb": {
+		"id": "http://activitystrea.ms/schema/1.0/accessed"
+	},
+	"object": {
+		"id": "http://example.com/games/cutscenes/VideoTutorial",
+		"definition": {
+			"type": "https://rage.e-ucm.es/xapi/seriousgames/activities/Cutscene"
+		}
+	},
+	"timestamp": "2016-05-24T07:47:47Z"
+},
+{
+	"actor": {
+		"name": "James Dean"
+	},
+	"verb": {
+		"id": "http://id.tincanapi.com/verb/accessed"
+	},
+	"object": {
+		"id": "http://example.com/games/SuperMarioBros/Cutscenes/VideoDemo",
+		"definition": {
+			"type": "https://rage.e-ucm.es/xapi/seriousgames/activities/Cutscene"
+		}
+	},
+	"timestamp": "2016-05-24T09:17:37Z"
+},
+{
+	"actor": {
+		"name": "James Dean"
+	},
+	"verb": {
+		"id": "http://adlnet.gov/expapi/verbs/selected"
+	},
+	"object": {
+		"id": "http://example.com/games/Capitals/CapitalOfSpain",
+		"definition": {
+			"type": "https://rage.e-ucm.es/xapi/seriousgames/activities/Alternative"
+		}
+	},
+	"result": {
+		"response": "Madrid",
+		"success": "True"
+	},
+	"timestamp": "2016-05-24T13:05:12Z"
+},
+{
+	"actor": {
+		"name": "James Dean"
+	},
+	"verb": {
+		"id": "http://adlnet.gov/expapi/verbs/selected"
+	},
+	"object": {
+		"id": "http://example.com/games/Capitals/CapitalOfFlorida",
+		"definition": {
+			"type": "https://rage.e-ucm.es/xapi/seriousgames/activities/Alternative"
+		}
+	},
+	"result": {
+		"response": "Miami",
+		"success": "False"
+	},
+	"timestamp": "2016-05-24T13:05:12Z"
+},
+{
+	"actor": {
+		"name": "James Dean"
+	},
+	"verb": {
+		"id": "http://adlnet.gov/expapi/verbs/selected"
+	},
+	"object": {
+		"id": "http://example.com/games/Capitals/CapitalOfFlorida",
+		"definition": {
+			"type": "https://rage.e-ucm.es/xapi/seriousgames/activities/Alternative"
+		}
+	},
+	"result": {
+		"response": "Tallahassee",
+		"success": "True"
+	},
+	"timestamp": "2016-05-24T13:05:12Z"
+},
+{
+	"actor": {
+		"name": "Mary Kate"
+	},
+	"verb": {
+		"id": "http://adlnet.gov/expapi/verbs/initialized"
+	},
+	"object": {
+		"id": "http://example.com/games/MyFirstGame",
+		"definition": {
+			"type": "http://curatr3.com/define/type/serious-game"
+		}
+	},
+	"timestamp": "2016-05-24T15:25:47Z"	
+},
+{
+	"actor": {
+		"name": "Mary Kate"
+	},
+	"verb": {
+		"id": "http://adlnet.gov/expapi/verbs/initialized"
+	},
+	"object": {
+		"id": "http://example.com/games/SuperMarioBros/Levels/World1-2",
+		"definition": {
+			"type": "http://curatr3.com/define/type/level"
+		}
+	},
+	"timestamp": "2016-05-24T15:05:47Z"	
+},
+{
+	"actor": {
+		"name": "Mary Kate"
+	},
+	"verb": {
+		"id": "http://adlnet.gov/expapi/verbs/progressed"
+	},
+	"object": {
+		"id": "http://example.com/games/SuperMarioBros/Levels/World1-2",
+		"definition": {
+			"type": "http://curatr3.com/define/type/level"
+		}
+	},
+	"result": {
+		"extensions": {
+			"https://rage.e-ucm.es/xapi/ext/progress": 0.5,
+			"progress": 0.5
+		}
+	},
+	"timestamp": "2016-05-24T15:05:49Z"	
+},
+{
+	"actor": {
+		"name": "Mary Kate"
+	},
+	"verb": {
+		"id": "http://adlnet.gov/expapi/verbs/progressed"
+	},
+	"object": {
+		"id": "http://example.com/games/MyFirstGame",
+		"definition": {
+			"type": "http://curatr3.com/define/type/serious-game"
+		}
+	},
+	"result": {
+		"extensions": {
+			"https://rage.e-ucm.es/xapi/ext/progress": 0.5,
+			"progress": 0.25
+		}
+	},
+	"timestamp": "2016-05-24T15:36:49Z"	
+},
+{
+	"actor": {
+		"name": "Mary Kate"
+	},
+	"verb": {
+		"id": "http://adlnet.gov/expapi/verbs/progressed"
+	},
+	"object": {
+		"id": "http://example.com/games/MyFirstGame",
+		"definition": {
+			"type": "http://curatr3.com/define/type/serious-game"
+		}
+	},
+	"result": {
+		"extensions": {
+			"https://rage.e-ucm.es/xapi/ext/progress": 0.5,
+			"progress": 0.35
+		}
+	},
+	"timestamp": "2016-05-24T15:38:49Z"	
+},
+{
+	"actor": {
+		"name": "Mary Kate"
+	},
+	"verb": {
+		"id": "http://adlnet.gov/expapi/verbs/progressed"
+	},
+	"object": {
+		"id": "http://example.com/games/MyFirstGame",
+		"definition": {
+			"type": "http://curatr3.com/define/type/serious-game"
+		}
+	},
+	"result": {
+		"extensions": {
+			"https://rage.e-ucm.es/xapi/ext/progress": 0.5,
+			"progress": 0.65
+		}
+	},
+	"timestamp": "2016-05-24T15:45:49Z"	
+},
+{
+	"actor": {
+		"name": "Mary Kate"
+	},
+	"verb": {
+		"id": "http://adlnet.gov/expapi/verbs/progressed"
+	},
+	"object": {
+		"id": "http://example.com/games/MyFirstGame",
+		"definition": {
+			"type": "http://curatr3.com/define/type/serious-game"
+		}
+	},
+	"result": {
+		"extensions": {
+			"https://rage.e-ucm.es/xapi/ext/progress": 0.5,
+			"progress": 0.75
+		}
+	},
+	"timestamp": "2016-05-24T15:47:49Z"	
+},
+{
+	"actor": {
+		"name": "Mary Kate"
+	},
+	"verb": {
+		"id": "http://adlnet.gov/expapi/verbs/completed"
+	},
+	"object": {
+		"id": "http://example.com/games/SuperMarioBros/Levels/World1-2",
+		"definition": {
+			"type": "http://curatr3.com/define/type/level"
+		}
+	},
+	"result": {
+		"extensions": {
+			"https://rage.e-ucm.es/xapi/ext/value": "Game Over",
+			"success": "False",
+			"score":72
+		}
+	},
+	"timestamp": "2016-05-24T15:48:13Z"
+},
+{
+	"actor": {
+		"name": "Mary Kate"
+	},
+	"verb": {
+		"id": "http://adlnet.gov/expapi/verbs/completed"
+	},
+	"object": {
+		"id": "http://example.com/games/SuperMarioBros/Levels/MyFirstGame",
+		"definition": {
+			"type": "http://curatr3.com/define/type/serious-game"
+		}
+	},
+	"result": {
+		"extensions": {
+			"https://rage.e-ucm.es/xapi/ext/value": "Game Over",
+			"success": "True",
+			"score":72
+		}
+	},
+	"timestamp": "2016-05-24T15:59:13Z"
+},
+{
+	"actor": {
+		"name": "Mary Kate"
+	},
+	"verb": {
+		"id": "http://activitystrea.ms/schema/1.0/accessed"
+	},
+	"object": {
+		"id": "http://example.com/games/SuperMarioBros/Screens/SoundMenu",
+		"definition": {
+			"type": "https://rage.e-ucm.es/xapi/seriousgames/activities/Screen"
+		}
+	},
+	"timestamp": "2016-05-24T07:47:47Z"
+},
+{
+	"actor": {
+		"name": "Mary Kate"
+	},
+	"verb": {
+		"id": "http://activitystrea.ms/schema/1.0/accessed"
+	},
+	"object": {
+		"id": "http://example.com/games/cutscenes/IntroVideo",
+		"definition": {
+			"type": "https://rage.e-ucm.es/xapi/seriousgames/activities/Cutscene"
+		}
+	},
+	"timestamp": "2016-05-24T07:47:47Z"
+},
+{
+	"actor": {
+		"name": "Mary Kate"
+	},
+	"verb": {
+		"id": "http://id.tincanapi.com/verb/skipped"
+	},
+	"object": {
+		"id": "http://example.com/games/SuperMarioBros/Cutscenes/IntroVideo",
+		"definition": {
+			"type": "https://rage.e-ucm.es/xapi/seriousgames/activities/Cutscene"
+		}
+	},
+	"timestamp": "2016-05-24T09:17:37Z"
+},
+{
+	"actor": {
+		"name": "Mary Kate"
+	},
+	"verb": {
+		"id": "http://adlnet.gov/expapi/verbs/selected"
+	},
+	"object": {
+		"id": "http://example.com/games/Capitals/CapitalOfSpain",
+		"definition": {
+			"type": "https://rage.e-ucm.es/xapi/seriousgames/activities/Alternative"
+		}
+	},
+	"result": {
+		"response": "Lisbon",
+		"success": "False"
+	},
+	"timestamp": "2016-05-24T13:05:12Z"
+},
+{
+	"actor": {
+		"name": "Mary Kate"
+	},
+	"verb": {
+		"id": "http://adlnet.gov/expapi/verbs/selected"
+	},
+	"object": {
+		"id": "http://example.com/games/Capitals/CapitalOfFlorida",
+		"definition": {
+			"type": "https://rage.e-ucm.es/xapi/seriousgames/activities/Alternative"
+		}
+	},
+	"result": {
+		"response": "Miami",
+		"success": "False"
+	},
+	"timestamp": "2016-05-24T13:05:12Z"
+},
+{
+	"actor": {
+		"name": "Mary Kate"
+	},
+	"verb": {
+		"id": "http://adlnet.gov/expapi/verbs/selected"
+	},
+	"object": {
+		"id": "http://example.com/games/Capitals/CapitalOfFlorida",
+		"definition": {
+			"type": "https://rage.e-ucm.es/xapi/seriousgames/activities/Alternative"
+		}
+	},
+	"result": {
+		"response": "Jacksonville",
+		"success": "False"
+	},
+	"timestamp": "2016-05-24T13:05:12Z"
+},
+{
+	"actor": {
+		"name": "Juan Gomez"
+	},
+	"verb": {
+		"id": "http://adlnet.gov/expapi/verbs/initialized"
+	},
+	"object": {
+		"id": "http://example.com/games/MyFirstGame",
+		"definition": {
+			"type": "http://curatr3.com/define/type/serious-game"
+		}
+	},
+	"timestamp": "2016-05-24T15:13:47Z"	
+},
+{
+	"actor": {
+		"name": "Juan Gomez"
+	},
+	"verb": {
+		"id": "http://adlnet.gov/expapi/verbs/initialized"
+	},
+	"object": {
+		"id": "http://example.com/games/SuperMarioBros/Levels/World1-1",
+		"definition": {
+			"type": "http://curatr3.com/define/type/level"
+		}
+	},
+	"timestamp": "2016-05-24T15:15:47Z"	
+},
+{
+	"actor": {
+		"name": "Juan Gomez"
+	},
+	"verb": {
+		"id": "http://adlnet.gov/expapi/verbs/initialized"
+	},
+	"object": {
+		"id": "http://example.com/games/SuperMarioBros/Levels/World1-2",
+		"definition": {
+			"type": "http://curatr3.com/define/type/level"
+		}
+	},
+	"timestamp": "2016-05-24T15:25:47Z"	
+},
+{
+	"actor": {
+		"name": "Juan Gomez"
+	},
+	"verb": {
+		"id": "http://adlnet.gov/expapi/verbs/progressed"
+	},
+	"object": {
+		"id": "http://example.com/games/SuperMarioBros/Levels/World1-1",
+		"definition": {
+			"type": "http://curatr3.com/define/type/level"
+		}
+	},
+	"result": {
+		"extensions": {
+			"https://rage.e-ucm.es/xapi/ext/progress": 0.5,
+			"progress": 0.5
+		}
+	},
+	"timestamp": "2016-05-24T15:05:49Z"	
+},
+{
+	"actor": {
+		"name": "Juan Gomez"
+	},
+	"verb": {
+		"id": "http://adlnet.gov/expapi/verbs/progressed"
+	},
+	"object": {
+		"id": "http://example.com/games/MyFirstGame",
+		"definition": {
+			"type": "http://curatr3.com/define/type/serious-game"
+		}
+	},
+	"result": {
+		"extensions": {
+			"https://rage.e-ucm.es/xapi/ext/progress": 0.5,
+			"progress": 0.30
+		}
+	},
+	"timestamp": "2016-05-24T15:17:49Z"	
+},
+{
+	"actor": {
+		"name": "Juan Gomez"
+	},
+	"verb": {
+		"id": "http://adlnet.gov/expapi/verbs/progressed"
+	},
+	"object": {
+		"id": "http://example.com/games/MyFirstGame",
+		"definition": {
+			"type": "http://curatr3.com/define/type/serious-game"
+		}
+	},
+	"result": {
+		"extensions": {
+			"https://rage.e-ucm.es/xapi/ext/progress": 0.5,
+			"progress": 0.50
+		}
+	},
+	"timestamp": "2016-05-24T15:25:49Z"	
+},
+{
+	"actor": {
+		"name": "Juan Gomez"
+	},
+	"verb": {
+		"id": "http://adlnet.gov/expapi/verbs/progressed"
+	},
+	"object": {
+		"id": "http://example.com/games/MyFirstGame",
+		"definition": {
+			"type": "http://curatr3.com/define/type/serious-game"
+		}
+	},
+	"result": {
+		"extensions": {
+			"https://rage.e-ucm.es/xapi/ext/progress": 0.5,
+			"progress": 0.75
+		}
+	},
+	"timestamp": "2016-05-24T15:33:49Z"	
+},
+{
+	"actor": {
+		"name": "Juan Gomez"
+	},
+	"verb": {
+		"id": "http://adlnet.gov/expapi/verbs/progressed"
+	},
+	"object": {
+		"id": "http://example.com/games/MyFirstGame",
+		"definition": {
+			"type": "http://curatr3.com/define/type/serious-game"
+		}
+	},
+	"result": {
+		"extensions": {
+			"https://rage.e-ucm.es/xapi/ext/progress": 0.5,
+			"progress": 0.95
+		}
+	},
+	"timestamp": "2016-05-24T15:40:49Z"	
+},
+{
+	"actor": {
+		"name": "Juan Gomez"
+	},
+	"verb": {
+		"id": "http://adlnet.gov/expapi/verbs/completed"
+	},
+	"object": {
+		"id": "http://example.com/games/SuperMarioBros/Levels/World1-1",
+		"definition": {
+			"type": "http://curatr3.com/define/type/level"
+		}
+	},
+	"result": {
+		"extensions": {
+			"https://rage.e-ucm.es/xapi/ext/value": "Game Over",
+			"success": "False",
+			"score":22
+		}
+	},
+	"timestamp": "2016-05-24T15:55:13Z"
+},
+{
+	"actor": {
+		"name": "Juan Gomez"
+	},
+	"verb": {
+		"id": "http://adlnet.gov/expapi/verbs/completed"
+	},
+	"object": {
+		"id": "http://example.com/games/SuperMarioBros/Levels/World1-2",
+		"definition": {
+			"type": "http://curatr3.com/define/type/level"
+		}
+	},
+	"result": {
+		"extensions": {
+			"https://rage.e-ucm.es/xapi/ext/value": "Game Over",
+			"success": "True",
+			"score":60
+		}
+	},
+	"timestamp": "2016-05-24T15:55:13Z"
+},
+{
+	"actor": {
+		"name": "Juan Gomez"
+	},
+	"verb": {
+		"id": "http://adlnet.gov/expapi/verbs/completed"
+	},
+	"object": {
+		"id": "http://example.com/games/SuperMarioBros/Levels/MyFirstGame",
+		"definition": {
+			"type": "http://curatr3.com/define/type/serious-game"
+		}
+	},
+	"result": {
+		"extensions": {
+			"https://rage.e-ucm.es/xapi/ext/value": "Game Over",
+			"success": "True",
+			"score":43
+		}
+	},
+	"timestamp": "2016-05-24T15:45:13Z"
+},
+{
+	"actor": {
+		"name": "Juan Gomez"
+	},
+	"verb": {
+		"id": "http://activitystrea.ms/schema/1.0/accessed"
+	},
+	"object": {
+		"id": "http://example.com/games/cutscenes/IntroVideo",
+		"definition": {
+			"type": "https://rage.e-ucm.es/xapi/seriousgames/activities/Cutscene"
+		}
+	},
+	"timestamp": "2016-05-24T07:47:47Z"
+},
+{
+	"actor": {
+		"name": "Juan Gomez"
+	},
+	"verb": {
+		"id": "http://activitystrea.ms/schema/1.0/accessed"
+	},
+	"object": {
+		"id": "http://example.com/games/cutscenes/VideoTutorial",
+		"definition": {
+			"type": "https://rage.e-ucm.es/xapi/seriousgames/activities/Cutscene"
+		}
+	},
+	"timestamp": "2016-05-24T07:47:47Z"
+},
+{
+	"actor": {
+		"name": "Juan Gomez"
+	},
+	"verb": {
+		"id": "http://adlnet.gov/expapi/verbs/selected"
+	},
+	"object": {
+		"id": "http://example.com/games/Capitals/CapitalOfSpain",
+		"definition": {
+			"type": "https://rage.e-ucm.es/xapi/seriousgames/activities/Alternative"
+		}
+	},
+	"result": {
+		"response": "Madrid",
+		"success": "True"
+	},
+	"timestamp": "2016-05-24T13:05:12Z"
+},
+{
+	"actor": {
+		"name": "Juan Gomez"
+	},
+	"verb": {
+		"id": "http://adlnet.gov/expapi/verbs/selected"
+	},
+	"object": {
+		"id": "http://example.com/games/Capitals/CapitalOfFlorida",
+		"definition": {
+			"type": "https://rage.e-ucm.es/xapi/seriousgames/activities/Alternative"
+		}
+	},
+	"result": {
+		"response": "Miami",
+		"success": "False"
+	},
+	"timestamp": "2016-05-24T13:05:12Z"
+},
+{
+	"actor": {
+		"name": "Juan Gomez"
+	},
+	"verb": {
+		"id": "http://adlnet.gov/expapi/verbs/selected"
+	},
+	"object": {
+		"id": "http://example.com/games/Capitals/CapitalOfFlorida",
+		"definition": {
+			"type": "https://rage.e-ucm.es/xapi/seriousgames/activities/Alternative"
+		}
+	},
+	"result": {
+		"response": "Tallahassee",
+		"success": "True"
+	},
+	"timestamp": "2016-05-24T13:05:12Z"
+}
+]
