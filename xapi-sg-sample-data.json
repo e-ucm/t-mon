@@ -44,7 +44,7 @@
 	},
 	"result": {
 		"extensions": {
-			"https://rage.e-ucm.es/xapi/ext/progress": 0.5,
+			"https://w3id.org/xapi/seriousgames/extensions/progress": 0.5,
 			"progress": 0.5
 		}
 	},
@@ -65,7 +65,7 @@
 	},
 	"result": {
 		"extensions": {
-			"https://rage.e-ucm.es/xapi/ext/progress": 0.5,
+			"https://w3id.org/xapi/seriousgames/extensions/progress": 0.5,
 			"progress": 0.15
 		}
 	},
@@ -86,7 +86,7 @@
 	},
 	"result": {
 		"extensions": {
-			"https://rage.e-ucm.es/xapi/ext/progress": 0.5,
+			"https://w3id.org/xapi/seriousgames/extensions/progress": 0.5,
 			"progress": 0.5
 		}
 	},
@@ -107,7 +107,7 @@
 	},
 	"result": {
 		"extensions": {
-			"https://rage.e-ucm.es/xapi/ext/progress": 0.5,
+			"https://w3id.org/xapi/seriousgames/extensions/progress": 0.5,
 			"progress": 0.7
 		}
 	},
@@ -128,7 +128,7 @@
 	},
 	"result": {
 		"extensions": {
-			"https://rage.e-ucm.es/xapi/ext/progress": 0.5,
+			"https://w3id.org/xapi/seriousgames/extensions/progress": 0.5,
 			"progress": 0.9
 		}
 	},
@@ -397,7 +397,7 @@
 	},
 	"result": {
 		"extensions": {
-			"https://rage.e-ucm.es/xapi/ext/progress": 0.5,
+			"https://w3id.org/xapi/seriousgames/extensions/progress": 0.5,
 			"progress": 0.1
 		}
 	},
@@ -418,7 +418,7 @@
 	},
 	"result": {
 		"extensions": {
-			"https://rage.e-ucm.es/xapi/ext/progress": 0.5,
+			"https://w3id.org/xapi/seriousgames/extensions/progress": 0.5,
 			"progress": 0.1
 		}
 	},
@@ -439,7 +439,7 @@
 	},
 	"result": {
 		"extensions": {
-			"https://rage.e-ucm.es/xapi/ext/progress": 0.5,
+			"https://w3id.org/xapi/seriousgames/extensions/progress": 0.5,
 			"progress": 0.35
 		}
 	},
@@ -460,7 +460,7 @@
 	},
 	"result": {
 		"extensions": {
-			"https://rage.e-ucm.es/xapi/ext/progress": 0.5,
+			"https://w3id.org/xapi/seriousgames/extensions/progress": 0.5,
 			"progress": 0.55
 		}
 	},
@@ -481,7 +481,7 @@
 	},
 	"result": {
 		"extensions": {
-			"https://rage.e-ucm.es/xapi/ext/progress": 0.5,
+			"https://w3id.org/xapi/seriousgames/extensions/progress": 0.5,
 			"progress": 0.75
 		}
 	},
@@ -750,7 +750,7 @@
 	},
 	"result": {
 		"extensions": {
-			"https://rage.e-ucm.es/xapi/ext/progress": 0.5,
+			"https://w3id.org/xapi/seriousgames/extensions/progress": 0.5,
 			"progress": 0.5
 		}
 	},
@@ -771,7 +771,7 @@
 	},
 	"result": {
 		"extensions": {
-			"https://rage.e-ucm.es/xapi/ext/progress": 0.5,
+			"https://w3id.org/xapi/seriousgames/extensions/progress": 0.5,
 			"progress": 0.45
 		}
 	},
@@ -792,7 +792,7 @@
 	},
 	"result": {
 		"extensions": {
-			"https://rage.e-ucm.es/xapi/ext/progress": 0.5,
+			"https://w3id.org/xapi/seriousgames/extensions/progress": 0.5,
 			"progress": 0.8
 		}
 	},
@@ -813,7 +813,7 @@
 	},
 	"result": {
 		"extensions": {
-			"https://rage.e-ucm.es/xapi/ext/progress": 0.5,
+			"https://w3id.org/xapi/seriousgames/extensions/progress": 0.5,
 			"progress": 0.99
 		}
 	},
@@ -1025,7 +1025,7 @@
 	},
 	"result": {
 		"extensions": {
-			"https://rage.e-ucm.es/xapi/ext/progress": 0.5,
+			"https://w3id.org/xapi/seriousgames/extensions/progress": 0.5,
 			"progress": 0.5
 		}
 	},
@@ -1046,7 +1046,7 @@
 	},
 	"result": {
 		"extensions": {
-			"https://rage.e-ucm.es/xapi/ext/progress": 0.5,
+			"https://w3id.org/xapi/seriousgames/extensions/progress": 0.5,
 			"progress": 0.25
 		}
 	},
@@ -1067,7 +1067,7 @@
 	},
 	"result": {
 		"extensions": {
-			"https://rage.e-ucm.es/xapi/ext/progress": 0.5,
+			"https://w3id.org/xapi/seriousgames/extensions/progress": 0.5,
 			"progress": 0.35
 		}
 	},
@@ -1088,7 +1088,7 @@
 	},
 	"result": {
 		"extensions": {
-			"https://rage.e-ucm.es/xapi/ext/progress": 0.5,
+			"https://w3id.org/xapi/seriousgames/extensions/progress": 0.5,
 			"progress": 0.65
 		}
 	},
@@ -1109,7 +1109,7 @@
 	},
 	"result": {
 		"extensions": {
-			"https://rage.e-ucm.es/xapi/ext/progress": 0.5,
+			"https://w3id.org/xapi/seriousgames/extensions/progress": 0.5,
 			"progress": 0.75
 		}
 	},
@@ -1321,7 +1321,7 @@
 	},
 	"result": {
 		"extensions": {
-			"https://rage.e-ucm.es/xapi/ext/progress": 0.5,
+			"https://w3id.org/xapi/seriousgames/extensions/progress": 0.5,
 			"progress": 0.5
 		}
 	},
@@ -1342,7 +1342,7 @@
 	},
 	"result": {
 		"extensions": {
-			"https://rage.e-ucm.es/xapi/ext/progress": 0.5,
+			"https://w3id.org/xapi/seriousgames/extensions/progress": 0.5,
 			"progress": 0.30
 		}
 	},
@@ -1363,7 +1363,7 @@
 	},
 	"result": {
 		"extensions": {
-			"https://rage.e-ucm.es/xapi/ext/progress": 0.5,
+			"https://w3id.org/xapi/seriousgames/extensions/progress": 0.5,
 			"progress": 0.50
 		}
 	},
@@ -1384,7 +1384,7 @@
 	},
 	"result": {
 		"extensions": {
-			"https://rage.e-ucm.es/xapi/ext/progress": 0.5,
+			"https://w3id.org/xapi/seriousgames/extensions/progress": 0.5,
 			"progress": 0.75
 		}
 	},
@@ -1405,7 +1405,7 @@
 	},
 	"result": {
 		"extensions": {
-			"https://rage.e-ucm.es/xapi/ext/progress": 0.5,
+			"https://w3id.org/xapi/seriousgames/extensions/progress": 0.5,
 			"progress": 0.95
 		}
 	},
