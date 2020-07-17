@@ -1,1 +1,6 @@
 .idea/
+.gitignore
+FirstAid_xapi-statement.json
+Conectado_xapi-statement.json
+xAPISGProcessor-Tests.ipynb
+à\ remplacer\ fichiers\ xapi
