@@ -33,6 +33,7 @@ The Jupyter Notebooks with the default set of visualizations are included in the
    * display a multibar chart and a heatmap showing the number of times the player has interacted with the item.
    * display a bubble chart showing a bubble in function of the average of players has interacted with the item in a certain period of time.
 * **xAPISG-MenusSelected**: display multiples bar chart showing for each menus the number of time each player select an option
-* **xAPISG-ItemsInteracted**: display a multibar chart and a heatmap showing the number of times the player has interacted with the item.
 * **xAPISG-ItemsActionTypeInteracted**: display a multibar chart and a heatmap showing for each action type (like talk_to, etc) the total number of time the player has been interacted with.
-* **xAPISG-AccessedAccessible**: display a multibar chart and a heatmap showing for each accessible the total number of time the player has accessed to this zone.
+* **xAPISG-AccessedAccessible**:
+    * display a multibar chart and a heatmap showing for each accessible the total number of time the player has accessed to this zone.
+    * display a bubble chart showing a bubble in function of the average of players has accessed this accessible in a certain period of time.
