@@ -29,6 +29,7 @@ The Jupyter Notebooks with the default set of visualizations are included in the
 * **xAPISG-GamesStartedCompleted**: displays a pie chart of games started and completed.
 * **xAPISG-PlayersProgress**: displays a line chart showing progress over time for each player.
 * **xAPISG-VideosSeenSkipped**: displays a bar chart showing for each video the total number of times it has been seen and skipped.
+* **xAPISG-MenusSelected**: display multiples bar chart showing for each menus the number of time each player select an option
 * **xAPISG-ItemsInteracted**: display a multibar chart and a heatmap showing for each item the total number of time the player has been interacted with.
 * **xAPISG-ItemsActionTypeInteracted**: display a multibar chart and a heatmap showing for each item and for each action type (like talk_to, etc) the total number of time the player has been interacted with.
 * **xAPISG-AccessedAccessible**: display a multibar chart and a heatmap showing for each accessible the total number of time the player has accessed to this zone.
