@@ -27,6 +27,7 @@ The Jupyter Notebooks with the default set of visualizations are included in the
 * **xAPISG-PlayersProgress**: displays a line chart showing progress over time for each player.
 * **xAPISG-VideosSeenSkipped**: displays a bar chart showing for each video the total number of times it has been seen and skipped.
 * **xAPISG-CompletablesProgress**: displays a bar chart showing for each player the progress achieved in the different completables of the game as well as in the total game.
+* **xAPISG-CompletablesProgressIncreaseDecrease**: displays a points/line chart showing for each player in function of time the progress increase or decrease of different completables of the game.
 * **xAPISG-CompletablesScores**: displays a bar chart showing the score achieved by players in the different completables.
 * **xAPISG-CompletablesTimes**: displays a bar chart showing for each completable the maximum, minimum and mean time of completion by players.
 * **xAPISG-CorrectIncorrectPlayer**: displays a bar chart showing for each user the number of correct and incorrect alternatives selected in multiple-choice questions.
