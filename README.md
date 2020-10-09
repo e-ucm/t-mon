@@ -1,6 +1,6 @@
 # xAPI-SG Processor
 
-[![Binder](https://mybinder.org/badge_logo.svg)](https://mybinder.org/v2/gh/crisal24/xapi-sg-processor/binder?filepath=xAPISGProcessor.ipynb)
+[![Binder](https://mybinder.org/badge_logo.svg)](https://mybinder.org/v2/gh/e-ucm/xapi-sg-processor/master?filepath=xAPISGProcessor.ipynb)
 
 ## Introduction
 
@@ -18,7 +18,7 @@ The main Jupyter Notebook is **[xAPISGProcessor.ipynb](https://nbviewer.jupyter.
 * set `local = True` if you want to work on a local-hosted Jupyter server.
 * set `local = False` if working with a web-hosted Jupyter server.
 
-You can execute the xAPI-SG Processor and interact with it online using [Binder](https://mybinder.org/v2/gh/crisal24/xapi-sg-processor/binder?filepath=xAPISGProcessor.ipynb).
+You can execute the xAPI-SG Processor and interact with it online using [Binder](https://mybinder.org/v2/gh/e-ucm/xapi-sg-processor/master?filepath=xAPISGProcessor.ipynb).
 
 ### 2. Choose your file with xAPI-SG traces
 
