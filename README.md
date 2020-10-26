@@ -11,14 +11,24 @@ The xAPI-SG statements (traces) are analyzed and, with the information extraced 
 
 ## Usage
 
-### 1. Select your mode (local/remote)
+### 1. Select your mode
 
 The main Jupyter Notebook is **[xAPISGProcessor.ipynb](https://nbviewer.jupyter.org/github/e-ucm/xapi-sg-processor/blob/master/xAPISGProcessor.ipynb)**. In the first line of the notebook:
 
 * set `local = True` if you want to work on a local-hosted Jupyter server.
 * set `local = False` if working with a web-hosted Jupyter server.
 
-You can execute the xAPI-SG Processor and interact with it online using [Binder](https://mybinder.org/v2/gh/e-ucm/xapi-sg-processor/master?filepath=xAPISGProcessor.ipynb).
+Keep `storage = file`. You can execute the xAPI-SG Processor and interact with it online using [Binder](https://mybinder.org/v2/gh/e-ucm/xapi-sg-processor/master?filepath=xAPISGProcessor.ipynb).
+
+#### SIMVA
+
+![simva logo](docs/images/logo-simva.png)
+
+The xAPI-SG Processor can also connect with **[SIMVA](https://github.com/e-ucm/simva-infra)** to analyze the traces stored there as part of experiments.
+
+If you are using SIMVA, the main Jupyter Notebook is **[xAPISGProcessor-SIMVA.ipynb](https://nbviewer.jupyter.org/github/e-ucm/xapi-sg-processor/blob/master/xAPISGProcessor-SIMVA.ipynb)**.
+
+After running the first cell in the notebook, a "Sign in" button will appear in the output. Click the "Sign in" button will pop up a window when you need to enter your **SIMVA credentials**. Once you have done this, run the following cells. Keep `storage = simva`, so you will be able to access all traces JSON files available in your SIMVA account.
 
 ### 2. Choose your file with xAPI-SG traces
 
@@ -31,6 +41,8 @@ When running the **[xAPISGProcessor.ipynb](https://nbviewer.jupyter.org/github/e
 * If using remote mode, you will be able to upload your data file. 
 
 ![remote upload](docs/images/remote%20upload.png)
+
+* If you are accessing SIMVA JSON files, you will see a widget file selector similar to the one in local mode.
 
 In any case, choose your JSON file containing a list of xAPI-SG statements.
 
