@@ -11,14 +11,14 @@ The xAPI-SG statements (traces) are analyzed and, with the information extraced 
 
 ## Usage
 
-### 1. Select your mode (local/remote)
+### 1. Select your mode
 
 The main Jupyter Notebook is **[xAPISGProcessor.ipynb](https://nbviewer.jupyter.org/github/e-ucm/xapi-sg-processor/blob/master/xAPISGProcessor.ipynb)**. In the first line of the notebook:
 
 * set `local = True` if you want to work on a local-hosted Jupyter server.
 * set `local = False` if working with a web-hosted Jupyter server.
 
-You can execute the xAPI-SG Processor and interact with it online using [Binder](https://mybinder.org/v2/gh/e-ucm/xapi-sg-processor/master?filepath=xAPISGProcessor.ipynb).
+Keep `storage = file`. You can execute the xAPI-SG Processor and interact with it online using [Binder](https://mybinder.org/v2/gh/e-ucm/xapi-sg-processor/master?filepath=xAPISGProcessor.ipynb).
 
 ### 2. Choose your file with xAPI-SG traces
 
@@ -41,6 +41,36 @@ Finally, run the analysis.
 After selected, all xAPI-SG statements in your JSON file will be processed (the Jupyter Notebook [ProcessxAPISGStatement.ipynb](https://nbviewer.jupyter.org/github/e-ucm/xapi-sg-processor/blob/master/ProcessxAPISGStatement.ipynb) processes each xAPI-SG statement). 
 
 With the information extracted from the statements, the default set of visualizations will be displayed in different tabs in the notebook. See below for details about the visualizations included.
+
+## SIMVA
+
+![simva logo](docs/images/logo-simva.png)
+
+The xAPI-SG Processor can also connect with **[SIMVA](https://github.com/e-ucm/simva-infra)** to analyze the traces stored there as part of experiments.
+
+To connect with SIMVA and analyze the xAPI-SG traces files stored there:
+
+1. Previous requirements:
+  * Download the tar.gz file of the [ipyauth release with KeyCloak support](https://github.com/e-ucm/ipyauth/releases/download/0.2.6-eucm.2/ipyauth-0.2.6-eucm.2.tar.gz)
+  * Install ipyauth:
+  ```
+  pip install ipyauth.tar.gz
+  jupyter nbextension enable --py --sys-prefix ipyauth.ipyauth_widget
+  jupyter serverextension enable --py --sys-prefix ipyauth.ipyauth_callback
+  ```
+   * Install other dependencies required by the Notebook ([boto3](https://pypi.org/project/boto3/) and [jwt](https://pypi.org/project/jwt/)):
+  ```
+  pip install boto3 jwt
+  ```
+  
+2. The main Jupyter Notebook to use is **[xAPISGProcessor-SIMVA.ipynb](https://nbviewer.jupyter.org/github/e-ucm/xapi-sg-processor/blob/master/xAPISGProcessor-SIMVA.ipynb)**.  
+1. Run the first cell in the notebook. A "Sign in" button will appear in the output. 
+1. Click the "Sign in" button, it will pop up a window when you need to enter your **SIMVA credentials**. 
+1. Once you have signed in, run the following cells. Keep `storage = simva`, so you will be able to access all traces JSON files available in your SIMVA account.
+1. Select your activity id and the `traces.json` file.
+1. Run the analysis.
+
+![simva upload](docs/images/simva-upload.png)
 
 ## xAPI-SG
 
