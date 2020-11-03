@@ -1,0 +1,2 @@
+jupyter nbextension enable --py --sys-prefix ipyauth.ipyauth_widget
+jupyter serverextension enable --py --sys-prefix ipyauth.ipyauth_callback
