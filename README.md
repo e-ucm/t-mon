@@ -20,8 +20,8 @@
 
 **T-Mon: Traces Monitor in xAPI-SG**
 
-**T-Mon** is a set of Jupyter Notebooks to process data given in the **xAPI-SG** data format. 
-The xAPI-SG statements (traces) are analyzed and, with the information extraced from them, a default set of visualizations is displayed, showing information about the data in xAPI-SG.
+**T-Mon** is a set of Jupyter Notebooks to process data in the **xAPI-SG** data format. 
+T-Mon loads [xAPI-SG](https://github.com/e-ucm/rage-analytics/wiki/xAPI-SG-Profile) statements (traces), analyzes them, and displays a default set of visualizations that provide a quick overview of its contents.
 
 ## Usage
 
@@ -29,8 +29,8 @@ The xAPI-SG statements (traces) are analyzed and, with the information extraced 
 
 The main Jupyter Notebook of T-Mon is **[T-Mon.ipynb](https://nbviewer.jupyter.org/github/e-ucm/t-mon/blob/master/T-Mon.ipynb)**. In the first line of the notebook:
 
-* set `local = True` if you want to work on a local-hosted Jupyter server.
-* set `local = False` if working with a web-hosted Jupyter server.
+* set `local = True` if you are hosting your own Jupyter server locally.
+* set `local = False` to work with a web-hosted Jupyter server.
 
 Keep `storage = file`. You can execute the xAPI-SG Processor and interact with it online using [Binder](https://mybinder.org/v2/gh/e-ucm/t-mon/master?filepath=T-Mon.ipynb).
 
@@ -121,96 +121,100 @@ We currently provide **default visualizations** (see below for description and e
 
 ### xAPISG-GamesStartedCompleted
 
-It displays a pie chart of games started and completed.
+Displays a pie chart of games started and completed.
 
 ![games started completed](docs/images/games_started_and_completed.png)
 
 ### xAPISG-PlayersProgress
 
-It displays a line chart showing progress over time for each player.
+Displays a line chart showing progress over time for each player.
 
 ![progress](docs/images/players_progress.png)
 
 ### xAPISG-VideosSeenSkipped
 
-It displays a bar chart showing for each video the total number of times it has been seen and skipped.
+Displays a bar chart showing, for each video, the total number of times it has been seen and skipped.
 
 ![videos](docs/images/videos_seen_skipped.png)
 
 ### xAPISG-CompletablesProgress
 
-It displays a bar chart showing for each player the progress achieved in the different completables of the game as well as in the total game.
+Displays a bar chart showing, for each player, the progress achieved in the different completables of the game -- as well as in the total game.
 
 ![completables progress](docs/images/completable_progress.png)
 
 ### xAPISG-CompletablesProgressIncreaseDecrease
 
-It displays a points/line chart showing for each player in function of time the progress increase or decrease of different completables of the game.
+Displays a points/line chart showing, for each player, the progress along time: increase or decrease of different completables of the game.
 
 ![completables progress incdec](docs/images/completable_progress_increase_decrease_DolorToracicoCompletable.png)
 
 ### xAPISG-CompletablesScores
 
-It displays a bar chart showing the score achieved by players in the different completables.
+Displays a bar chart showing the score achieved by players in the different completables.
 
 ![completables scores](docs/images/completable_scores.png)
 
 ### xAPISG-CompletablesTimes
 
-It displays a bar chart showing for each completable the maximum and minimum time of completion by players.
+Displays a bar chart showing, for each completable, the maximum and minimum time of completion by players.
 
 ![completables times](docs/images/completable_time.png)
 
 ### xAPISG-CorrectIncorrectPlayer
 
-It displays a bar chart showing for each user the number of correct and incorrect alternatives selected in multiple-choice questions.
+Displays a bar chart showing, for each user the number of correct and incorrect alternatives selected in multiple-choice questions.
 
 ![correct incorrect player](docs/images/correct_incorrect_per_player.png)
 
 ### xAPISG-CorrectIncorrectQuestion
 
-It displays a bar chart showing the total number of correct and incorrect alternatives selected by players in each multiple-choice question.
+Displays a bar chart with the total number of correct and incorrect alternatives selected by players in each multiple-choice question.
 
 ![correct incorrect question](docs/images/correct_incorrect_per_question.png)
 
 ### xAPISG-AlternativesSelectedQuestion
 
-It displays multiple bar charts showing the alternatives selected in each multiple-choice question.
+Displays multiple bar charts showing the alternatives selected in each multiple-choice question.
 
 ![alternatives](docs/images/selected_answers_per_questions_CapitalOfFlorida.png)
 
 ### xAPISG-ItemsInteracted
 
-It displays a multiple bar chart and a heatmap showing the number of times the player has interacted with the item.
+For each item, a bar-chart displaying, for that item, the number of times that each player interacted with it.
 
 ![interacted bar](docs/images/interaction_with_item_LivingroomDoor.png)
 
+A heatmap showing how many times each player interacted with each item.
+
 ![interacted heatmap](docs/images/HeatMap_interaction_with_item_by_players.png)
 
-Also, it displays a bubble chart showing a bubble in function of the average number of players who have interacted with the item in a certain period of time.
+Also, a bubble chart displaying item interactions as a function of time. Larger bubbles indicate more players interacting with the item at that time-period.
 
 ![interacted bubble](docs/images/bubbleChart_item_interacted_function_time_by_all_players.png)
 
 ### xAPISG-ItemsActionTypeInteracted
 
-It displays a multiple bar chart showing for each action type (e.g. talk_to) the total number of times the player has interacted with it.
+Displays a multiple bar chart showing, for each action type (e.g. `talk_to`), the total number of times the player has interacted with it.
 
 ![interacted action type](docs/images/interaction_with_item_by_action_type_Persona.png)
 
 ### xAPISG-AccessedAccessible
 
-It displays a multiple bar chart and a heatmap showing for each accessible the total number of time the player has accessed the accessible.
+For each accessible, a bar-chart displaying, for that accessible, the number of times that each player accessed it.
 
 ![accessible bar](docs/images/accessed_accessible_zone_endDay.png)
 
+A heatmap showing how many times each player accessed each accessible.
+
 ![accessible heatmap](docs/images/HeatMap_accessed_accessible_by_players.png)
 
-Also, it displays a bubble chart showing a bubble in function of the average number of players who have accessed the accessible in a certain period of time.
+Also, a bubble chart displaying access to each accessible as a function of time. Larger bubbles indicate more players accessing an accessible at that time-period.
 
 ![accessible bubble](docs/images/bubbleChart_accessibles_function_time_by_all_players.png)
     
 ### xAPISG-MenusSelected
 
-It displays multiple bar charts showing for each menu the number of times each player select an option.
+For each selection-menu, a bar-chart displaying, for that menu, the number of times that each player selected each option.
 
 ![menu](docs/images/response_selected_for_each_person_in_menu_Inicio.png)
