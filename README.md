@@ -1,6 +1,6 @@
 # T-Mon: Traces Monitor in xAPI-SG
 
-[![Binder](https://mybinder.org/badge_logo.svg)](https://mybinder.org/v2/gh/e-ucm/t-mon/master?filepath=T-Mon.ipynb)
+[![Binder](https://mybinder.org/badge_logo.svg)](https://mybinder.org/v2/gh/e-ucm/t-mon/conectado?filepath=Conectado.ipynb)
 
 ![logo](docs/images/logo-tmon.png)
 ![nombre](docs/images/logo-name-tmon.png)
