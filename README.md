@@ -23,6 +23,10 @@
 **T-Mon** is a set of Jupyter Notebooks to process data in the **xAPI-SG** data format. 
 T-Mon loads [xAPI-SG](https://github.com/e-ucm/rage-analytics/wiki/xAPI-SG-Profile) statements (traces), analyzes them, and displays a default set of visualizations that provide a quick overview of its contents.
 
+T-MON aims to display information as a quick overview for multiple stakeholers (game developers, teachers applying games, data scientist with little previous game knowledge).
+
+Visualizations are better design to fit data of about **20-30 students** (average class size), although many of the visualizations which display aggregated data also work for larger datasets.
+
 ## Usage
 
 ### 1. Select your mode
