@@ -9,3 +9,4 @@ dependencies:
   - ipython=7.13
   - ipympl=0.5.7
   - boto3
+  - jwt
