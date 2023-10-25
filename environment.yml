@@ -2,9 +2,9 @@ name: pretty_name
 dependencies:
   - python=3.8
   - numpy=1.18.1
-  - matplotlib==3.2.0
-  - pandas==1.0.5
-  - jsonschema==3.2.0
-  - ipywidgets==7.5.1
-  - ipython==7.13.0
-  - ipympl==0.5.7
+  - matplotlib=3.2.0
+  - pandas=1.0.5
+  - jsonschema
+  - ipywidgets=7.5
+  - ipython=7.13
+  - ipympl=0.5.7
