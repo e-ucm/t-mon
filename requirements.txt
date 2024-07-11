@@ -5,3 +5,7 @@ jsonschema
 ipywidgets
 ipython
 ipympl
+nbformat
+requests
+boto3
+jwt
