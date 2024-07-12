@@ -57,26 +57,19 @@ players_info={}
 def update_output(list_of_contents, list_of_names, list_of_dates):
     if list_of_contents is not None:
         players_info={}
+        div_list= []
         for c, n, d in zip(list_of_contents, list_of_names, list_of_dates):
-            out, err, div_list = [], [], []
+            out, err = [], []
+            div_list.append(html.Div([
+                html.H5(n),
+                html.H6(datetime.datetime.fromtimestamp(d)),
+            ]))
             try:
                 fileBrowserAndUploadButtonToLoadProcessStatements.load_players_info_from_content(c, n, players_info, out, err)
                 div_list.append(html.Div([
-                    html.H5(n),
-                    html.H6(datetime.datetime.fromtimestamp(d)),
-                ]))                 
-            except Exception as e:
-                print(e)
-                div_list.append(html.Div(
-                    html.Div([
-                        'There was an error processing this file.'
-                    ])
-                ))
-            div_list.append(html.Div([
-                    html.H5(n),
-                    html.H6(datetime.datetime.fromtimestamp(d)),
                     html.Div(out),
-                    html.Hr(),  # horizontal line
+                    html.Div(err),
+                    html.Hr() # horizontal line
                     # For debugging, display the raw contents provided by the web browser
                     #html.Div('Raw Content'),
                     #html.Pre(content_string[0:200], style={
@@ -84,6 +77,16 @@ def update_output(list_of_contents, list_of_names, list_of_dates):
                     #    'wordBreak': 'break-all'
                     #})
                 ]))
+            except Exception as e:
+                print(e)
+                div_list.append(html.Div(
+                    html.Div([
+                        'There was an error processing this file.'
+                    ]),
+                    html.Div(out),
+                    html.Div(err)
+                ))
+
         return html.Div(div_list)
 
 #@callback(
