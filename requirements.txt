@@ -9,3 +9,5 @@ nbformat
 requests
 boto3
 jwt
+plotly
+dash
