@@ -7,9 +7,9 @@
             "id": "http://adlnet.gov/expapi/verbs/initialized"
         },
         "object": {
-            "id": "http://example.com/games/MyFirstGame",
+            "id": "http://example.com/games/SuperMarioBros",
             "definition": {
-                "type": "http://curatr3.com/define/type/serious-game"
+                "type": "https://w3id.org/xapi/seriousgames/activity-types/serious-game"
             }
         },
         "timestamp": "2016-05-24T15:03:47Z"
@@ -24,7 +24,7 @@
         "object": {
             "id": "http://example.com/games/SuperMarioBros/Levels/World1-1",
             "definition": {
-                "type": "http://curatr3.com/define/type/level"
+                "type": "https://w3id.org/xapi/seriousgames/activity-types/level"
             }
         },
         "timestamp": "2016-05-24T15:03:47Z"
@@ -39,13 +39,12 @@
         "object": {
             "id": "http://example.com/games/SuperMarioBros/Levels/World1-1",
             "definition": {
-                "type": "http://curatr3.com/define/type/level"
+                "type": "https://w3id.org/xapi/seriousgames/activity-types/level"
             }
         },
         "result": {
             "extensions": {
-                "https://w3id.org/xapi/seriousgames/extensions/progress": 0.5,
-                "progress": 0.5
+                "https://w3id.org/xapi/seriousgames/extensions/progress": 0.5
             }
         },
         "timestamp": "2016-05-24T15:05:49Z"
@@ -58,15 +57,14 @@
             "id": "http://adlnet.gov/expapi/verbs/progressed"
         },
         "object": {
-            "id": "http://example.com/games/MyFirstGame",
+            "id": "http://example.com/games/SuperMarioBros",
             "definition": {
-                "type": "http://curatr3.com/define/type/serious-game"
+                "type": "https://w3id.org/xapi/seriousgames/activity-types/serious-game"
             }
         },
         "result": {
             "extensions": {
-                "https://w3id.org/xapi/seriousgames/extensions/progress": 0.5,
-                "progress": 0.15
+                "https://w3id.org/xapi/seriousgames/extensions/progress": 0.15
             }
         },
         "timestamp": "2016-05-24T15:05:49Z"
@@ -79,15 +77,14 @@
             "id": "http://adlnet.gov/expapi/verbs/progressed"
         },
         "object": {
-            "id": "http://example.com/games/MyFirstGame",
+            "id": "http://example.com/games/SuperMarioBros",
             "definition": {
-                "type": "http://curatr3.com/define/type/serious-game"
+                "type": "https://w3id.org/xapi/seriousgames/activity-types/serious-game"
             }
         },
         "result": {
             "extensions": {
-                "https://w3id.org/xapi/seriousgames/extensions/progress": 0.5,
-                "progress": 0.5
+                "https://w3id.org/xapi/seriousgames/extensions/progress": 0.5
             }
         },
         "timestamp": "2016-05-24T15:15:49Z"
@@ -100,15 +97,14 @@
             "id": "http://adlnet.gov/expapi/verbs/progressed"
         },
         "object": {
-            "id": "http://example.com/games/MyFirstGame",
+            "id": "http://example.com/games/SuperMarioBros",
             "definition": {
-                "type": "http://curatr3.com/define/type/serious-game"
+                "type": "https://w3id.org/xapi/seriousgames/activity-types/serious-game"
             }
         },
         "result": {
             "extensions": {
-                "https://w3id.org/xapi/seriousgames/extensions/progress": 0.5,
-                "progress": 0.7
+                "https://w3id.org/xapi/seriousgames/extensions/progress": 0.7
             }
         },
         "timestamp": "2016-05-24T15:25:49Z"
@@ -121,15 +117,14 @@
             "id": "http://adlnet.gov/expapi/verbs/progressed"
         },
         "object": {
-            "id": "http://example.com/games/MyFirstGame",
+            "id": "http://example.com/games/SuperMarioBros",
             "definition": {
-                "type": "http://curatr3.com/define/type/serious-game"
+                "type": "https://w3id.org/xapi/seriousgames/activity-types/serious-game"
             }
         },
         "result": {
             "extensions": {
-                "https://w3id.org/xapi/seriousgames/extensions/progress": 0.5,
-                "progress": 0.9
+                "https://w3id.org/xapi/seriousgames/extensions/progress": 0.9
             }
         },
         "timestamp": "2016-05-24T15:35:49Z"
@@ -144,14 +139,14 @@
         "object": {
             "id": "http://example.com/games/SuperMarioBros/Levels/World1-1",
             "definition": {
-                "type": "http://curatr3.com/define/type/level"
+                "type": "https://w3id.org/xapi/seriousgames/activity-types/level"
             }
         },
         "result": {
             "extensions": {
                 "https://rage.e-ucm.es/xapi/ext/value": "Game Over",
-                "success": "True",
-                "score": 50
+                "http://example.com/extensions/success": "True",
+                "http://example.com/extensions/score": 50
             }
         },
         "timestamp": "2016-05-24T15:40:13Z"
@@ -164,16 +159,16 @@
             "id": "http://adlnet.gov/expapi/verbs/completed"
         },
         "object": {
-            "id": "http://example.com/games/SuperMarioBros/Levels/MyFirstGame",
+            "id": "http://example.com/games/SuperMarioBros",
             "definition": {
-                "type": "http://curatr3.com/define/type/serious-game"
+                "type": "https://w3id.org/xapi/seriousgames/activity-types/serious-game"
             }
         },
         "result": {
             "extensions": {
                 "https://rage.e-ucm.es/xapi/ext/value": "Game Over",
-                "success": "True",
-                "score": 50
+                "http://example.com/extensions/success": "True",
+                "http://example.com/extensions/score": 50
             }
         },
         "timestamp": "2016-05-24T15:45:13Z"
@@ -188,7 +183,7 @@
         "object": {
             "id": "http://example.com/games/SuperMarioBros/Screens/SoundMenu",
             "definition": {
-                "type": "https://rage.e-ucm.es/xapi/seriousgames/activities/Screen"
+                "type": "https://w3id.org/xapi/seriousgames/activity-types/Screen"
             }
         },
         "timestamp": "2016-05-24T07:47:47Z"
@@ -201,9 +196,9 @@
             "id": "http://activitystrea.ms/schema/1.0/accessed"
         },
         "object": {
-            "id": "http://example.com/games/cutscenes/IntroVideo",
+            "id": "http://example.com/games/SuperMarioBros/cutscenes/IntroVideo",
             "definition": {
-                "type": "https://rage.e-ucm.es/xapi/seriousgames/activities/Cutscene"
+                "type": "https://w3id.org/xapi/seriousgames/activity-types/Cutscene"
             }
         },
         "timestamp": "2016-05-24T07:47:47Z"
@@ -216,9 +211,9 @@
             "id": "http://activitystrea.ms/schema/1.0/accessed"
         },
         "object": {
-            "id": "http://example.com/games/cutscenes/VideoTutorial",
+            "id": "http://example.com/games/SuperMarioBros/cutscenes/VideoTutorial",
             "definition": {
-                "type": "https://rage.e-ucm.es/xapi/seriousgames/activities/Cutscene"
+                "type": "https://w3id.org/xapi/seriousgames/activity-types/Cutscene"
             }
         },
         "timestamp": "2016-05-24T07:47:47Z"
@@ -231,9 +226,9 @@
             "id": "http://id.tincanapi.com/verb/skipped"
         },
         "object": {
-            "id": "http://example.com/games/SuperMarioBros/Cutscenes/IntroVideo",
+            "id": "http://example.com/games/SuperMarioBros/cutscenes/IntroVideo",
             "definition": {
-                "type": "https://rage.e-ucm.es/xapi/seriousgames/activities/Cutscene"
+                "type": "https://w3id.org/xapi/seriousgames/activity-types/Cutscene"
             }
         },
         "timestamp": "2016-05-24T09:17:37Z"
@@ -248,7 +243,7 @@
         "object": {
             "id": "http://example.com/games/Capitals/CapitalOfSpain",
             "definition": {
-                "type": "https://rage.e-ucm.es/xapi/seriousgames/activities/Alternative"
+                "type": "https://w3id.org/xapi/seriousgames/activity-types/Alternative"
             }
         },
         "result": {
@@ -267,7 +262,7 @@
         "object": {
             "id": "http://example.com/games/Capitals/CapitalOfSpain",
             "definition": {
-                "type": "https://rage.e-ucm.es/xapi/seriousgames/activities/Alternative"
+                "type": "https://w3id.org/xapi/seriousgames/activity-types/Alternative"
             }
         },
         "result": {
@@ -286,7 +281,7 @@
         "object": {
             "id": "http://example.com/games/Capitals/CapitalOfFlorida",
             "definition": {
-                "type": "https://rage.e-ucm.es/xapi/seriousgames/activities/Alternative"
+                "type": "https://w3id.org/xapi/seriousgames/activity-types/Alternative"
             }
         },
         "result": {
@@ -305,7 +300,7 @@
         "object": {
             "id": "http://example.com/games/Capitals/CapitalOfFlorida",
             "definition": {
-                "type": "https://rage.e-ucm.es/xapi/seriousgames/activities/Alternative"
+                "type": "https://w3id.org/xapi/seriousgames/activity-types/Alternative"
             }
         },
         "result": {
@@ -324,7 +319,7 @@
         "object": {
             "id": "http://example.com/games/Capitals/CapitalOfFlorida",
             "definition": {
-                "type": "https://rage.e-ucm.es/xapi/seriousgames/activities/Alternative"
+                "type": "https://w3id.org/xapi/seriousgames/activity-types/Alternative"
             }
         },
         "result": {
@@ -343,7 +338,7 @@
         "object": {
             "id": "http://example.com/games/Capitals/CapitalOfFlorida",
             "definition": {
-                "type": "https://rage.e-ucm.es/xapi/seriousgames/activities/Alternative"
+                "type": "https://w3id.org/xapi/seriousgames/activity-types/Alternative"
             }
         },
         "result": {
@@ -360,9 +355,9 @@
             "id": "http://adlnet.gov/expapi/verbs/initialized"
         },
         "object": {
-            "id": "http://example.com/games/MyFirstGame",
+            "id": "http://example.com/games/SuperMarioBros",
             "definition": {
-                "type": "http://curatr3.com/define/type/serious-game"
+                "type": "https://w3id.org/xapi/seriousgames/activity-types/serious-game"
             }
         },
         "timestamp": "2016-05-24T15:05:47Z"
@@ -377,7 +372,7 @@
         "object": {
             "id": "http://example.com/games/SuperMarioBros/Levels/World1-1",
             "definition": {
-                "type": "http://curatr3.com/define/type/level"
+                "type": "https://w3id.org/xapi/seriousgames/activity-types/level"
             }
         },
         "timestamp": "2016-05-24T15:05:47Z"
@@ -392,13 +387,12 @@
         "object": {
             "id": "http://example.com/games/SuperMarioBros/Levels/World1-1",
             "definition": {
-                "type": "http://curatr3.com/define/type/level"
+                "type": "https://w3id.org/xapi/seriousgames/activity-types/level"
             }
         },
         "result": {
             "extensions": {
-                "https://w3id.org/xapi/seriousgames/extensions/progress": 0.5,
-                "progress": 0.1
+                "https://w3id.org/xapi/seriousgames/extensions/progress": 0.1
             }
         },
         "timestamp": "2016-05-24T15:05:49Z"
@@ -411,15 +405,14 @@
             "id": "http://adlnet.gov/expapi/verbs/progressed"
         },
         "object": {
-            "id": "http://example.com/games/MyFirstGame",
+            "id": "http://example.com/games/SuperMarioBros",
             "definition": {
-                "type": "http://curatr3.com/define/type/serious-game"
+                "type": "https://w3id.org/xapi/seriousgames/activity-types/serious-game"
             }
         },
         "result": {
             "extensions": {
-                "https://w3id.org/xapi/seriousgames/extensions/progress": 0.5,
-                "progress": 0.1
+                "https://w3id.org/xapi/seriousgames/extensions/progress": 0.1
             }
         },
         "timestamp": "2016-05-24T15:05:49Z"
@@ -432,15 +425,14 @@
             "id": "http://adlnet.gov/expapi/verbs/progressed"
         },
         "object": {
-            "id": "http://example.com/games/MyFirstGame",
+            "id": "http://example.com/games/SuperMarioBros",
             "definition": {
-                "type": "http://curatr3.com/define/type/serious-game"
+                "type": "https://w3id.org/xapi/seriousgames/activity-types/serious-game"
             }
         },
         "result": {
             "extensions": {
-                "https://w3id.org/xapi/seriousgames/extensions/progress": 0.5,
-                "progress": 0.35
+                "https://w3id.org/xapi/seriousgames/extensions/progress": 0.35
             }
         },
         "timestamp": "2016-05-24T15:15:49Z"
@@ -453,15 +445,14 @@
             "id": "http://adlnet.gov/expapi/verbs/progressed"
         },
         "object": {
-            "id": "http://example.com/games/MyFirstGame",
+            "id": "http://example.com/games/SuperMarioBros",
             "definition": {
-                "type": "http://curatr3.com/define/type/serious-game"
+                "type": "https://w3id.org/xapi/seriousgames/activity-types/serious-game"
             }
         },
         "result": {
             "extensions": {
-                "https://w3id.org/xapi/seriousgames/extensions/progress": 0.5,
-                "progress": 0.55
+                "https://w3id.org/xapi/seriousgames/extensions/progress": 0.55
             }
         },
         "timestamp": "2016-05-24T15:25:49Z"
@@ -474,15 +465,14 @@
             "id": "http://adlnet.gov/expapi/verbs/progressed"
         },
         "object": {
-            "id": "http://example.com/games/MyFirstGame",
+            "id": "http://example.com/games/SuperMarioBros",
             "definition": {
-                "type": "http://curatr3.com/define/type/serious-game"
+                "type": "https://w3id.org/xapi/seriousgames/activity-types/serious-game"
             }
         },
         "result": {
             "extensions": {
-                "https://w3id.org/xapi/seriousgames/extensions/progress": 0.5,
-                "progress": 0.75
+                "https://w3id.org/xapi/seriousgames/extensions/progress": 0.75
             }
         },
         "timestamp": "2016-05-24T15:35:49Z"
@@ -497,14 +487,14 @@
         "object": {
             "id": "http://example.com/games/SuperMarioBros/Levels/World1-1",
             "definition": {
-                "type": "http://curatr3.com/define/type/level"
+                "type": "https://w3id.org/xapi/seriousgames/activity-types/level"
             }
         },
         "result": {
             "extensions": {
                 "https://rage.e-ucm.es/xapi/ext/value": "Game Over",
-                "success": "False",
-                "score": 17
+                "http://example.com/extensions/success": "False",
+                "http://example.com/extensions/score": 17
             }
         },
         "timestamp": "2016-05-24T15:48:13Z"
@@ -517,16 +507,16 @@
             "id": "http://adlnet.gov/expapi/verbs/completed"
         },
         "object": {
-            "id": "http://example.com/games/SuperMarioBros/Levels/MyFirstGame",
+            "id": "http://example.com/games/SuperMarioBros",
             "definition": {
-                "type": "http://curatr3.com/define/type/serious-game"
+                "type": "https://w3id.org/xapi/seriousgames/activity-types/serious-game"
             }
         },
         "result": {
             "extensions": {
                 "https://rage.e-ucm.es/xapi/ext/value": "Game Over",
-                "success": "False",
-                "score": 33
+                "http://example.com/extensions/success": "False",
+                "http://example.com/extensions/score": 33
             }
         },
         "timestamp": "2016-05-24T15:55:13Z"
@@ -541,7 +531,7 @@
         "object": {
             "id": "http://example.com/games/SuperMarioBros/Screens/SoundMenu",
             "definition": {
-                "type": "https://rage.e-ucm.es/xapi/seriousgames/activities/Screen"
+                "type": "https://w3id.org/xapi/seriousgames/activity-types/Screen"
             }
         },
         "timestamp": "2016-05-24T07:47:47Z"
@@ -554,9 +544,9 @@
             "id": "http://activitystrea.ms/schema/1.0/accessed"
         },
         "object": {
-            "id": "http://example.com/games/cutscenes/IntroVideo",
+            "id": "http://example.com/games/SuperMarioBros/cutscenes/IntroVideo",
             "definition": {
-                "type": "https://rage.e-ucm.es/xapi/seriousgames/activities/Cutscene"
+                "type": "https://w3id.org/xapi/seriousgames/activity-types/Cutscene"
             }
         },
         "timestamp": "2016-05-24T07:47:47Z"
@@ -569,9 +559,9 @@
             "id": "http://activitystrea.ms/schema/1.0/accessed"
         },
         "object": {
-            "id": "http://example.com/games/cutscenes/VideoTutorial",
+            "id": "http://example.com/games/SuperMarioBros/cutscenes/VideoTutorial",
             "definition": {
-                "type": "https://rage.e-ucm.es/xapi/seriousgames/activities/Cutscene"
+                "type": "https://w3id.org/xapi/seriousgames/activity-types/Cutscene"
             }
         },
         "timestamp": "2016-05-24T07:47:47Z"
@@ -584,9 +574,9 @@
             "id": "http://id.tincanapi.com/verb/skipped"
         },
         "object": {
-            "id": "http://example.com/games/SuperMarioBros/Cutscenes/IntroVideo",
+            "id": "http://example.com/games/SuperMarioBros/cutscenes/IntroVideo",
             "definition": {
-                "type": "https://rage.e-ucm.es/xapi/seriousgames/activities/Cutscene"
+                "type": "https://w3id.org/xapi/seriousgames/activity-types/Cutscene"
             }
         },
         "timestamp": "2016-05-24T09:17:37Z"
@@ -601,7 +591,7 @@
         "object": {
             "id": "http://example.com/games/Capitals/CapitalOfSpain",
             "definition": {
-                "type": "https://rage.e-ucm.es/xapi/seriousgames/activities/Alternative"
+                "type": "https://w3id.org/xapi/seriousgames/activity-types/Alternative"
             }
         },
         "result": {
@@ -620,7 +610,7 @@
         "object": {
             "id": "http://example.com/games/Capitals/CapitalOfSpain",
             "definition": {
-                "type": "https://rage.e-ucm.es/xapi/seriousgames/activities/Alternative"
+                "type": "https://w3id.org/xapi/seriousgames/activity-types/Alternative"
             }
         },
         "result": {
@@ -639,7 +629,7 @@
         "object": {
             "id": "http://example.com/games/Capitals/CapitalOfFlorida",
             "definition": {
-                "type": "https://rage.e-ucm.es/xapi/seriousgames/activities/Alternative"
+                "type": "https://w3id.org/xapi/seriousgames/activity-types/Alternative"
             }
         },
         "result": {
@@ -658,7 +648,7 @@
         "object": {
             "id": "http://example.com/games/Capitals/CapitalOfFlorida",
             "definition": {
-                "type": "https://rage.e-ucm.es/xapi/seriousgames/activities/Alternative"
+                "type": "https://w3id.org/xapi/seriousgames/activity-types/Alternative"
             }
         },
         "result": {
@@ -677,7 +667,7 @@
         "object": {
             "id": "http://example.com/games/Capitals/CapitalOfFlorida",
             "definition": {
-                "type": "https://rage.e-ucm.es/xapi/seriousgames/activities/Alternative"
+                "type": "https://w3id.org/xapi/seriousgames/activity-types/Alternative"
             }
         },
         "result": {
@@ -696,7 +686,7 @@
         "object": {
             "id": "http://example.com/games/Capitals/CapitalOfFlorida",
             "definition": {
-                "type": "https://rage.e-ucm.es/xapi/seriousgames/activities/Alternative"
+                "type": "https://w3id.org/xapi/seriousgames/activity-types/Alternative"
             }
         },
         "result": {
@@ -713,9 +703,9 @@
             "id": "http://adlnet.gov/expapi/verbs/initialized"
         },
         "object": {
-            "id": "http://example.com/games/MyFirstGame",
+            "id": "http://example.com/games/SuperMarioBros",
             "definition": {
-                "type": "http://curatr3.com/define/type/serious-game"
+                "type": "https://w3id.org/xapi/seriousgames/activity-types/serious-game"
             }
         },
         "timestamp": "2016-05-24T15:03:47Z"
@@ -730,7 +720,7 @@
         "object": {
             "id": "http://example.com/games/SuperMarioBros/Levels/World1-2",
             "definition": {
-                "type": "http://curatr3.com/define/type/level"
+                "type": "https://w3id.org/xapi/seriousgames/activity-types/level"
             }
         },
         "timestamp": "2016-05-24T15:03:47Z"
@@ -745,13 +735,12 @@
         "object": {
             "id": "http://example.com/games/SuperMarioBros/Levels/World1-2",
             "definition": {
-                "type": "http://curatr3.com/define/type/level"
+                "type": "https://w3id.org/xapi/seriousgames/activity-types/level"
             }
         },
         "result": {
             "extensions": {
-                "https://w3id.org/xapi/seriousgames/extensions/progress": 0.5,
-                "progress": 0.5
+                "https://w3id.org/xapi/seriousgames/extensions/progress": 0.5
             }
         },
         "timestamp": "2016-05-24T15:05:49Z"
@@ -764,15 +753,14 @@
             "id": "http://adlnet.gov/expapi/verbs/progressed"
         },
         "object": {
-            "id": "http://example.com/games/MyFirstGame",
+            "id": "http://example.com/games/SuperMarioBros",
             "definition": {
-                "type": "http://curatr3.com/define/type/serious-game"
+                "type": "https://w3id.org/xapi/seriousgames/activity-types/serious-game"
             }
         },
         "result": {
             "extensions": {
-                "https://w3id.org/xapi/seriousgames/extensions/progress": 0.5,
-                "progress": 0.45
+                "https://w3id.org/xapi/seriousgames/extensions/progress": 0.45
             }
         },
         "timestamp": "2016-05-24T15:05:49Z"
@@ -785,15 +773,14 @@
             "id": "http://adlnet.gov/expapi/verbs/progressed"
         },
         "object": {
-            "id": "http://example.com/games/MyFirstGame",
+            "id": "http://example.com/games/SuperMarioBros",
             "definition": {
-                "type": "http://curatr3.com/define/type/serious-game"
+                "type": "https://w3id.org/xapi/seriousgames/activity-types/serious-game"
             }
         },
         "result": {
             "extensions": {
-                "https://w3id.org/xapi/seriousgames/extensions/progress": 0.5,
-                "progress": 0.8
+                "https://w3id.org/xapi/seriousgames/extensions/progress": 0.8
             }
         },
         "timestamp": "2016-05-24T15:15:49Z"
@@ -806,15 +793,14 @@
             "id": "http://adlnet.gov/expapi/verbs/progressed"
         },
         "object": {
-            "id": "http://example.com/games/MyFirstGame",
+            "id": "http://example.com/games/SuperMarioBros",
             "definition": {
-                "type": "http://curatr3.com/define/type/serious-game"
+                "type": "https://w3id.org/xapi/seriousgames/activity-types/serious-game"
             }
         },
         "result": {
             "extensions": {
-                "https://w3id.org/xapi/seriousgames/extensions/progress": 0.5,
-                "progress": 0.99
+                "https://w3id.org/xapi/seriousgames/extensions/progress": 0.99
             }
         },
         "timestamp": "2016-05-24T15:35:49Z"
@@ -829,14 +815,14 @@
         "object": {
             "id": "http://example.com/games/SuperMarioBros/Levels/World1-2",
             "definition": {
-                "type": "http://curatr3.com/define/type/level"
+                "type": "https://w3id.org/xapi/seriousgames/activity-types/level"
             }
         },
         "result": {
             "extensions": {
                 "https://rage.e-ucm.es/xapi/ext/value": "Game Over",
-                "success": "True",
-                "score": 95
+                "http://example.com/extensions/success": "True",
+                "http://example.com/extensions/score": 95
             }
         },
         "timestamp": "2016-05-24T15:37:13Z"
@@ -849,16 +835,16 @@
             "id": "http://adlnet.gov/expapi/verbs/completed"
         },
         "object": {
-            "id": "http://example.com/games/SuperMarioBros/Levels/MyFirstGame",
+            "id": "http://example.com/games/SuperMarioBros",
             "definition": {
-                "type": "http://curatr3.com/define/type/serious-game"
+                "type": "https://w3id.org/xapi/seriousgames/activity-types/serious-game"
             }
         },
         "result": {
             "extensions": {
                 "https://rage.e-ucm.es/xapi/ext/value": "Game Over",
-                "success": "True",
-                "score": 95
+                "http://example.com/extensions/success": "True",
+                "http://example.com/extensions/score": 95
             }
         },
         "timestamp": "2016-05-24T15:37:13Z"
@@ -873,7 +859,7 @@
         "object": {
             "id": "http://example.com/games/SuperMarioBros/Screens/SoundMenu",
             "definition": {
-                "type": "https://rage.e-ucm.es/xapi/seriousgames/activities/Screen"
+                "type": "https://w3id.org/xapi/seriousgames/activity-types/Screen"
             }
         },
         "timestamp": "2016-05-24T07:47:47Z"
@@ -886,9 +872,9 @@
             "id": "http://activitystrea.ms/schema/1.0/accessed"
         },
         "object": {
-            "id": "http://example.com/games/cutscenes/IntroVideo",
+            "id": "http://example.com/games/SuperMarioBros/cutscenes/IntroVideo",
             "definition": {
-                "type": "https://rage.e-ucm.es/xapi/seriousgames/activities/Cutscene"
+                "type": "https://w3id.org/xapi/seriousgames/activity-types/Cutscene"
             }
         },
         "timestamp": "2016-05-24T07:47:47Z"
@@ -901,9 +887,9 @@
             "id": "http://activitystrea.ms/schema/1.0/accessed"
         },
         "object": {
-            "id": "http://example.com/games/cutscenes/VideoTutorial",
+            "id": "http://example.com/games/SuperMarioBros/cutscenes/VideoTutorial",
             "definition": {
-                "type": "https://rage.e-ucm.es/xapi/seriousgames/activities/Cutscene"
+                "type": "https://w3id.org/xapi/seriousgames/activity-types/Cutscene"
             }
         },
         "timestamp": "2016-05-24T07:47:47Z"
@@ -916,9 +902,9 @@
             "id": "http://id.tincanapi.com/verb/accessed"
         },
         "object": {
-            "id": "http://example.com/games/SuperMarioBros/Cutscenes/VideoDemo",
+            "id": "http://example.com/games/SuperMarioBros/cutscenes/VideoDemo",
             "definition": {
-                "type": "https://rage.e-ucm.es/xapi/seriousgames/activities/Cutscene"
+                "type": "https://w3id.org/xapi/seriousgames/activity-types/Cutscene"
             }
         },
         "timestamp": "2016-05-24T09:17:37Z"
@@ -933,7 +919,7 @@
         "object": {
             "id": "http://example.com/games/Capitals/CapitalOfSpain",
             "definition": {
-                "type": "https://rage.e-ucm.es/xapi/seriousgames/activities/Alternative"
+                "type": "https://w3id.org/xapi/seriousgames/activity-types/Alternative"
             }
         },
         "result": {
@@ -952,7 +938,7 @@
         "object": {
             "id": "http://example.com/games/Capitals/CapitalOfFlorida",
             "definition": {
-                "type": "https://rage.e-ucm.es/xapi/seriousgames/activities/Alternative"
+                "type": "https://w3id.org/xapi/seriousgames/activity-types/Alternative"
             }
         },
         "result": {
@@ -971,7 +957,7 @@
         "object": {
             "id": "http://example.com/games/Capitals/CapitalOfFlorida",
             "definition": {
-                "type": "https://rage.e-ucm.es/xapi/seriousgames/activities/Alternative"
+                "type": "https://w3id.org/xapi/seriousgames/activity-types/Alternative"
             }
         },
         "result": {
@@ -988,9 +974,9 @@
             "id": "http://adlnet.gov/expapi/verbs/initialized"
         },
         "object": {
-            "id": "http://example.com/games/MyFirstGame",
+            "id": "http://example.com/games/SuperMarioBros",
             "definition": {
-                "type": "http://curatr3.com/define/type/serious-game"
+                "type": "https://w3id.org/xapi/seriousgames/activity-types/serious-game"
             }
         },
         "timestamp": "2016-05-24T15:25:47Z"
@@ -1005,7 +991,7 @@
         "object": {
             "id": "http://example.com/games/SuperMarioBros/Levels/World1-2",
             "definition": {
-                "type": "http://curatr3.com/define/type/level"
+                "type": "https://w3id.org/xapi/seriousgames/activity-types/level"
             }
         },
         "timestamp": "2016-05-24T15:05:47Z"
@@ -1020,13 +1006,12 @@
         "object": {
             "id": "http://example.com/games/SuperMarioBros/Levels/World1-2",
             "definition": {
-                "type": "http://curatr3.com/define/type/level"
+                "type": "https://w3id.org/xapi/seriousgames/activity-types/level"
             }
         },
         "result": {
             "extensions": {
-                "https://w3id.org/xapi/seriousgames/extensions/progress": 0.5,
-                "progress": 0.5
+                "https://w3id.org/xapi/seriousgames/extensions/progress": 0.5
             }
         },
         "timestamp": "2016-05-24T15:05:49Z"
@@ -1039,15 +1024,14 @@
             "id": "http://adlnet.gov/expapi/verbs/progressed"
         },
         "object": {
-            "id": "http://example.com/games/MyFirstGame",
+            "id": "http://example.com/games/SuperMarioBros",
             "definition": {
-                "type": "http://curatr3.com/define/type/serious-game"
+                "type": "https://w3id.org/xapi/seriousgames/activity-types/serious-game"
             }
         },
         "result": {
             "extensions": {
-                "https://w3id.org/xapi/seriousgames/extensions/progress": 0.5,
-                "progress": 0.25
+                "https://w3id.org/xapi/seriousgames/extensions/progress": 0.25
             }
         },
         "timestamp": "2016-05-24T15:36:49Z"
@@ -1060,15 +1044,14 @@
             "id": "http://adlnet.gov/expapi/verbs/progressed"
         },
         "object": {
-            "id": "http://example.com/games/MyFirstGame",
+            "id": "http://example.com/games/SuperMarioBros",
             "definition": {
-                "type": "http://curatr3.com/define/type/serious-game"
+                "type": "https://w3id.org/xapi/seriousgames/activity-types/serious-game"
             }
         },
         "result": {
             "extensions": {
-                "https://w3id.org/xapi/seriousgames/extensions/progress": 0.5,
-                "progress": 0.35
+                "https://w3id.org/xapi/seriousgames/extensions/progress": 0.35
             }
         },
         "timestamp": "2016-05-24T15:38:49Z"
@@ -1081,15 +1064,14 @@
             "id": "http://adlnet.gov/expapi/verbs/progressed"
         },
         "object": {
-            "id": "http://example.com/games/MyFirstGame",
+            "id": "http://example.com/games/SuperMarioBros",
             "definition": {
-                "type": "http://curatr3.com/define/type/serious-game"
+                "type": "https://w3id.org/xapi/seriousgames/activity-types/serious-game"
             }
         },
         "result": {
             "extensions": {
-                "https://w3id.org/xapi/seriousgames/extensions/progress": 0.5,
-                "progress": 0.65
+                "https://w3id.org/xapi/seriousgames/extensions/progress": 0.65
             }
         },
         "timestamp": "2016-05-24T15:45:49Z"
@@ -1102,15 +1084,14 @@
             "id": "http://adlnet.gov/expapi/verbs/progressed"
         },
         "object": {
-            "id": "http://example.com/games/MyFirstGame",
+            "id": "http://example.com/games/SuperMarioBros",
             "definition": {
-                "type": "http://curatr3.com/define/type/serious-game"
+                "type": "https://w3id.org/xapi/seriousgames/activity-types/serious-game"
             }
         },
         "result": {
             "extensions": {
-                "https://w3id.org/xapi/seriousgames/extensions/progress": 0.5,
-                "progress": 0.75
+                "https://w3id.org/xapi/seriousgames/extensions/progress": 0.75
             }
         },
         "timestamp": "2016-05-24T15:47:49Z"
@@ -1125,14 +1106,14 @@
         "object": {
             "id": "http://example.com/games/SuperMarioBros/Levels/World1-2",
             "definition": {
-                "type": "http://curatr3.com/define/type/level"
+                "type": "https://w3id.org/xapi/seriousgames/activity-types/level"
             }
         },
         "result": {
             "extensions": {
                 "https://rage.e-ucm.es/xapi/ext/value": "Game Over",
-                "success": "False",
-                "score": 72
+                "http://example.com/extensions/success": "False",
+                "http://example.com/extensions/score": 72
             }
         },
         "timestamp": "2016-05-24T15:48:13Z"
@@ -1145,16 +1126,16 @@
             "id": "http://adlnet.gov/expapi/verbs/completed"
         },
         "object": {
-            "id": "http://example.com/games/SuperMarioBros/Levels/MyFirstGame",
+            "id": "http://example.com/games/SuperMarioBros",
             "definition": {
-                "type": "http://curatr3.com/define/type/serious-game"
+                "type": "https://w3id.org/xapi/seriousgames/activity-types/serious-game"
             }
         },
         "result": {
             "extensions": {
                 "https://rage.e-ucm.es/xapi/ext/value": "Game Over",
-                "success": "True",
-                "score": 72
+                "http://example.com/extensions/success": "True",
+                "http://example.com/extensions/score": 72
             }
         },
         "timestamp": "2016-05-24T15:59:13Z"
@@ -1169,7 +1150,7 @@
         "object": {
             "id": "http://example.com/games/SuperMarioBros/Screens/SoundMenu",
             "definition": {
-                "type": "https://rage.e-ucm.es/xapi/seriousgames/activities/Screen"
+                "type": "https://w3id.org/xapi/seriousgames/activity-types/Screen"
             }
         },
         "timestamp": "2016-05-24T07:47:47Z"
@@ -1182,9 +1163,9 @@
             "id": "http://activitystrea.ms/schema/1.0/accessed"
         },
         "object": {
-            "id": "http://example.com/games/cutscenes/IntroVideo",
+            "id": "http://example.com/games/SuperMarioBros/cutscenes/IntroVideo",
             "definition": {
-                "type": "https://rage.e-ucm.es/xapi/seriousgames/activities/Cutscene"
+                "type": "https://w3id.org/xapi/seriousgames/activity-types/Cutscene"
             }
         },
         "timestamp": "2016-05-24T07:47:47Z"
@@ -1197,9 +1178,9 @@
             "id": "http://id.tincanapi.com/verb/skipped"
         },
         "object": {
-            "id": "http://example.com/games/SuperMarioBros/Cutscenes/IntroVideo",
+            "id": "http://example.com/games/SuperMarioBros/cutscenes/IntroVideo",
             "definition": {
-                "type": "https://rage.e-ucm.es/xapi/seriousgames/activities/Cutscene"
+                "type": "https://w3id.org/xapi/seriousgames/activity-types/Cutscene"
             }
         },
         "timestamp": "2016-05-24T09:17:37Z"
@@ -1214,7 +1195,7 @@
         "object": {
             "id": "http://example.com/games/Capitals/CapitalOfSpain",
             "definition": {
-                "type": "https://rage.e-ucm.es/xapi/seriousgames/activities/Alternative"
+                "type": "https://w3id.org/xapi/seriousgames/activity-types/Alternative"
             }
         },
         "result": {
@@ -1233,7 +1214,7 @@
         "object": {
             "id": "http://example.com/games/Capitals/CapitalOfFlorida",
             "definition": {
-                "type": "https://rage.e-ucm.es/xapi/seriousgames/activities/Alternative"
+                "type": "https://w3id.org/xapi/seriousgames/activity-types/Alternative"
             }
         },
         "result": {
@@ -1252,7 +1233,7 @@
         "object": {
             "id": "http://example.com/games/Capitals/CapitalOfFlorida",
             "definition": {
-                "type": "https://rage.e-ucm.es/xapi/seriousgames/activities/Alternative"
+                "type": "https://w3id.org/xapi/seriousgames/activity-types/Alternative"
             }
         },
         "result": {
@@ -1269,9 +1250,9 @@
             "id": "http://adlnet.gov/expapi/verbs/initialized"
         },
         "object": {
-            "id": "http://example.com/games/MyFirstGame",
+            "id": "http://example.com/games/SuperMarioBros",
             "definition": {
-                "type": "http://curatr3.com/define/type/serious-game"
+                "type": "https://w3id.org/xapi/seriousgames/activity-types/serious-game"
             }
         },
         "timestamp": "2016-05-24T15:13:47Z"
@@ -1286,7 +1267,7 @@
         "object": {
             "id": "http://example.com/games/SuperMarioBros/Levels/World1-1",
             "definition": {
-                "type": "http://curatr3.com/define/type/level"
+                "type": "https://w3id.org/xapi/seriousgames/activity-types/level"
             }
         },
         "timestamp": "2016-05-24T15:15:47Z"
@@ -1301,7 +1282,7 @@
         "object": {
             "id": "http://example.com/games/SuperMarioBros/Levels/World1-2",
             "definition": {
-                "type": "http://curatr3.com/define/type/level"
+                "type": "https://w3id.org/xapi/seriousgames/activity-types/level"
             }
         },
         "timestamp": "2016-05-24T15:25:47Z"
@@ -1316,16 +1297,15 @@
         "object": {
             "id": "http://example.com/games/SuperMarioBros/Levels/World1-1",
             "definition": {
-                "type": "http://curatr3.com/define/type/level"
+                "type": "https://w3id.org/xapi/seriousgames/activity-types/level"
             }
         },
         "result": {
             "extensions": {
-                "https://w3id.org/xapi/seriousgames/extensions/progress": 0.5,
-                "progress": 0.5
+                "https://w3id.org/xapi/seriousgames/extensions/progress": 0.5
             }
         },
-        "timestamp": "2016-05-24T15:05:49Z"
+        "timestamp": "2016-05-24T15:15:49Z"
     },
     {
         "actor": {
@@ -1335,15 +1315,14 @@
             "id": "http://adlnet.gov/expapi/verbs/progressed"
         },
         "object": {
-            "id": "http://example.com/games/MyFirstGame",
+            "id": "http://example.com/games/SuperMarioBros",
             "definition": {
-                "type": "http://curatr3.com/define/type/serious-game"
+                "type": "https://w3id.org/xapi/seriousgames/activity-types/serious-game"
             }
         },
         "result": {
             "extensions": {
-                "https://w3id.org/xapi/seriousgames/extensions/progress": 0.5,
-                "progress": 0.3
+                "https://w3id.org/xapi/seriousgames/extensions/progress": 0.3
             }
         },
         "timestamp": "2016-05-24T15:17:49Z"
@@ -1356,15 +1335,14 @@
             "id": "http://adlnet.gov/expapi/verbs/progressed"
         },
         "object": {
-            "id": "http://example.com/games/MyFirstGame",
+            "id": "http://example.com/games/SuperMarioBros",
             "definition": {
-                "type": "http://curatr3.com/define/type/serious-game"
+                "type": "https://w3id.org/xapi/seriousgames/activity-types/serious-game"
             }
         },
         "result": {
             "extensions": {
-                "https://w3id.org/xapi/seriousgames/extensions/progress": 0.5,
-                "progress": 0.5
+                "https://w3id.org/xapi/seriousgames/extensions/progress": 0.5
             }
         },
         "timestamp": "2016-05-24T15:25:49Z"
@@ -1377,15 +1355,14 @@
             "id": "http://adlnet.gov/expapi/verbs/progressed"
         },
         "object": {
-            "id": "http://example.com/games/MyFirstGame",
+            "id": "http://example.com/games/SuperMarioBros",
             "definition": {
-                "type": "http://curatr3.com/define/type/serious-game"
+                "type": "https://w3id.org/xapi/seriousgames/activity-types/serious-game"
             }
         },
         "result": {
             "extensions": {
-                "https://w3id.org/xapi/seriousgames/extensions/progress": 0.5,
-                "progress": 0.75
+                "https://w3id.org/xapi/seriousgames/extensions/progress": 0.75
             }
         },
         "timestamp": "2016-05-24T15:33:49Z"
@@ -1398,15 +1375,14 @@
             "id": "http://adlnet.gov/expapi/verbs/progressed"
         },
         "object": {
-            "id": "http://example.com/games/MyFirstGame",
+            "id": "http://example.com/games/SuperMarioBros",
             "definition": {
-                "type": "http://curatr3.com/define/type/serious-game"
+                "type": "https://w3id.org/xapi/seriousgames/activity-types/serious-game"
             }
         },
         "result": {
             "extensions": {
-                "https://w3id.org/xapi/seriousgames/extensions/progress": 0.5,
-                "progress": 0.95
+                "https://w3id.org/xapi/seriousgames/extensions/progress": 0.95
             }
         },
         "timestamp": "2016-05-24T15:40:49Z"
@@ -1421,14 +1397,14 @@
         "object": {
             "id": "http://example.com/games/SuperMarioBros/Levels/World1-1",
             "definition": {
-                "type": "http://curatr3.com/define/type/level"
+                "type": "https://w3id.org/xapi/seriousgames/activity-types/level"
             }
         },
         "result": {
             "extensions": {
                 "https://rage.e-ucm.es/xapi/ext/value": "Game Over",
-                "success": "False",
-                "score": 22
+                "http://example.com/extensions/success": "False",
+                "http://example.com/extensions/score": 22
             }
         },
         "timestamp": "2016-05-24T15:55:13Z"
@@ -1443,14 +1419,14 @@
         "object": {
             "id": "http://example.com/games/SuperMarioBros/Levels/World1-2",
             "definition": {
-                "type": "http://curatr3.com/define/type/level"
+                "type": "https://w3id.org/xapi/seriousgames/activity-types/level"
             }
         },
         "result": {
             "extensions": {
                 "https://rage.e-ucm.es/xapi/ext/value": "Game Over",
-                "success": "True",
-                "score": 60
+                "http://example.com/extensions/success": "True",
+                "http://example.com/extensions/score": 60
             }
         },
         "timestamp": "2016-05-24T15:55:13Z"
@@ -1463,16 +1439,16 @@
             "id": "http://adlnet.gov/expapi/verbs/completed"
         },
         "object": {
-            "id": "http://example.com/games/SuperMarioBros/Levels/MyFirstGame",
+            "id": "http://example.com/games/SuperMarioBros",
             "definition": {
-                "type": "http://curatr3.com/define/type/serious-game"
+                "type": "https://w3id.org/xapi/seriousgames/activity-types/serious-game"
             }
         },
         "result": {
             "extensions": {
                 "https://rage.e-ucm.es/xapi/ext/value": "Game Over",
-                "success": "True",
-                "score": 43
+                "http://example.com/extensions/success": "True",
+                "http://example.com/extensions/score": 43
             }
         },
         "timestamp": "2016-05-24T15:45:13Z"
@@ -1485,9 +1461,9 @@
             "id": "http://activitystrea.ms/schema/1.0/accessed"
         },
         "object": {
-            "id": "http://example.com/games/cutscenes/IntroVideo",
+            "id": "http://example.com/games/SuperMarioBros/cutscenes/IntroVideo",
             "definition": {
-                "type": "https://rage.e-ucm.es/xapi/seriousgames/activities/Cutscene"
+                "type": "https://w3id.org/xapi/seriousgames/activity-types/Cutscene"
             }
         },
         "timestamp": "2016-05-24T07:47:47Z"
@@ -1500,9 +1476,9 @@
             "id": "http://activitystrea.ms/schema/1.0/accessed"
         },
         "object": {
-            "id": "http://example.com/games/cutscenes/VideoTutorial",
+            "id": "http://example.com/games/SuperMarioBros/cutscenes/VideoTutorial",
             "definition": {
-                "type": "https://rage.e-ucm.es/xapi/seriousgames/activities/Cutscene"
+                "type": "https://w3id.org/xapi/seriousgames/activity-types/Cutscene"
             }
         },
         "timestamp": "2016-05-24T07:47:47Z"
@@ -1517,7 +1493,7 @@
         "object": {
             "id": "http://example.com/games/Capitals/CapitalOfSpain",
             "definition": {
-                "type": "https://rage.e-ucm.es/xapi/seriousgames/activities/Alternative"
+                "type": "https://w3id.org/xapi/seriousgames/activity-types/Alternative"
             }
         },
         "result": {
@@ -1536,7 +1512,7 @@
         "object": {
             "id": "http://example.com/games/Capitals/CapitalOfFlorida",
             "definition": {
-                "type": "https://rage.e-ucm.es/xapi/seriousgames/activities/Alternative"
+                "type": "https://w3id.org/xapi/seriousgames/activity-types/Alternative"
             }
         },
         "result": {
@@ -1555,7 +1531,7 @@
         "object": {
             "id": "http://example.com/games/Capitals/CapitalOfFlorida",
             "definition": {
-                "type": "https://rage.e-ucm.es/xapi/seriousgames/activities/Alternative"
+                "type": "https://w3id.org/xapi/seriousgames/activity-types/Alternative"
             }
         },
         "result": {
