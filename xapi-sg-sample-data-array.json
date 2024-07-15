@@ -201,7 +201,7 @@
             "id": "http://activitystrea.ms/schema/1.0/accessed"
         },
         "object": {
-            "id": "http://example.com/games/cutscenes/IntroVideo",
+            "id": "http://example.com/games/SuperMarioBros/cutscenes/IntroVideo",
             "definition": {
                 "type": "https://rage.e-ucm.es/xapi/seriousgames/activities/Cutscene"
             }
@@ -216,7 +216,7 @@
             "id": "http://activitystrea.ms/schema/1.0/accessed"
         },
         "object": {
-            "id": "http://example.com/games/cutscenes/VideoTutorial",
+            "id": "http://example.com/games/SuperMarioBros/cutscenes/VideoTutorial",
             "definition": {
                 "type": "https://rage.e-ucm.es/xapi/seriousgames/activities/Cutscene"
             }
@@ -231,7 +231,7 @@
             "id": "http://id.tincanapi.com/verb/skipped"
         },
         "object": {
-            "id": "http://example.com/games/SuperMarioBros/Cutscenes/IntroVideo",
+            "id": "http://example.com/games/SuperMarioBros/cutscenes/IntroVideo",
             "definition": {
                 "type": "https://rage.e-ucm.es/xapi/seriousgames/activities/Cutscene"
             }
@@ -554,7 +554,7 @@
             "id": "http://activitystrea.ms/schema/1.0/accessed"
         },
         "object": {
-            "id": "http://example.com/games/cutscenes/IntroVideo",
+            "id": "http://example.com/games/SuperMarioBros/cutscenes/IntroVideo",
             "definition": {
                 "type": "https://rage.e-ucm.es/xapi/seriousgames/activities/Cutscene"
             }
@@ -569,7 +569,7 @@
             "id": "http://activitystrea.ms/schema/1.0/accessed"
         },
         "object": {
-            "id": "http://example.com/games/cutscenes/VideoTutorial",
+            "id": "http://example.com/games/SuperMarioBros/cutscenes/VideoTutorial",
             "definition": {
                 "type": "https://rage.e-ucm.es/xapi/seriousgames/activities/Cutscene"
             }
@@ -584,7 +584,7 @@
             "id": "http://id.tincanapi.com/verb/skipped"
         },
         "object": {
-            "id": "http://example.com/games/SuperMarioBros/Cutscenes/IntroVideo",
+            "id": "http://example.com/games/SuperMarioBros/cutscenes/IntroVideo",
             "definition": {
                 "type": "https://rage.e-ucm.es/xapi/seriousgames/activities/Cutscene"
             }
@@ -886,7 +886,7 @@
             "id": "http://activitystrea.ms/schema/1.0/accessed"
         },
         "object": {
-            "id": "http://example.com/games/cutscenes/IntroVideo",
+            "id": "http://example.com/games/SuperMarioBros/cutscenes/IntroVideo",
             "definition": {
                 "type": "https://rage.e-ucm.es/xapi/seriousgames/activities/Cutscene"
             }
@@ -901,7 +901,7 @@
             "id": "http://activitystrea.ms/schema/1.0/accessed"
         },
         "object": {
-            "id": "http://example.com/games/cutscenes/VideoTutorial",
+            "id": "http://example.com/games/SuperMarioBros/cutscenes/VideoTutorial",
             "definition": {
                 "type": "https://rage.e-ucm.es/xapi/seriousgames/activities/Cutscene"
             }
@@ -916,7 +916,7 @@
             "id": "http://id.tincanapi.com/verb/accessed"
         },
         "object": {
-            "id": "http://example.com/games/SuperMarioBros/Cutscenes/VideoDemo",
+            "id": "http://example.com/games/SuperMarioBros/cutscenes/VideoDemo",
             "definition": {
                 "type": "https://rage.e-ucm.es/xapi/seriousgames/activities/Cutscene"
             }
@@ -1182,7 +1182,7 @@
             "id": "http://activitystrea.ms/schema/1.0/accessed"
         },
         "object": {
-            "id": "http://example.com/games/cutscenes/IntroVideo",
+            "id": "http://example.com/games/SuperMarioBros/cutscenes/IntroVideo",
             "definition": {
                 "type": "https://rage.e-ucm.es/xapi/seriousgames/activities/Cutscene"
             }
@@ -1197,7 +1197,7 @@
             "id": "http://id.tincanapi.com/verb/skipped"
         },
         "object": {
-            "id": "http://example.com/games/SuperMarioBros/Cutscenes/IntroVideo",
+            "id": "http://example.com/games/SuperMarioBros/cutscenes/IntroVideo",
             "definition": {
                 "type": "https://rage.e-ucm.es/xapi/seriousgames/activities/Cutscene"
             }
@@ -1485,7 +1485,7 @@
             "id": "http://activitystrea.ms/schema/1.0/accessed"
         },
         "object": {
-            "id": "http://example.com/games/cutscenes/IntroVideo",
+            "id": "http://example.com/games/SuperMarioBros/cutscenes/IntroVideo",
             "definition": {
                 "type": "https://rage.e-ucm.es/xapi/seriousgames/activities/Cutscene"
             }
@@ -1500,7 +1500,7 @@
             "id": "http://activitystrea.ms/schema/1.0/accessed"
         },
         "object": {
-            "id": "http://example.com/games/cutscenes/VideoTutorial",
+            "id": "http://example.com/games/SuperMarioBros/cutscenes/VideoTutorial",
             "definition": {
                 "type": "https://rage.e-ucm.es/xapi/seriousgames/activities/Cutscene"
             }
