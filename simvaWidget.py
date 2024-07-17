@@ -2,7 +2,7 @@ import requests
 import xml.etree.ElementTree as ET
 import boto3
 import boto3.session
-
+from botocore.client import Config
 from jwt import JWT
 
 class SimvaBrowser:
@@ -38,7 +38,7 @@ class SimvaBrowser:
             print(response.text)
             return
         
-        if 'text/xml' not in response.headers['Content-Type']:
+        if 'application/xml' not in response.headers['Content-Type']:
             print('Expected XML response, got:', response.headers['Content-Type'])
             print(response.text)
             return
@@ -54,7 +54,7 @@ class SimvaBrowser:
             print('Error parsing XML response:', e)
             print(response.text)
 
-    def _s3_client(self):
+    def _s3_resource(self):
         return boto3.resource(
             's3',
             endpoint_url=self.storage_url,
@@ -67,33 +67,35 @@ class SimvaBrowser:
         )
 
     def _list_files(self, path):
-        s3_client = self._s3_client()
-        folder = s3_client.list_objects_v2(Bucket=self.bucket_name,
-                                           Prefix=path,
-                                           Delimiter=self.delimiter)
+        s3_resource = self._s3_resource()
+        bucket = s3_resource.Bucket(self.bucket_name)
+        objects = bucket.objects.filter(Prefix=path, Delimiter=self.delimiter)
+        
         files = []
-        contents = folder.get('Contents')
-        if contents:
-            for o in contents:
-                files.append(o.get('Key')[len(self.current_path):])
+        for obj in objects:
+            files.append(obj.key[len(self.current_path):])
+        
         return files
 
     def _list_folders(self, path):
-        s3_client = self._s3_client()
-        folder = s3_client.list_objects_v2(Bucket=self.bucket_name,
-                                           Prefix=path,
-                                           Delimiter=self.delimiter)
+        s3_resource = self._s3_resource()
+        bucket = s3_resource.Bucket(self.bucket_name)
+        objects = bucket.objects.filter(Prefix=path, Delimiter=self.delimiter)
+        
         folders = []
-        contents = folder.get('CommonPrefixes')
-        if contents:
-            for o in contents:
-                folders.append(o.get('Prefix')[len(self.current_path):])
+        for obj in objects:
+            prefix = obj.key[len(self.current_path):]
+            folder_name = prefix.split(self.delimiter)[0]
+            if folder_name and folder_name not in folders:
+                folders.append(folder_name)
+        
         return folders
 
     def get_file_content(self, path):
-        s3_client = self._s3_client()
-        file = s3_client.get_object(Bucket=self.bucket_name, Key=path)
-        return file['Body'].read()
+        s3_resource = self._s3_resource()
+        bucket = s3_resource.Object(self.bucket_name, path)
+        file_content = obj.get()['Body'].read()
+        return file_content
 
     def _isdir(self, path):
         return path.endswith(self.delimiter)
