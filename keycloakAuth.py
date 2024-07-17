@@ -2,7 +2,7 @@ import json
 import logging
 import os
 
-from flask import Flask, g, jsonify, redirect, url_for, session
+from flask import Flask, jsonify, redirect, url_for, session
 from flask_oidc import OpenIDConnect
 import requests
 
@@ -11,8 +11,8 @@ logger = logging.getLogger(__name__)
 
 basedir = os.path.abspath(os.path.dirname(__file__))
 
-app = Flask(__name__)
-app.config.update({
+flaskServer = Flask(__name__)
+flaskServer.config.update({
     'SECRET_KEY': 'SomethingNotEntirelySecret',
     'TESTING': True,
     'DEBUG': True,
@@ -25,10 +25,10 @@ app.config.update({
 })
 hosturl = 'http%3A%2F%2Flocalhost%3A5000%2F'
 
-oidc = OpenIDConnect(app)
+oidc = OpenIDConnect(flaskServer)
 
 
-@app.route('/')
+@flaskServer.route('/')
 def home():
     print(f"Accessing route /")
     if oidc.user_loggedin:
@@ -41,7 +41,7 @@ def home():
         return f'Welcome anonymous, <a href="{url_for("private")}">Log in</a>'
 
 
-@app.route('/private')
+@flaskServer.route('/private')
 @oidc.require_login
 def private():
     """Example for protected endpoint that extracts private information from the OpenID Connect id_token.
@@ -72,10 +72,11 @@ def private():
     return (f"""{greeting} your email is {email} and your user_id is {user_id}!
            <ul>
              <li><a href="/">Home</a></li>
+            <li><a href="dashboard">Dashboard</a></li>
              <li><a href="{issuer_url}/account?referrer={client_id}&referrer_uri={redirect_uri}">Account</a></li>
            </ul>""")
 
-@app.route('/api', methods=['POST'])
+@flaskServer.route('/api', methods=['POST'])
 @oidc.accept_token(require_token=True, scopes_required=['openid'])
 def api():
     """OAuth 2.0 protected API endpoint accessible via AccessToken"""
@@ -85,7 +86,7 @@ def api():
     preferred_username = user_info.get('preferred_username')
     return json.dumps({'hello': f"Welcome {preferred_username}"})
 
-@app.route('/logoutkeycloak')
+@flaskServer.route('/logoutkeycloak')
 @oidc.require_login
 def logoutkeycloak():
     """Performs local logout by removing the session cookie."""
@@ -120,4 +121,4 @@ def logoutkeycloak():
         return redirect(redirect_uri)
  
 if __name__ == '__main__':
-    app.run()
+    flaskServer.run(debug=True, port=5000)

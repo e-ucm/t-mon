@@ -11,5 +11,6 @@ boto3
 jwt
 plotly
 dash
+dash-auth
 flask
 flask_oidc
