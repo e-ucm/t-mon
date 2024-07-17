@@ -11,3 +11,5 @@ boto3
 jwt
 plotly
 dash
+flask
+flask_oidc
