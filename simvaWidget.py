@@ -31,7 +31,7 @@ class SimvaBrowser:
             'WebIdentityToken': self.auth.get('oidc_auth_token', {}).get("access_token")
         }
         response = requests.post(self.storage_url, data=data, verify=self.ca_file)
-        print(f"Response : {response}")
+        print(f"Response : {response.text}")
 
         if response.status_code != 200:
             print('Problems getting temporary credentials')
@@ -56,20 +56,21 @@ class SimvaBrowser:
 
     def _s3_client(self):
         return boto3.resource(
-                                service_name='s3',
-                                endpoint_url=self.storage_url,
-                                aws_access_key_id=self.access_key_id,
-                                aws_secret_access_key=self.secret_access_key,
-                                aws_session_token=self.session_token,
-                                config=boto3.session.Config(signature_version='s3v4'),
-                                verify=self.ca_file
-                            )
+            's3',
+            endpoint_url=self.storage_url,
+            aws_access_key_id=self.access_key_id,
+            aws_secret_access_key=self.secret_access_key,
+            aws_session_token=self.session_token,
+            region_name='us-east-1',
+            config=Config(signature_version='s3v4'),
+            verify=self.ca_file
+        )
 
     def _list_files(self, path):
         s3_client = self._s3_client()
-        folder = s3_client.list_objects(Bucket=self.bucket_name,
-                                        Prefix=path,
-                                        Delimiter=self.delimiter)
+        folder = s3_client.list_objects_v2(Bucket=self.bucket_name,
+                                           Prefix=path,
+                                           Delimiter=self.delimiter)
         files = []
         contents = folder.get('Contents')
         if contents:
@@ -79,9 +80,9 @@ class SimvaBrowser:
 
     def _list_folders(self, path):
         s3_client = self._s3_client()
-        folder = s3_client.list_objects(Bucket=self.bucket_name,
-                                        Prefix=path,
-                                        Delimiter=self.delimiter)
+        folder = s3_client.list_objects_v2(Bucket=self.bucket_name,
+                                           Prefix=path,
+                                           Delimiter=self.delimiter)
         folders = []
         contents = folder.get('CommonPrefixes')
         if contents:
@@ -95,7 +96,7 @@ class SimvaBrowser:
         return file['Body'].read()
 
     def _isdir(self, path):
-        return path[len(path) - 1] == self.delimiter
+        return path.endswith(self.delimiter)
 
     def _update_files(self):
         self.files = []
