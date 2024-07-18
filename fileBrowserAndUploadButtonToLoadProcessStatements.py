@@ -96,6 +96,6 @@ def load_players_info_from_file(file, players_info,xapiData, out, err):
 
 def load_players_info_from_content(filecontent, filename, players_info, xapiData, out, err):
     content_type, content_string = filecontent.split(',')
-    decoded = base64.b64decode(content_string)
+    decoded = base64.b64decode(content_string).decode('utf-8')
     progress = Progress(0)
-    load_from_string(decoded.decode('utf-8'), progress, players_info, xapiData, timeformats, out, err)
+    load_from_string(decoded, progress, players_info, xapiData, timeformats, out, err)
