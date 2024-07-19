@@ -14,6 +14,7 @@ class SimvaBrowser:
         self.auth = auth
         self.accept = accept
         self.ca_file = ca_file
+        self.accepted_activities=[]
         self.storage_url = self.secret_file.get("minio").get("storage_url")
         self.bucket_name = self.secret_file.get("minio").get("bucket_name")
         self.traces_folder = self.secret_file.get("minio").get("users_folder")
@@ -67,12 +68,15 @@ class SimvaBrowser:
         response = requests.get(url, headers=headers)
         if response.status_code == 200:
             data = response.json()
-            print("Data received:", data)
-            gameplay_data = [item for item in data if item.get("type") == 'gameplay']
-            # Print the result
-            print("gameplay_data : ", gameplay_data)
+            username = self.access_token.get('preferred_username')
+            user_data = [item for item in data if username in item.get("owners",[])]
+            gameplay_data = [item for item in user_data if item.get("type") == 'gameplay']
             filtered_ids = [item['id'] + '/' for item in gameplay_data if item.get("extra_data").get("config").get("trace_storage")]
             # Print the result
+            print("Data received:", data)
+            print("preferred_username:", username)
+            print("user_data : ", user_data)
+            print("gameplay_data : ", gameplay_data)
             print("filtered_ids : ",filtered_ids)
             self.accepted_activities=filtered_ids
         else:
