@@ -6,7 +6,7 @@ import datetime
 import pandas as pd
 
 # Initialize the app
-TMonApp = Dash(__name__, url_base_pathname='/dashboard-t-mon/')
+TMonApp = Dash(__name__)
 
 # App layout
 TMonApp.layout = html.Div([
@@ -238,4 +238,4 @@ def render_content(tab):
         ])
 
 if __name__ == '__main__':
-    TMonApp.run(debug=True, port="5000")
+    TMonApp.run(debug=True, port="5001")
