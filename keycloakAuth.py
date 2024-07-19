@@ -56,25 +56,25 @@ def private():
         user_id = user_info.get('sub')
         email = user_info.get('email')
         preferred_username = user_info.get('preferred_username')
-        try:
-            # Use the token stored in session
-            access_token = oidc.get_access_token()
-            logger.debug(f'access_token=<{access_token}>')
-            headers = {'Authorization': f'Bearer {access_token}'}
-            # YOLO
-            greeting = requests.get('http://localhost:8080/greeting', headers=headers).text
-        except:
-            logger.debug("Could not access greeting-service")
-            greeting = f"Hello {preferred_username}"
-    else:
-        return jsonify({'error': 'User not logged in'})
-    redirect_uri = url_for('private', _external=True)
-    return (f"""{greeting} your email is {email} and your user_id is {user_id}!
+        #try:
+        #    # Use the token stored in session
+        #    access_token = oidc.get_access_token()
+        #    logger.debug(f'access_token=<{access_token}>')
+        #    headers = {'Authorization': f'Bearer {access_token}'}
+        #    # YOLO
+        #    greeting = requests.get('http://localhost:5000/dashboard', headers=headers).text
+        #except:
+        #    logger.debug("Could not access greeting-service")
+        redirect_uri = url_for('private', _external=True)
+        return (f"""Hello {preferred_username}, your email is {email} and your user_id is {user_id}!
            <ul>
              <li><a href="/">Home</a></li>
             <li><a href="dashboard">Dashboard</a></li>
              <li><a href="{issuer_url}/account?referrer={client_id}&referrer_uri={redirect_uri}">Account</a></li>
            </ul>""")
+    else:
+        return jsonify({'error': 'User not logged in'})
+    
 
 @flaskServer.route('/api', methods=['POST'])
 @oidc.accept_token(require_token=True, scopes_required=['openid'])

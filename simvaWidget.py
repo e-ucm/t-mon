@@ -4,25 +4,80 @@ import boto3
 import boto3.session
 from botocore.client import Config
 from jwt import JWT
+import os 
+import json
 
 class SimvaBrowser:
-    def __init__(self, auth, storage_url, accept='.json', ca_file=None, bucket_name='traces', delimiter='/'):
+    def __init__(self, auth, accept='.json', ca_file=None, delimiter='/', client_secret_file="client_secrets.json"):
+        basedir = os.path.abspath(os.path.dirname(__file__))
+        self.secret_file=self._load_secret_file(os.path.join(basedir, client_secret_file))
         self.auth = auth
-        self.storage_url = storage_url
         self.accept = accept
         self.ca_file = ca_file
-        self.bucket_name = bucket_name
+        self.storage_url = self.secret_file.get("minio").get("storage_url")
+        self.bucket_name = self.secret_file.get("minio").get("bucket_name")
+        self.traces_folder = self.secret_file.get("minio").get("users_folder")
+        self.simva_api_url = self.secret_file.get("simva").get("api_url")
         self.delimiter = delimiter
         jwt_parser = JWT()
         self.access_token = jwt_parser.decode(self.auth.get('oidc_auth_token', {}).get("access_token"), do_verify=False)
         
         self._storage_login()
         
-        self.base_path = 'users' + self.delimiter + self.access_token['preferred_username'] + self.delimiter
+        self.base_path = self.traces_folder + self.delimiter + self.access_token['preferred_username'] + self.delimiter
         self.current_path = self.base_path
-        
+        self._login_to_simva_api()
+        self._load_selected_activities_from_simva_api()
         self._update_files()
 
+    def _load_secret_file(self, file_path):
+        with open(file_path, 'r') as file:
+            secret_data = json.load(file)
+        return secret_data
+
+    def _login_to_simva_api(self):
+        admin_username = self.secret_file.get("simva").get("admin_username").lower()
+        admin_password = self.secret_file.get("simva").get("admin_password")
+        # Define the payload
+        payload = {
+            "username": f"{admin_username}",
+            "password": f"{admin_password}",
+        }
+
+        # Make POST request to API and get token
+        response = requests.post(f"{self.simva_api_url}/users/login", headers={"Content-Type": "application/json"}, data=json.dumps(payload))
+
+        # Check if the request was successful
+        if response.status_code == 200:
+            response_data = response.json()
+            token = response_data.get("token")
+            if token:
+                self.jwt = f"{token}"
+            else:
+                print("Token not found in the response.")
+        else:
+            print(f"Failed to get token, status code: {response.status_code}")
+            print(response.text)
+
+    def _load_selected_activities_from_simva_api(self):
+        headers = {'Content-Type': 'application/json'}
+        if self.jwt:
+            headers['Authorization'] = f'Bearer {self.jwt}'
+        url = f"{self.simva_api_url}/activities"
+        response = requests.get(url, headers=headers)
+        if response.status_code == 200:
+            data = response.json()
+            print("Data received:", data)
+            gameplay_data = [item for item in data if item.get("type") == 'gameplay']
+            # Print the result
+            print("gameplay_data : ", gameplay_data)
+            filtered_ids = [item['id'] + '/' for item in gameplay_data if item.get("extra_data").get("config").get("trace_storage")]
+            # Print the result
+            print("filtered_ids : ",filtered_ids)
+            self.accepted_activities=filtered_ids
+        else:
+            print(f"Error: {response.text}")
+    
     def _storage_login(self):
         data = {
             'Action': 'AssumeRoleWithWebIdentity',
@@ -65,17 +120,6 @@ class SimvaBrowser:
             #config=Config(signature_version='s3v4'),
             verify=self.ca_file
         )
-    def _s3_resource(self):
-        return boto3.resource(
-            's3',
-            endpoint_url=self.storage_url,
-            aws_access_key_id=self.access_key_id,
-            aws_secret_access_key=self.secret_access_key,
-            aws_session_token=self.session_token,
-            region_name='us-east-1',
-            config=Config(signature_version='s3v4'),
-            verify=self.ca_file
-        )
 
     def _list_files(self, path):
         s3_client = self._s3_client()
@@ -100,6 +144,8 @@ class SimvaBrowser:
         if contents:
             for o in contents:
                 folders.append(o.get('Prefix')[len(self.current_path):])
+        if self.current_path == self.base_path:
+            folders=[dir_id for dir_id in folders if dir_id in self.accepted_activities]
         return folders
 
     def get_file_content(self, path):
