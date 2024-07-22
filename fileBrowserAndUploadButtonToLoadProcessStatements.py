@@ -1,17 +1,11 @@
-import datetime
+from datetime import datetime
 import json
 import pandas as pd
 import sys
-import os
-import io
 import base64
 from dataclasses import dataclass
 import traceback
-import ProcessxAPISGStatement
 
-#
-# 
-#
 @dataclass
 class Progress:
     """Fools load_from_string, keeps track of progress."""
@@ -45,11 +39,12 @@ def log(target, o_str):
 #    an object o where with o.output: print() is valid
 #
 # Callback to update progress periodically
-def load_from_string(str, progress, players_info, xapiData, timeformats, info_output, err_output):
+def load_from_string(str, xapiData, info_output, err_output):
+    progress = Progress(0)
     total=0
     count=0
     try:
-        start_time = datetime.datetime.now()
+        start_time = datetime.now()
         if is_json_and_not_list(str.partition('\n')[0]):
             total=len(str.splitlines())
             log(info_output, f"... 1st line is valid JSON; interpreting as one-statement-per-line ({total} statement(s))")
@@ -59,7 +54,6 @@ def load_from_string(str, progress, players_info, xapiData, timeformats, info_ou
                 s=json.loads(statement)
                 progress.value=count/total
                 count+=1
-                ProcessxAPISGStatement.process_xapisg_statement(s, players_info, timeformats)
                 xapiData.append(s)
         else:
             log(info_output, "... interpreting as statement-array")
@@ -70,8 +64,7 @@ def load_from_string(str, progress, players_info, xapiData, timeformats, info_ou
             for s in statements:
                 progress.value=count/total
                 count+=1
-                ProcessxAPISGStatement.process_xapisg_statement(s, players_info, timeformats)
-            xapiData.extend(statements)
+                xapiData.append(s)
     except Exception as e:
         log(err_output, 
             f"ERROR loading at line/statement {count}/{total}: {e}\n"
@@ -79,23 +72,25 @@ def load_from_string(str, progress, players_info, xapiData, timeformats, info_ou
             f"File must contain EITHER 1 statement (in JSON) per line, or be a well-formed JSON of statements. Please select another file.")
         return e
     progress.value=1.0
-    log(info_output, f"... processed {count}/{total} statement(s) in {datetime.datetime.now() - start_time}. Displaying visualizations ...")
+    log(info_output, f"... processed {count}/{total} statement(s) in {datetime.now() - start_time}. Displaying visualizations ...")
 
-timeformats=['%Y-%m-%dT%H:%M:%SZ','%Y-%m-%dT%H:%M:%S.%fZ']
-
-def load_players_info_from_file(file, players_info,xapiData, out, err):
+def load_players_info_from_file(file, xapiData, out, err):
+    log(out, f"{file}")
     with open(file, encoding="utf-8") as f:
         str = f.read()
-        progress = Progress(0)
-        load_from_string(str, progress, players_info, xapiData, timeformats, out, err)
-        print(f"Info log ({len(out)} lines):\n", '\n'.join(out))
+        load_from_string(str, xapiData, out, err)
+        print(f"Info log ({len(out)} lines):\n{'\n'.join(out)}")
         if len(err) > 0:
-            print(f"ERRORS FOUND ({len(err)} lines):\n", '\n'.join(err))
+            print(f"ERRORS FOUND ({len(err)} lines):\n{'\n'.join(err)}")
             sys.exit(-1)
-    return players_info
 
-def load_players_info_from_content(filecontent, filename, players_info, xapiData, out, err):
+def load_players_info_from_uploaded_content(filecontent, filename, xapiData, out, err):
+    log(out, f"{filename}")
     content_type, content_string = filecontent.split(',')
     decoded = base64.b64decode(content_string).decode('utf-8')
-    progress = Progress(0)
-    load_from_string(decoded, progress, players_info, xapiData, timeformats, out, err)
+    load_from_string(decoded, xapiData, out, err)
+
+def load_players_info_from_content(filecontent, filename, xapiData, out, err):
+    log(out, f"{filename}")
+    decoded = filecontent.decode('utf-8')
+    load_from_string(decoded, xapiData, out, err)

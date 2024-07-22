@@ -1,11 +1,9 @@
 from dash import Dash, html, dash_table, dcc, callback, Output, Input, State
 from dash.exceptions import PreventUpdate
-import plotly.subplots as subplots
-import fileBrowserAndUploadButtonToLoadProcessStatements
+from fileBrowserAndUploadButtonToLoadProcessStatements import load_players_info_from_uploaded_content
 import datetime
 import pandas as pd
-global players_info, xapiData
-players_info = {}
+global xapiData
 xapiData = []
 
 # Initialize the app
@@ -68,8 +66,7 @@ def update_output(list_of_contents, list_of_names, list_of_dates):
         raise PreventUpdate
     else:
         div_list = []
-        global players_info, xapiData
-        players_info = {}
+        global xapiData
         xapiData = []
         nbError=0
         style={'display': 'block'}
@@ -77,7 +74,7 @@ def update_output(list_of_contents, list_of_names, list_of_dates):
             out, err = [], []
             div_list.append(html.H5(n))
             div_list.append(html.H6(datetime.datetime.fromtimestamp(d)))
-            fileBrowserAndUploadButtonToLoadProcessStatements.load_players_info_from_content(c, n, players_info, xapiData, out, err)
+            load_players_info_from_uploaded_content(c, n, xapiData, out, err)
             div_list.append(html.Div(out))
             div_list.append(html.Div(err))
             if len(err) > 0 : 
