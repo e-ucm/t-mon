@@ -75,7 +75,7 @@ def update_connection_status(input_value):
     if flask.oidc.user_loggedin:
         user_info = session.get('oidc_auth_profile', {})
         preferred_username = user_info.get('preferred_username')
-        return f'Logged in as {preferred_username} - {session}'
+        return f'Logged in as {preferred_username}'
     else:
         return 'Not logged in'
     
@@ -108,7 +108,8 @@ def init_storage(main):
      Output('folders-div', 'children'),
      Output('files-div', 'children'),
      Output('run-analyse', 'style'),
-     Output('debug-browser', 'children')],
+     #Output('debug-browser', 'children')
+     ],
     [Input('parent-directory', 'n_clicks'),
      Input({'type': 'folder-button', 'index': dash.dependencies.ALL}, 'n_clicks'),
      Input({'type': 'file-button', 'index': dash.dependencies.ALL}, 'n_clicks')],
@@ -117,7 +118,7 @@ def init_storage(main):
 def update_browser(n_clicks_parent, folder_n_clicks, file_n_clicks, current_path):
     ctx = dash.callback_context
     res=f"{current_path} - triggered : {ctx.triggered} - Files : {file_n_clicks} - Folders : {folder_n_clicks} - n_clicks_parent : {n_clicks_parent}"
-    print(res)
+    #print(res)
     if not ctx.triggered:
         raise PreventUpdate
     triggered_prop_id = ctx.triggered[0]['prop_id']
@@ -143,7 +144,7 @@ def update_browser(n_clicks_parent, folder_n_clicks, file_n_clicks, current_path
     file_buttons = [html.Button(f, id={'type': 'file-button', 'index': f}, n_clicks=0, style={'background-color': 'green'}) for f in browser.files if f.endswith(browser.accept)]
     run_analyse_style = {'display': 'none'} if browser._isdir(browser.current_path) else {'display': 'block'}
     
-    return browser.current_path, folder_buttons, file_buttons, run_analyse_style, [html.H1(f'Res : {res}')]
+    return browser.current_path, folder_buttons, file_buttons, run_analyse_style, #[html.H1(f'Res : {res}')]
 
 
 @app.callback(
@@ -154,7 +155,6 @@ def update_browser(n_clicks_parent, folder_n_clicks, file_n_clicks, current_path
 def run_analyse(n_clicks, current_path):
     if n_clicks > 0:
         global xapiData, timeformats
-        #players_info={}
         xapiData=[]
         div_list= []
         out=[]
