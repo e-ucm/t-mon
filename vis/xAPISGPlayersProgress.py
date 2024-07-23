@@ -92,11 +92,10 @@ def displayPlayerProgressPieFig(pie_chart_data):
             hoverinfo='label+percent+value+text',
             text=pie_chart_data['startedCompleted']
         )])
-
-        fig.update_layout(
-            title_text='Game Status'
-        )
-        ## Show the plot
-        return fig
     else:
-        return xAPISGnoDataToFillVisualization.noDataToFillVis(10)
+        fig=xAPISGnoDataToFillVisualization.noDataToFillVis(10)
+    fig.update_layout(
+            title_text='Game Status'
+    )
+    ## Show the plot
+    return fig
