@@ -1,7 +1,5 @@
 from dash import Dash, html
 from widgets import UploadWidget, TMonWidget
-global xapiData
-xapiData = []
 
 # Initialize the app
 TMonApp = Dash(__name__)

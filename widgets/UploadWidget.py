@@ -2,6 +2,7 @@ from dash import html, dcc, callback, Output, Input, State
 from fileBrowserAndUploadButtonToLoadProcessStatements import load_players_info_from_uploaded_content
 import datetime
 from dash.exceptions import PreventUpdate
+from widgets import xapiData
 
 TMonUpload=html.Div([
     dcc.Upload(

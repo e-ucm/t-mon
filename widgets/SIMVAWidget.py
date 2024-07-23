@@ -4,6 +4,7 @@ from dash import html, dcc, callback
 from dash.dependencies import Input, Output, State
 from dash.exceptions import PreventUpdate
 import json
+from widgets import xapiData
 #Import fileBrowserAndUploadButtonToLoadProcessStatements.py
 from fileBrowserAndUploadButtonToLoadProcessStatements import load_players_info_from_content
 # Import SimvaBrowser from simvaWidget.py

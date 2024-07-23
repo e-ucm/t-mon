@@ -1,6 +1,7 @@
 from dash import html, dash_table, dcc, callback, Output, Input
 from dash.exceptions import PreventUpdate
 import pandas as pd
+from widgets import xapiData
 
 @callback(
     [Output("users-multi-dynamic-dropdown", "options"),
@@ -13,6 +14,7 @@ def update_output(search_value, tab, value):
     if not search_value and not tab:
         raise PreventUpdate
     # Normalize the JSON data to a pandas DataFrame
+    global xapiData
     if len(xapiData) > 0:
         df = pd.json_normalize(xapiData)
         filtered_df=df
