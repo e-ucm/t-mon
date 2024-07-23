@@ -89,18 +89,18 @@ def update_output(list_of_contents, list_of_names, list_of_dates):
      Output('tabs-content', 'children')],
     Input("users-multi-dynamic-dropdown", "search_value"),
     Input('t-mon-tabs', 'value'),
-    State("users-multi-dynamic-dropdown", "value"),
+    Input("users-multi-dynamic-dropdown", "value"),
 )
 def update_output(search_value, tab, value):
     if not search_value and not tab:
         raise PreventUpdate
     # Normalize the JSON data to a pandas DataFrame
-    if len(xapiData) > 0: 
+    if len(xapiData) > 0:
         df = pd.json_normalize(xapiData)
+        filtered_df=df
         # Make sure that the set values are in the option list, else they will disappear
         # from the shown select list, but still part of the `value`.
         # Convert the dictionary keys to the appropriate format for dropdown options
-        #all_options = [{'label': k, 'value': k} for k in players_info.keys()]
         all_options = [{'label': k, 'value': k} for k in df['actor.name'].unique()]
         # Filter options based on the search value
         if search_value is not None:
@@ -111,22 +111,32 @@ def update_output(search_value, tab, value):
         if value:
             selected_options = [o for o in all_options if o['value'] in value]
             filtered_options = selected_options + filtered_options
-            df = df.loc[df['actor.name'].isin(value)]
+            filtered_df = df.loc[df['actor.name'].isin(value)]
+        #else:
+        #    filtered_df=df
         # Remove duplicates while preserving order
         unique_options = list({v['value']:v for v in filtered_options}.values())
         if tab == 'progress_tab':
-            tab_content = html.Div([
-                html.H3('Tab content 1'),
-                dcc.Graph(
-                    figure={
-                        'data': [{
-                            'x': [1, 2, 3],
-                            'y': [3, 1, 2],
-                            'type': 'bar'
-                        }]
-                    }
+            from vis import xAPISGPlayersProgress
+            content=[]
+            content.append(html.H3('Player Progress Throw Serious game'))
+            seriousgamesId=df.loc[df["object.definition.type"]=="https://w3id.org/xapi/seriousgames/activity-types/serious-game"]['object.id'].unique()
+            for game in seriousgamesId:
+                fig=xAPISGPlayersProgress.displayPlayerProgressFig(
+                    bar_game_data=xAPISGPlayersProgress.ProgressPlayerLineChart(filtered_df, game),
+                    game=game
                 )
-            ])
+                content.append(dcc.Graph(id=f"barchart-{game}",figure=fig))
+                fig=xAPISGPlayersProgress.displayPlayerProgressInitFig(
+                    bar_game_data=xAPISGPlayersProgress.ProgressPlayerLineChart(filtered_df, game),
+                    game=game
+                )
+                content.append(dcc.Graph(id=f"barchart-init-{game}",figure=fig))
+                fig=xAPISGPlayersProgress.displayPlayerProgressPieFig(
+                    pie_chart_data=xAPISGPlayersProgress.ProgressPlayerPie(filtered_df, game)
+                )
+                content.append(dcc.Graph(id=f"pie-{game}",figure=fig))
+            tab_content = html.Div(html.Div(content))
         elif tab == 'video_tab':
             tab_content= html.Div([
                 html.H3('Tab content 2'),
@@ -214,12 +224,12 @@ def update_output(search_value, tab, value):
         elif tab == 'data_tab':
         #else:
             # Convert the DataFrame to a dictionary suitable for DataTable
-            data = df.to_dict('records')
+            data = filtered_df.to_dict('records')
             tab_content= html.Div([
-                html.H3("Length table : " + str(len(xapiData))),
+                html.H3("Length table : " + str(len(data))),
                 dash_table.DataTable(
-                    #id='table',
-                    columns=[{"name": i, "id": i} for i in df.columns],
+                    id='table-all-xapi-data',
+                    columns=[{"name": i, "id": i} for i in filtered_df.columns],
                     data=data
                 )
             ])
