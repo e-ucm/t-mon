@@ -8,9 +8,9 @@ import widgets
 #Import LoadProcessStatements.py
 from LoadProcessStatements import load_players_info_from_content
 # Import SimvaBrowser from simvaWidget.py
-from SIMVABrowser.SIMVABrowser import SimvaBrowser
-# Import Flask server from keycloakAuth.py
-from SIMVABrowser.keycloakAuth import KeycloakClient
+from SimvaBrowser.SimvaBrowser import SimvaBrowser
+# Import Flask server from KeycloakClient.py
+from SimvaBrowser.KeycloakClient import KeycloakClient
 flask=KeycloakClient(homepage=False)
 httpSecure= "https" if flask.flaskServer.config.get('SECURE', False) else "http"
 host=flask.flaskServer.config.get('HOST', '127.0.0.1')

@@ -1,8 +1,8 @@
 from dash import Dash, html
-from widgets import SIMVAWidget, TMonWidget
+from widgets import SimvaBrowserWidget, TMonWidget
 
 # Initialize Dash app with Flask server
-app = Dash(__name__, server=SIMVAWidget.flask.flaskServer)
+app = Dash(__name__, server=SimvaBrowserWidget.flask.flaskServer)
 
 # If you set host or port differently
 httpSecure= "https://" if app.server.config.get('SECURE', False) else "http://"
@@ -14,7 +14,7 @@ port = app.server.config.get('PORT', 5000)
 app.layout=html.Div(
     [
         TMonWidget.TMonHeader,
-        SIMVAWidget.simvaBrowserBody,
+        SimvaBrowserWidget.simvaBrowserBody,
         TMonWidget.TMonBody,
         TMonWidget.TMonFooter,
     ]
