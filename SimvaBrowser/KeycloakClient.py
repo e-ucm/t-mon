@@ -25,7 +25,10 @@ class KeycloakClient:
         self.oidc = OpenIDConnect(self.flaskServer)
         issuer_url = self.oidc.client_secrets.get('issuer')
         client_id = self.oidc.client_secrets.get('client_id')
-        self.accountpage=f"{issuer_url}/account?referrer={client_id}&referrer_uri="
+        httpSecure= "https" if self.flaskServer.config.get('SECURE', False) else "http"
+        host=self.flaskServer.config.get('HOST', '127.0.0.1')
+        port=self.flaskServer.config.get('PORT', 5000)
+        self.accountpage=f"{issuer_url}/account?referrer={client_id}&referrer_uri={httpSecure}://{host}:{port}"
         self.homepage="/"
         if homepage:
             @self.flaskServer.route(self.homepage)

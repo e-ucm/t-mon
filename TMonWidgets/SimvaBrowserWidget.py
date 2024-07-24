@@ -12,9 +12,6 @@ from SimvaBrowser.SimvaBrowser import SimvaBrowser
 # Import KeycloakClient class containing a Flask OIDC server from KeycloakClient.py
 from SimvaBrowser.KeycloakClient import KeycloakClient
 flask=KeycloakClient(homepage=False)
-httpSecure= "https" if flask.flaskServer.config.get('SECURE', False) else "http"
-host=flask.flaskServer.config.get('HOST', '127.0.0.1')
-port=flask.flaskServer.config.get('PORT', 5000)
 
 # Dash callback to handle login button click
 @callback(
@@ -59,7 +56,7 @@ def login_logout_button(main):
 def account_button_click(n_clicks):
     if n_clicks > 0:
         if flask.oidc.user_loggedin:
-            return dcc.Location(href=f'{flask.accountpage}{httpSecure}://{host}:{port}', id='account-link')
+            return dcc.Location(href=f'{flask.accountpage}', id='account-link')
 
 # Dash callback to update connection status
 @callback(
