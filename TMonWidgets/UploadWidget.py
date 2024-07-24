@@ -2,7 +2,7 @@ from dash import html, dcc, callback, Output, Input, State
 from LoadProcessStatements import load_players_info_from_uploaded_content
 import datetime
 from dash.exceptions import PreventUpdate
-import widgets
+import TMonWidgets
 
 TMonUpload=html.Div([
     dcc.Upload(
@@ -40,14 +40,14 @@ def update_output(list_of_contents, list_of_names, list_of_dates):
         raise PreventUpdate
     else:
         div_list = []
-        widgets.xapiData = []
+        TMonWidgets.xapiData = []
         nbError=0
         style={'display': 'block'}
         for c, n, d in zip(list_of_contents, list_of_names, list_of_dates):
             out, err = [], []
             div_list.append(html.H5(n))
             div_list.append(html.H6(datetime.datetime.fromtimestamp(d)))
-            load_players_info_from_uploaded_content(c, n, widgets.xapiData, out, err)
+            load_players_info_from_uploaded_content(c, n, TMonWidgets.xapiData, out, err)
             div_list.append(html.Div(out))
             div_list.append(html.Div(err))
             if len(err) > 0 : 

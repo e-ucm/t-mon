@@ -1,7 +1,7 @@
 from dash import html, dash_table, dcc, callback, Output, Input
 from dash.exceptions import PreventUpdate
 import pandas as pd
-import widgets
+import TMonWidgets
 
 @callback(
     [Output("users-multi-dynamic-dropdown", "options"),
@@ -14,8 +14,8 @@ def update_output(search_value, tab, value):
     if not search_value and not tab:
         raise PreventUpdate
     # Normalize the JSON data to a pandas DataFrame
-    if len(widgets.xapiData) > 0:
-        df = pd.json_normalize(widgets.xapiData)
+    if len(TMonWidgets.xapiData) > 0:
+        df = pd.json_normalize(TMonWidgets.xapiData)
         filtered_df=df
         # Make sure that the set values are in the option list, else they will disappear
         # from the shown select list, but still part of the `value`.

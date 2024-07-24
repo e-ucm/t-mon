@@ -4,12 +4,12 @@ from dash import html, dcc, callback
 from dash.dependencies import Input, Output, State
 from dash.exceptions import PreventUpdate
 import json
-import widgets
+import TMonWidgets
 #Import LoadProcessStatements.py
 from LoadProcessStatements import load_players_info_from_content
-# Import SimvaBrowser from simvaWidget.py
+# Import SimvaBrowser class from SimvaBrowser.py
 from SimvaBrowser.SimvaBrowser import SimvaBrowser
-# Import Flask server from KeycloakClient.py
+# Import KeycloakClient class containing a Flask OIDC server from KeycloakClient.py
 from SimvaBrowser.KeycloakClient import KeycloakClient
 flask=KeycloakClient(homepage=False)
 httpSecure= "https" if flask.flaskServer.config.get('SECURE', False) else "http"
@@ -19,7 +19,7 @@ port=flask.flaskServer.config.get('PORT', 5000)
 # Dash callback to handle login button click
 @callback(
     Output('login-logout-button', 'children'),
-    [Input('main', 'children')]
+    [Input('main-login', 'children')]
 )
 def login_logout_button(main):
     if flask.oidc.user_loggedin:
@@ -43,7 +43,7 @@ def login_logout_button_click(n_clicks):
 @callback(
     [Output('account-button', 'children'),
     Output('account-button', 'style')],
-    [Input('main', 'children')]
+    [Input('main-login', 'children')]
 )
 def login_logout_button(main):
     if flask.oidc.user_loggedin:
@@ -64,7 +64,7 @@ def account_button_click(n_clicks):
 # Dash callback to update connection status
 @callback(
     Output('connection-status', 'children'),
-    [Input('main', 'children')]
+    [Input('main-login', 'children')]
 )
 def update_connection_status(input_value):
     if flask.oidc.user_loggedin:
@@ -76,8 +76,8 @@ def update_connection_status(input_value):
     
 # Dash callback to handle login button click
 @callback(
-    [Output('browser_div', 'children')],
-    [Input('main', 'children')]
+    Output('browser_div', 'children'),
+    [Input('main-login', 'children')]
 )
 def init_storage(main):
     if flask.oidc.user_loggedin:
@@ -89,14 +89,16 @@ def init_storage(main):
         run_analyse_style = {'display': 'none'}
         if not browser._isdir(browser.current_path):
             run_analyse_style = {'display': 'block'}
-        appLayout = [html.Div([
+        appLayout = html.Div([
             html.H3(id='current-path', children=browser.current_path),
             html.Button('..', id='parent-directory', n_clicks=0, style={'display': 'block'}),
             html.Div(id='folders-div', children=folder_buttons),
             html.Div(id='files-div', children=file_buttons),
-            html.Button('Run Analyse', id='run-analyse', n_clicks=0, style=run_analyse_style)
-        ])]
+            html.Button('Run Analyse', id='run-analyse', n_clicks=0, style=run_analyse_style),
+        ])
         return appLayout
+    else:
+        return html.H4("Connect to your SIMVA account to access to your data.")
 
 @callback(
     [Output('current-path', 'children'),
@@ -126,13 +128,13 @@ def update_browser(n_clicks_parent, folder_n_clicks, file_n_clicks, n_clicks_run
         run_analyse_style={'display': 'none'}
         folder_buttons=[]
         file_buttons=[]
-        widgets.xapiData=[]
+        TMonWidgets.xapiData=[]
         div_list= []
         out=[]
         err=[]
         content_string = browser.get_file_content(current_path)
         load_players_info_from_content(
-            content_string, current_path, widgets.xapiData, out, err
+            content_string, current_path, TMonWidgets.xapiData, out, err
         )
         div_list.append(html.Div([
                 html.Div(out),
@@ -165,20 +167,25 @@ def update_browser(n_clicks_parent, folder_n_clicks, file_n_clicks, n_clicks_run
     
     return browser.current_path, folder_buttons, file_buttons, run_analyse_style, html.H1(""), {'display': 'none'}, "home"
 
-simvaBrowserBody = html.Div(id="main", children=[
-    html.H1('SIMVA T-Mon Dashboard'),
+simvaBrowserBody = html.Div(
+    [
+        html.Div(id='browser_div', children=[
+                html.H3(id='current-path'),
+                html.Button('..', id='parent-directory', n_clicks=0, style={'display': 'none'}),
+                html.Div(id='folders-div', children=[]),
+                html.Div(id='files-div', children=[]),
+                html.Button('Run Analyse', id='run-analyse', n_clicks=0, style={'display': 'none'}),
+            ]
+        ), 
+        html.Div(id='debug-browser', children=[]),
+        html.Div(id='content',children=[])
+    ]
+)
+
+LoginLogoutBody = html.Div(id="main-login", children=[
     html.Button(id='login-logout-button', n_clicks=0),
     html.Button(id='account-button', n_clicks=0),
     html.Div(id='login-logout'),
     html.Div(id='account',children=["Account"]),
-    html.Div(id='connection-status',children=[]),
-    html.Div(id='browser_div', children=[
-        html.H3(id='current-path'),
-        html.Button('..', id='parent-directory', n_clicks=0, style={'display': 'none'}),
-        html.Div(id='folders-div', children=[]),
-        html.Div(id='files-div', children=[]),
-        html.Button('Run Analyse', id='run-analyse', n_clicks=0, style={'display': 'none'})
-    ]),
-    html.Div(id='debug-browser', children=[]),
-    html.Div(id='content',children=[])
+    html.Div(id='connection-status',children=[])
 ])

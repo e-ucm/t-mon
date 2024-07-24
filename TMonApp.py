@@ -1,5 +1,5 @@
 from dash import Dash, html
-from widgets import UploadWidget, TMonWidget
+from TMonWidgets import UploadWidget, TMonWidget
 
 # Initialize the app
 TMonApp = Dash(__name__)
