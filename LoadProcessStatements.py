@@ -97,6 +97,6 @@ def load_players_info_from_content(filecontent, filename, xapiData, out, err):
 
 def processxapisgdata(statement, xapiData):
     # Extract the `id` from the first category object
-    if "contextActivities" in statement["context"] and "category" in statement["context"]["contextActivities"] and len(statement["context"]["contextActivities"]["category"]) > 0:
+    if "context" in statement and "contextActivities" in statement["context"] and "category" in statement["context"]["contextActivities"] and len(statement["context"]["contextActivities"]["category"]) > 0:
         statement["context"]["contextActivities"]["category"] = statement["context"]["contextActivities"]["category"][0]["id"]
     xapiData.append(statement)
