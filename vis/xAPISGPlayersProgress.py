@@ -28,7 +28,7 @@ def ProgressPlayerLineChart(df, game):
         return bar_game_data
 
 def displayPlayerProgressInitFig(bar_game_data, game):
-    if bar_game_data: 
+    if isinstance(bar_game_data, pd.DataFrame) and len(bar_game_data) >0:
         data = []
         for actor in bar_game_data['actor.name'].unique():
                bar_data=bar_game_data.loc[bar_game_data['actor.name'] == actor].copy()
@@ -46,7 +46,7 @@ def displayPlayerProgressInitFig(bar_game_data, game):
     return fig
 
 def displayPlayerProgressFig(bar_game_data, game):
-    if bar_game_data:
+    if isinstance(bar_game_data, pd.DataFrame) and len(bar_game_data) >0:
         data = []
         for actor in bar_game_data['actor.name'].unique():
             bar_data=bar_game_data.loc[bar_game_data['actor.name'] == actor].copy()
@@ -92,7 +92,7 @@ def ProgressPlayerPie(df, game):
     return pie_chart_data
 
 def displayPlayerProgressPieFig(pie_chart_data):
-    if len(pie_chart_data)>0:
+    if isinstance(pie_chart_data, pd.DataFrame) and len(pie_chart_data)>0:
         fig = go.Figure(data=[go.Pie(
             labels=pie_chart_data['startedCompleted'],
             values=pie_chart_data['count'],
