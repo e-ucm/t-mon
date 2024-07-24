@@ -1,5 +1,5 @@
 from dash import html, dcc, callback, Output, Input, State
-from fileBrowserAndUploadButtonToLoadProcessStatements import load_players_info_from_uploaded_content
+from LoadProcessStatements import load_players_info_from_uploaded_content
 import datetime
 from dash.exceptions import PreventUpdate
 import widgets

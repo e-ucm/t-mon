@@ -9,7 +9,7 @@ import json
 
 class SimvaBrowser:
     def __init__(self, auth, accept='.json', ca_file=None, delimiter='/', client_secret_file="client_secrets.json"):
-        basedir = os.path.abspath(os.path.dirname(__file__))
+        basedir = os.path.abspath(f"{os.path.dirname(__file__)}/../")
         self.secret_file=self._load_secret_file(os.path.join(basedir, client_secret_file))
         self.auth = auth
         self.accept = accept

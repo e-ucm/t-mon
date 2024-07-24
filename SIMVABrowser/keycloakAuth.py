@@ -10,7 +10,7 @@ logger = logging.getLogger(__name__)
 class KeycloakClient:
     def __init__(self, client_secret_file="client_secrets.json", homepage = True):
         self.flaskServer = Flask(__name__)
-        basedir = os.path.abspath(os.path.dirname(__file__))
+        basedir = os.path.abspath(f"{os.path.dirname(__file__)}/../")
         self.flaskServer.config.update({
             'SECRET_KEY': 'SomethingNotEntirelySecret',
             'TESTING': True,

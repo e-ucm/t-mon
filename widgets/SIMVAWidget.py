@@ -5,12 +5,12 @@ from dash.dependencies import Input, Output, State
 from dash.exceptions import PreventUpdate
 import json
 import widgets
-#Import fileBrowserAndUploadButtonToLoadProcessStatements.py
-from fileBrowserAndUploadButtonToLoadProcessStatements import load_players_info_from_content
+#Import LoadProcessStatements.py
+from LoadProcessStatements import load_players_info_from_content
 # Import SimvaBrowser from simvaWidget.py
-from simvaWidget import SimvaBrowser
+from SIMVABrowser.SIMVABrowser import SimvaBrowser
 # Import Flask server from keycloakAuth.py
-from keycloakAuth import KeycloakClient
+from SIMVABrowser.keycloakAuth import KeycloakClient
 flask=KeycloakClient(homepage=False)
 httpSecure= "https" if flask.flaskServer.config.get('SECURE', False) else "http"
 host=flask.flaskServer.config.get('HOST', '127.0.0.1')
