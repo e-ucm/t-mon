@@ -4,7 +4,7 @@ from dash import html, dcc, callback
 from dash.dependencies import Input, Output, State
 from dash.exceptions import PreventUpdate
 import json
-from widgets import xapiData
+import widgets
 #Import fileBrowserAndUploadButtonToLoadProcessStatements.py
 from fileBrowserAndUploadButtonToLoadProcessStatements import load_players_info_from_content
 # Import SimvaBrowser from simvaWidget.py
@@ -102,22 +102,47 @@ def init_storage(main):
     [Output('current-path', 'children'),
      Output('folders-div', 'children'),
      Output('files-div', 'children'),
-     Output('run-analyse', 'style')
+     Output('run-analyse', 'style'),
+     Output('content', 'children'),
+     Output('output-t-mon', 'style'),
+     Output('t-mon-tabs', 'value')
      ],
     [Input('parent-directory', 'n_clicks'),
      Input({'type': 'folder-button', 'index': dash.dependencies.ALL}, 'n_clicks'),
-     Input({'type': 'file-button', 'index': dash.dependencies.ALL}, 'n_clicks')],
+     Input({'type': 'file-button', 'index': dash.dependencies.ALL}, 'n_clicks'),
+     Input('run-analyse', 'n_clicks')],
     [State('current-path', 'children')]
 )
-def update_browser(n_clicks_parent, folder_n_clicks, file_n_clicks, current_path):
+def update_browser(n_clicks_parent, folder_n_clicks, file_n_clicks, n_clicks_run_analyse, current_path):
     ctx = dash.callback_context
-    res=f"{current_path} - triggered : {ctx.triggered} - Files : {file_n_clicks} - Folders : {folder_n_clicks} - n_clicks_parent : {n_clicks_parent}"
-    #print(res)
+    res=f"{current_path} - triggered : {ctx.triggered} - Files : {file_n_clicks} - Folders : {folder_n_clicks} - n_clicks_parent : {n_clicks_parent} - n-clicks-run-analyse : {n_clicks_run_analyse}"
+    print(res)
     if not ctx.triggered:
-        raise PreventUpdate
+        raise PreventUpdate    
     triggered_prop_id = ctx.triggered[0]['prop_id']
     # Remove the .n_clicks suffix
     cleaned_prop_id = triggered_prop_id.rsplit('.', 1)[0]
+    if 'run-analyse' in cleaned_prop_id:
+        run_analyse_style={'display': 'none'}
+        folder_buttons=[]
+        file_buttons=[]
+        widgets.xapiData=[]
+        div_list= []
+        out=[]
+        err=[]
+        content_string = browser.get_file_content(current_path)
+        load_players_info_from_content(
+            content_string, current_path, widgets.xapiData, out, err
+        )
+        div_list.append(html.Div([
+                html.Div(out),
+                html.Div(err),
+                html.Hr(),
+            ]))
+        if(len(err) > 0):
+            return browser.current_path, folder_buttons, file_buttons, run_analyse_style, html.Div(div_list), {'display': 'none'}, "home"
+        else:
+            return browser.current_path, folder_buttons, file_buttons, run_analyse_style, html.Div(div_list), {'display': 'block'}, "home"
     if 'parent-directory' in cleaned_prop_id:
         if len(browser.current_path) > len(browser.base_path):
             if browser._isdir(browser.current_path):
@@ -138,44 +163,7 @@ def update_browser(n_clicks_parent, folder_n_clicks, file_n_clicks, current_path
     file_buttons = [html.Button(f, id={'type': 'file-button', 'index': f}, n_clicks=0, style={'background-color': 'green'}) for f in browser.files if f.endswith(browser.accept)]
     run_analyse_style = {'display': 'none'} if browser._isdir(browser.current_path) else {'display': 'block'}
     
-    return browser.current_path, folder_buttons, file_buttons, run_analyse_style, #[html.H1(f'Res : {res}')]
-
-@callback(
-    [Output('content', 'children'),
-    Output('output-t-mon', 'style')],
-    [Input('run-analyse', 'n_clicks')],
-    [State('current-path', 'children')]
-)
-def run_analyse(n_clicks, current_path):
-    if n_clicks > 0:
-        global xapiData
-        xapiData=[]
-        div_list= []
-        out=[]
-        err=[]
-        content_string = browser.get_file_content(current_path)
-        try:
-            load_players_info_from_content(
-                content_string, current_path, xapiData, out, err
-            )
-            div_list.append(html.Div([
-                    html.Div(out),
-                    html.Div(err),
-                    html.Hr(),
-                ]))
-            return html.Div(div_list), {'display': 'block'}
-        except Exception as e:
-            print(e)
-            div_list.append(html.Div(
-                html.Div([
-                    'There was an error processing this file.'
-                ]),
-                html.Div(out),
-                html.Div(err)
-            ))
-            return html.Div(div_list), {'display': 'none'}
-    else:
-        raise PreventUpdate
+    return browser.current_path, folder_buttons, file_buttons, run_analyse_style, html.H1(""), {'display': 'none'}, "home"
 
 simvaBrowserBody = html.Div(id="main", children=[
     html.H1('SIMVA T-Mon Dashboard'),

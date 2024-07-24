@@ -1,7 +1,7 @@
 from dash import html, dash_table, dcc, callback, Output, Input
 from dash.exceptions import PreventUpdate
 import pandas as pd
-from widgets import xapiData
+import widgets
 
 @callback(
     [Output("users-multi-dynamic-dropdown", "options"),
@@ -14,9 +14,8 @@ def update_output(search_value, tab, value):
     if not search_value and not tab:
         raise PreventUpdate
     # Normalize the JSON data to a pandas DataFrame
-    global xapiData
-    if len(xapiData) > 0:
-        df = pd.json_normalize(xapiData)
+    if len(widgets.xapiData) > 0:
+        df = pd.json_normalize(widgets.xapiData)
         filtered_df=df
         # Make sure that the set values are in the option list, else they will disappear
         # from the shown select list, but still part of the `value`.
@@ -36,7 +35,13 @@ def update_output(search_value, tab, value):
         #    filtered_df=df
         # Remove duplicates while preserving order
         unique_options = list({v['value']:v for v in filtered_options}.values())
-        if tab == 'progress_tab':
+        if tab == 'home':
+           content=[
+               html.H2('T-Mon Home Page.'),
+               html.H3('Please select another tab to see default visualisations with this data.')
+           ]
+           tab_content = html.Div(html.Div(content))
+        elif tab == 'progress_tab':
             from vis import xAPISGPlayersProgress
             content=[]
             content.append(html.H3('Player Progress Throw Serious game'))
@@ -168,7 +173,8 @@ TMonBody=html.Div([
     html.Div(id='output-t-mon', style={'display': 'none'}, children=[
         dcc.Dropdown(id='users-multi-dynamic-dropdown', multi=True),
         html.Div(
-            dcc.Tabs(id="t-mon-tabs", children=[
+            dcc.Tabs(id="t-mon-tabs", value="home", children=[
+                dcc.Tab(label='HomePage', value='home'),
                 dcc.Tab(label='Progress', value='progress_tab'),
                 dcc.Tab(label='Videos', value='video_tab'),
                 dcc.Tab(label='Completable', value='completable_tab'),

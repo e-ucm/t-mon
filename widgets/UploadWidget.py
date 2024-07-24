@@ -2,7 +2,7 @@ from dash import html, dcc, callback, Output, Input, State
 from fileBrowserAndUploadButtonToLoadProcessStatements import load_players_info_from_uploaded_content
 import datetime
 from dash.exceptions import PreventUpdate
-from widgets import xapiData
+import widgets
 
 TMonUpload=html.Div([
     dcc.Upload(
@@ -29,7 +29,8 @@ TMonUpload=html.Div([
 
 @callback(
     [Output('output-treatment', 'children'), 
-     Output('output-t-mon', 'style')],
+     Output('output-t-mon', 'style'),
+     Output('t-mon-tabs', 'value')],
     Input('upload-data', 'contents'),
     State('upload-data', 'filename'),
     State('upload-data', 'last_modified')
@@ -39,15 +40,14 @@ def update_output(list_of_contents, list_of_names, list_of_dates):
         raise PreventUpdate
     else:
         div_list = []
-        global xapiData
-        xapiData = []
+        widgets.xapiData = []
         nbError=0
         style={'display': 'block'}
         for c, n, d in zip(list_of_contents, list_of_names, list_of_dates):
             out, err = [], []
             div_list.append(html.H5(n))
             div_list.append(html.H6(datetime.datetime.fromtimestamp(d)))
-            load_players_info_from_uploaded_content(c, n, xapiData, out, err)
+            load_players_info_from_uploaded_content(c, n, widgets.xapiData, out, err)
             div_list.append(html.Div(out))
             div_list.append(html.Div(err))
             if len(err) > 0 : 
@@ -55,4 +55,4 @@ def update_output(list_of_contents, list_of_names, list_of_dates):
             div_list.append(html.Hr())
         if nbError == len(list_of_names):
             style={'display': 'none'}
-        return div_list, style
+        return div_list, style, "home"

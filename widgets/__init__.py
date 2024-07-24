@@ -1,2 +1,1 @@
-global xapiData
 xapiData=[]
