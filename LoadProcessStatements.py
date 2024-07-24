@@ -54,7 +54,7 @@ def load_from_string(str, xapiData, info_output, err_output):
                 s=json.loads(statement)
                 progress.value=count/total
                 count+=1
-                xapiData.append(s)
+                processxapisgdata(s, xapiData)
         else:
             log(info_output, "... interpreting as statement-array")
             # attempt to process all of it as a single JSON document
@@ -64,7 +64,7 @@ def load_from_string(str, xapiData, info_output, err_output):
             for s in statements:
                 progress.value=count/total
                 count+=1
-                xapiData.append(s)
+                processxapisgdata(s, xapiData)
     except Exception as e:
         log(err_output, 
             f"ERROR loading at line/statement {count}/{total}: {e}\n"
@@ -94,3 +94,9 @@ def load_players_info_from_content(filecontent, filename, xapiData, out, err):
     log(out, f"{filename}")
     decoded = filecontent.decode('utf-8')
     load_from_string(decoded, xapiData, out, err)
+
+def processxapisgdata(statement, xapiData):
+    # Extract the `id` from the first category object
+    if "contextActivities" in statement["context"] and "category" in statement["context"]["contextActivities"] and len(statement["context"]["contextActivities"]["category"]) > 0:
+        statement["context"]["contextActivities"]["category"] = statement["context"]["contextActivities"]["category"][0]["id"]
+    xapiData.append(statement)

@@ -47,13 +47,14 @@ def update_output(search_value, tab, value):
             content.append(html.H3('Player Progress Throw Serious game'))
             seriousgamesId=df.loc[df["object.definition.type"]=="https://w3id.org/xapi/seriousgames/activity-types/serious-game"]['object.id'].unique()
             for game in seriousgamesId:
+                bargamedata=xAPISGPlayersProgress.ProgressPlayerLineChart(filtered_df, game)
                 fig=xAPISGPlayersProgress.displayPlayerProgressFig(
-                    bar_game_data=xAPISGPlayersProgress.ProgressPlayerLineChart(filtered_df, game),
+                    bar_game_data=bargamedata,
                     game=game
                 )
                 content.append(dcc.Graph(id=f"barchart-{game}",figure=fig))
                 fig=xAPISGPlayersProgress.displayPlayerProgressInitFig(
-                    bar_game_data=xAPISGPlayersProgress.ProgressPlayerLineChart(filtered_df, game),
+                    bar_game_data=bargamedata,
                     game=game
                 )
                 content.append(dcc.Graph(id=f"barchart-init-{game}",figure=fig))

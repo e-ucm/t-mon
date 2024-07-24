@@ -28,27 +28,35 @@ def ProgressPlayerLineChart(df, game):
         return bar_game_data
 
 def displayPlayerProgressInitFig(bar_game_data, game):
-    data = []
-    for actor in bar_game_data['actor.name'].unique():
-           bar_data=bar_game_data.loc[bar_game_data['actor.name'] == actor].copy()
-           first =bar_data.timestamp.min()
-           bar_data["timestampinit"] = pd.to_timedelta(pd.to_datetime(bar_data['timestamp']) - pd.to_datetime(first)) + pd.to_datetime('1970/01/01')
-           data.append(go.Scatter(x=bar_data['timestampinit'], y=bar_data[result_progress_column], name=actor, hovertext=f"<b>{actor}</b>", mode="lines+markers"))
-    fig = go.Figure(
-        layout_title_text='Progress (same origin) during game level ' + str(game),
-        data=data
+    if bar_game_data: 
+        data = []
+        for actor in bar_game_data['actor.name'].unique():
+               bar_data=bar_game_data.loc[bar_game_data['actor.name'] == actor].copy()
+               first =bar_data.timestamp.min()
+               bar_data["timestampinit"] = pd.to_timedelta(pd.to_datetime(bar_data['timestamp']) - pd.to_datetime(first)) + pd.to_datetime('1970/01/01')
+               data.append(go.Scatter(x=bar_data['timestampinit'], y=bar_data[result_progress_column], name=actor, hovertext=f"<b>{actor}</b>", mode="lines+markers"))
+        fig = go.Figure(data=data)
+    else:
+        from vis import xAPISGnoDataToFillVisualization
+        fig=xAPISGnoDataToFillVisualization.noDataToFillVis(10)
+    fig.update_layout(
+        title_text='Progress (same origin) during game level ' + str(game),
     )
     fig.update_xaxes(categoryorder="total descending")
     return fig
 
 def displayPlayerProgressFig(bar_game_data, game):
-    data = []
-    for actor in bar_game_data['actor.name'].unique():
-           bar_data=bar_game_data.loc[bar_game_data['actor.name'] == actor].copy()
-           data.append(go.Scatter(x=bar_data['timestamp'], y=bar_data[result_progress_column], name=actor, hovertext=f"<b>{actor}</b>", mode="lines+markers"))
-    fig = go.Figure(
-        layout_title_text='Progress during game level ' + str(game),
-        data=data
+    if bar_game_data:
+        data = []
+        for actor in bar_game_data['actor.name'].unique():
+            bar_data=bar_game_data.loc[bar_game_data['actor.name'] == actor].copy()
+            data.append(go.Scatter(x=bar_data['timestamp'], y=bar_data[result_progress_column], name=actor, hovertext=f"<b>{actor}</b>", mode="lines+markers"))
+        fig = go.Figure(data=data)
+    else:
+        from vis import xAPISGnoDataToFillVisualization
+        fig=xAPISGnoDataToFillVisualization.noDataToFillVis(10)
+    fig.update_layout(
+        title_text='Progress during game level ' + str(game),
     )
     fig.update_xaxes(categoryorder="total descending")
     return fig
@@ -84,7 +92,6 @@ def ProgressPlayerPie(df, game):
     return pie_chart_data
 
 def displayPlayerProgressPieFig(pie_chart_data):
-    from vis import xAPISGnoDataToFillVisualization
     if len(pie_chart_data)>0:
         fig = go.Figure(data=[go.Pie(
             labels=pie_chart_data['startedCompleted'],
@@ -93,6 +100,7 @@ def displayPlayerProgressPieFig(pie_chart_data):
             text=pie_chart_data['startedCompleted']
         )])
     else:
+        from vis import xAPISGnoDataToFillVisualization
         fig=xAPISGnoDataToFillVisualization.noDataToFillVis(10)
     fig.update_layout(
             title_text='Game Status'
