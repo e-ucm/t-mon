@@ -7,17 +7,17 @@ from TMonWidgets.MultiSelector import searchValueFromMultiSelector
 @callback(
     [Output("users-multi-dynamic-dropdown", "options"),
      Output('tabs-content', 'children')],
-    Input("users-multi-dynamic-dropdown", "search_value"),
     Input('t-mon-tabs', 'value'),
+    Input("users-multi-dynamic-dropdown", "search_value"),
     Input("users-multi-dynamic-dropdown", "value"),
 )
-def update_output(search_value, tab, value):
-    if not search_value and not tab:
+def update_output(tab, user_search_value, user_value):
+    if not user_search_value and not tab:
         raise PreventUpdate
     # Normalize the JSON data to a pandas DataFrame
     if len(TMonWidgets.xapiData) > 0:
         df = pd.json_normalize(TMonWidgets.xapiData)
-        filtered_df, unique_options=searchValueFromMultiSelector(df, "actor.name", search_value, value)
+        filtered_df, user_unique_options=searchValueFromMultiSelector(df, "actor.name", user_search_value, user_value)
         if tab == 'home':
            content=[
                html.H2('T-Mon Home Page.'),
@@ -143,8 +143,8 @@ def update_output(search_value, tab, value):
                 )
             ])
 
-        return unique_options, tab_content
-    else: 
+        return user_unique_options, tab_content
+    else:
         return [], html.Div()
     
 TMonHeader=html.Div([
