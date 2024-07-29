@@ -82,7 +82,7 @@ def init_storage(main):
         global browser
         browser = SimvaBrowser(session)
         folder_buttons = [html.Button(f, id={'type': 'folder-button', 'index': f}, n_clicks=0) for f in browser.dirs]
-        file_buttons = [html.Button(f, id={'type': 'file-button', 'index': f}, n_clicks=0, style={'background-color': 'green'}) for f in browser.files if f.endswith(browser.accept)]
+        file_buttons = [html.Button(f, id={'type': 'file-button', 'index': f}, n_clicks=0, style={'backgroundColor': 'green'}) for f in browser.files if f.endswith(browser.accept)]
         run_analyse_style = {'display': 'none'}
         if not browser._isdir(browser.current_path):
             run_analyse_style = {'display': 'block'}
@@ -159,7 +159,7 @@ def update_browser(n_clicks_parent, folder_n_clicks, file_n_clicks, n_clicks_run
     browser._update_files()
     
     folder_buttons = [html.Button(f, id={'type': 'folder-button', 'index': f}, n_clicks=0) for f in browser.dirs]
-    file_buttons = [html.Button(f, id={'type': 'file-button', 'index': f}, n_clicks=0, style={'background-color': 'green'}) for f in browser.files if f.endswith(browser.accept)]
+    file_buttons = [html.Button(f, id={'type': 'file-button', 'index': f}, n_clicks=0, style={'backgroundColor': 'green'}) for f in browser.files if f.endswith(browser.accept)]
     run_analyse_style = {'display': 'none'} if browser._isdir(browser.current_path) else {'display': 'block'}
     
     return browser.current_path, folder_buttons, file_buttons, run_analyse_style, html.H1(""), {'display': 'none'}, "home"
