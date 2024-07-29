@@ -1,4 +1,4 @@
-from flask import redirect, url_for, session
+from flask import session
 import dash
 from dash import html, dcc, callback
 from dash.dependencies import Input, Output, State
@@ -183,6 +183,6 @@ LoginLogoutBody = html.Div(id="main-login", children=[
     html.Button(id='login-logout-button', n_clicks=0),
     html.Button(id='account-button', n_clicks=0),
     html.Div(id='login-logout'),
-    html.Div(id='account',children=["Account"]),
+    html.Div(id='account',children=[]),
     html.Div(id='connection-status',children=[])
 ])

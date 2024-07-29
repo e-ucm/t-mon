@@ -2,9 +2,8 @@ import requests
 import xml.etree.ElementTree as ET
 import boto3
 import boto3.session
-from botocore.client import Config
 from jwt import JWT
-import os 
+import os
 import json
 
 class SimvaBrowser:
@@ -120,8 +119,6 @@ class SimvaBrowser:
             aws_access_key_id=self.access_key_id,
             aws_secret_access_key=self.secret_access_key,
             aws_session_token=self.session_token,
-            #region_name='us-east-1',
-            #config=Config(signature_version='s3v4'),
             verify=self.ca_file
         )
 
