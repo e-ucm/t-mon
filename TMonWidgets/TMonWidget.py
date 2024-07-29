@@ -142,7 +142,8 @@ def update_output(tab, user_search_value, user_value):
                     data=data,
                     filter_action='native',
                     sort_action="native",
-                    sort_mode="multi"
+                    sort_mode="multi",
+                    #sort_by=[{'column_id': 'timestamp', 'direction': 'asc'}],
                 )
             ])
         else:
