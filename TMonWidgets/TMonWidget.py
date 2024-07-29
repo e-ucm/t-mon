@@ -3,6 +3,7 @@ from dash.exceptions import PreventUpdate
 import pandas as pd
 import TMonWidgets
 from TMonWidgets.MultiSelector import searchValueFromMultiSelector
+from vis import xAPISGPlayersProgress
 
 @callback(
     [Output("users-multi-dynamic-dropdown", "options"),
@@ -25,7 +26,6 @@ def update_output(tab, user_search_value, user_value):
            ]
            tab_content = html.Div(html.Div(content))
         elif tab == 'progress_tab':
-            from vis import xAPISGPlayersProgress
             content=[]
             content.append(html.H3('Player Progress Throw Serious game'))
             seriousgamesId=df.loc[df["object.definition.type"]=="https://w3id.org/xapi/seriousgames/activity-types/serious-game"]['object.id'].unique()
