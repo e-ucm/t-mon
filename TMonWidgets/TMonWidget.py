@@ -42,7 +42,8 @@ def update_output(tab, user_search_value, user_value):
                 )
                 content.append(dcc.Graph(id=f"barchart-init-{game}",figure=fig))
                 fig=xAPISGPlayersProgress.displayPlayerProgressPieFig(
-                    pie_chart_data=xAPISGPlayersProgress.ProgressPlayerPie(filtered_df, game)
+                    pie_chart_data=xAPISGPlayersProgress.ProgressPlayerPie(filtered_df, game),
+                    game=game
                 )
                 content.append(dcc.Graph(id=f"pie-{game}",figure=fig))
             tab_content = html.Div(html.Div(content))
@@ -131,7 +132,6 @@ def update_output(tab, user_search_value, user_value):
                 )
             ])
         elif tab == 'data_tab':
-        #else:
             # Convert the DataFrame to a dictionary suitable for DataTable
             data = filtered_df.to_dict('records')
             tab_content= html.Div([
@@ -142,7 +142,8 @@ def update_output(tab, user_search_value, user_value):
                     data=data
                 )
             ])
-
+        else:
+            tab_content = html.Div()
         return user_unique_options, tab_content
     else:
         return [], html.Div()

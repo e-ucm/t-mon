@@ -91,7 +91,7 @@ def ProgressPlayerPie(df, game):
     #    pie_chart_data["count"]=0
     return pie_chart_data
 
-def displayPlayerProgressPieFig(pie_chart_data):
+def displayPlayerProgressPieFig(pie_chart_data, game):
     if isinstance(pie_chart_data, pd.DataFrame) and len(pie_chart_data)>0:
         fig = go.Figure(data=[go.Pie(
             labels=pie_chart_data['startedCompleted'],
@@ -103,7 +103,7 @@ def displayPlayerProgressPieFig(pie_chart_data):
         from vis import xAPISGnoDataToFillVisualization
         fig=xAPISGnoDataToFillVisualization.noDataToFillVis(10)
     fig.update_layout(
-            title_text='Game Status'
+            title_text=f'Game Status of {game}'
     )
     ## Show the plot
     return fig
