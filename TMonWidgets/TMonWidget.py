@@ -139,7 +139,10 @@ def update_output(tab, user_search_value, user_value):
                 dash_table.DataTable(
                     id='table-all-xapi-data',
                     columns=[{"name": i, "id": i} for i in filtered_df.columns],
-                    data=data
+                    data=data,
+                    filter_action='native',
+                    sort_action="native",
+                    sort_mode="multi"
                 )
             ])
         else:
