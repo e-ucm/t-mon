@@ -1,4 +1,4 @@
-def searchValueFromSelector(df, object, search_value,value):
+def searchValueFromMultiSelector(df, object, search_value,value):
     filtered_df=df
     # Make sure that the set values are in the option list, else they will disappear
     # from the shown select list, but still part of the `value`.

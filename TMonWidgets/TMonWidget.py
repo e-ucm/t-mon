@@ -2,7 +2,7 @@ from dash import html, dash_table, dcc, callback, Output, Input
 from dash.exceptions import PreventUpdate
 import pandas as pd
 import TMonWidgets
-from TMonWidgets.MultiSelector import searchValueFromSelector
+from TMonWidgets.MultiSelector import searchValueFromMultiSelector
 
 @callback(
     [Output("users-multi-dynamic-dropdown", "options"),
@@ -17,7 +17,7 @@ def update_output(search_value, tab, value):
     # Normalize the JSON data to a pandas DataFrame
     if len(TMonWidgets.xapiData) > 0:
         df = pd.json_normalize(TMonWidgets.xapiData)
-        filtered_df, unique_options=searchValueFromSelector(df, "actor.name", search_value, value)
+        filtered_df, unique_options=searchValueFromMultiSelector(df, "actor.name", search_value, value)
         if tab == 'home':
            content=[
                html.H2('T-Mon Home Page.'),
