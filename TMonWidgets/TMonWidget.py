@@ -2,6 +2,7 @@ from dash import html, dash_table, dcc, callback, Output, Input
 from dash.exceptions import PreventUpdate
 import pandas as pd
 import TMonWidgets
+from TMonWidgets.MultiSelector import searchValueFromSelector
 
 @callback(
     [Output("users-multi-dynamic-dropdown", "options"),
@@ -16,25 +17,7 @@ def update_output(search_value, tab, value):
     # Normalize the JSON data to a pandas DataFrame
     if len(TMonWidgets.xapiData) > 0:
         df = pd.json_normalize(TMonWidgets.xapiData)
-        filtered_df=df
-        # Make sure that the set values are in the option list, else they will disappear
-        # from the shown select list, but still part of the `value`.
-        # Convert the dictionary keys to the appropriate format for dropdown options
-        all_options = [{'label': k, 'value': k} for k in df['actor.name'].unique()]
-        # Filter options based on the search value
-        if search_value is not None:
-            filtered_options = [o for o in all_options if search_value.lower() in o['label'].lower()]
-        else:
-            filtered_options = all_options
-        # Ensure selected values remain in the options list
-        if value:
-            selected_options = [o for o in all_options if o['value'] in value]
-            filtered_options = selected_options + filtered_options
-            filtered_df = df.loc[df['actor.name'].isin(value)]
-        #else:
-        #    filtered_df=df
-        # Remove duplicates while preserving order
-        unique_options = list({v['value']:v for v in filtered_options}.values())
+        filtered_df, unique_options=searchValueFromSelector(df, "actor.name", search_value, value)
         if tab == 'home':
            content=[
                html.H2('T-Mon Home Page.'),
