@@ -135,12 +135,21 @@ def update_browser(n_clicks_parent, folder_n_clicks, file_n_clicks, n_clicks_run
     res=f"{current_path} - triggered : {ctx.triggered} - Files : {file_n_clicks} - Folders : {folder_n_clicks} - n_clicks_parent : {n_clicks_parent} - n-clicks-run-analyse : {n_clicks_run_analyse}"
     print(res)
     if not ctx.triggered:
-        raise PreventUpdate    
+        raise PreventUpdate
     triggered_prop_id = ctx.triggered[0]['prop_id']
     print(f'PropId : {triggered_prop_id} - State : {statepathname} - {browser.current_path} - {browser.base_path}')
+    # Find the position of "/dashboard/"
+    index = statepathname.find("/dashboard")
+    # Slice the string up to the index if "/dashboard/" is found
+    if index != -1:
+        newstatepathname = statepathname[:index]
+        run_dashboard=True
+    else:
+        newstatepathname = statepathname
+        run_dashboard=False
     # Remove the .n_clicks suffix
     if 'parent-directory' in triggered_prop_id and int(n_clicks_parent)>0:
-        print(f"Current Path : {browser.current_path} - State : {statepathname} ")
+        print(f"Current Path : {browser.current_path} - State : {newstatepathname} ")
         if len(browser.current_path) > len(browser.base_path):
             if browser._isdir(browser.current_path):
                 browser.current_path = browser.current_path.rpartition(browser.delimiter)[0]
@@ -148,8 +157,8 @@ def update_browser(n_clicks_parent, folder_n_clicks, file_n_clicks, n_clicks_run
         else:
             browser.current_path = browser.base_path
         pathname=browser.current_path.replace(browser.base_path, "/")
-        print(f"New Path : {pathname}")
-    elif ('run-analyse' in triggered_prop_id and int(n_clicks_run_analyse)>0) or "dashboard" in statepathname:
+        print(f"{browser.current_path} - New Path : {pathname}")
+    elif ('run-analyse' in triggered_prop_id and int(n_clicks_run_analyse)>0) or run_dashboard:
         run_analyse_style={'display': 'none'}
         folder_buttons=[]
         file_buttons=[]
@@ -166,11 +175,12 @@ def update_browser(n_clicks_parent, folder_n_clicks, file_n_clicks, n_clicks_run
                 html.Div(err),
                 html.Hr(),
             ]))
-        pathname=browser.current_path.replace(browser.base_path, "/")
+        pathname=newstatepathname
+        print(f"Pathname : {pathname} - State : {newstatepathname}")
         if(len(err) > 0):
-            return browser.current_path, folder_buttons, file_buttons, run_analyse_style, html.Div(div_list), {'display': 'none'}, "home", f"{pathname}/dashboard"
+            return browser.current_path, folder_buttons, file_buttons, run_analyse_style, html.Div(div_list), {'display': 'none'}, "home", f"{pathname}/dashboard/"
         else:
-            return browser.current_path, folder_buttons, file_buttons, run_analyse_style, html.Div(div_list), {'display': 'block'}, "home", f"{pathname}/dashboard"
+            return browser.current_path, folder_buttons, file_buttons, run_analyse_style, html.Div(div_list), {'display': 'block'}, "home", f"{pathname}/dashboard/"
     elif "-button"in triggered_prop_id:
         cleaned_prop_id = triggered_prop_id.replace(".n_clicks", "")
         button_id = json.loads(cleaned_prop_id)

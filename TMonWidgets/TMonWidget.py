@@ -1,4 +1,4 @@
-from dash import html, dash_table, dcc, callback, Output, Input
+from dash import html, dash_table, dcc, callback, Output, Input, State
 from dash.exceptions import PreventUpdate
 import pandas as pd
 import TMonWidgets
@@ -7,12 +7,22 @@ from vis import xAPISGPlayersProgress
 
 @callback(
     [Output("users-multi-dynamic-dropdown", "options"),
-     Output('tabs-content', 'children')],
+     Output('tabs-content', 'children'),
+     Output('url-t-mon', 'pathname')],
     Input('t-mon-tabs', 'value'),
     Input("users-multi-dynamic-dropdown", "search_value"),
     Input("users-multi-dynamic-dropdown", "value"),
+    State('url-t-mon', 'pathname')
 )
-def update_output(tab, user_search_value, user_value):
+def update_output(tab, user_search_value, user_value, stateUrl):
+    # Find the position of "/dashboard/"
+    index = stateUrl.find("/dashboard/")
+    # Slice the string up to the index if "/dashboard/" is found
+    if index != -1:
+        newStateUrl = stateUrl[index:]
+    else:
+        newStateUrl = stateUrl
+    print(f"Path : {stateUrl} - {newStateUrl}")
     if not user_search_value and not tab:
         raise PreventUpdate
     # Normalize the JSON data to a pandas DataFrame
@@ -148,9 +158,9 @@ def update_output(tab, user_search_value, user_value):
             ])
         else:
             tab_content = html.Div()
-        return user_unique_options, tab_content
+        return user_unique_options, tab_content, f"{tab}"
     else:
-        return [], html.Div()
+        return [], html.Div(), ""
     
 TMonHeader=html.Div([
     html.H1(children='T-Mon'),
@@ -159,6 +169,7 @@ TMonHeader=html.Div([
 ])
 
 TMonBody=html.Div([
+    dcc.Location(id='url-t-mon', refresh=False), # Location component for URL handling
     html.Div(id='output-t-mon', style={'display': 'none'}, children=[
         dcc.Dropdown(id='users-multi-dynamic-dropdown', multi=True),
         html.Div(
