@@ -14,24 +14,31 @@ from vis import xAPISGPlayersProgress
     Input('t-mon-tabs', 'value'),
     Input("users-multi-dynamic-dropdown", "search_value"),
     Input("users-multi-dynamic-dropdown", "value"),
-    State('url-t-mon', 'pathname')
+    Input('url-t-mon', 'pathname')
 )
 def update_output(tab, user_search_value, user_value, stateUrl):
-    print(f"stateUrl: {stateUrl}")
-    if stateUrl is None or stateUrl == "":
-        stateUrlValue=""
-    else:
-        stateUrlValue=stateUrl
-    index = stateUrlValue.find("/dashboard")
+    print(f"Tab : {tab} - stateUrl: {stateUrl}")
+    index = stateUrl.find("/dashboard")
     # Slice the string up to the index if "/dashboard/" is found
     if index != -1:
-        urlValues = stateUrlValue[index:].replace("/dashboard/", "")
+        urlValues = stateUrl[index + len("/dashboard/"):]
         dashboard_data=True
     else:
-        urlValues = ""
+        urlValues=""
         dashboard_data = False
     if dashboard_data:
-        new_tab=urlValues
+        values=urlValues.split("&")
+        print(values)
+        if len(values) > 0:
+            new_tab=values[0]
+        if len(values) > 1:
+            users=values[1]
+            users=users.replace("actor.name=","").split(",")
+            print(f"users : {users}")
+            if users:
+                user_value=users
+        if not new_tab:
+            new_tab="home_tab"
     else:
         new_tab=None
     if new_tab:
@@ -170,7 +177,11 @@ def update_output(tab, user_search_value, user_value, stateUrl):
             ])
         else:
             tab_content = html.Div()
-        return user_value, user_unique_options, tab_content, f"{tab}", tab
+        url=tab
+        if user_value and len(user_value)>0:
+            url=f"{url}&actor.name={",".join(user_value)}"
+        print(f"url:{url}")
+        return user_value, user_unique_options, tab_content, f"{url}", tab
     else:
         return [],[], html.Div(), "", "home_tab"
     

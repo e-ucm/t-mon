@@ -38,7 +38,7 @@ TMonUpload=html.Div([
 )
 def update_output(list_of_contents, list_of_names, list_of_dates):
     if list_of_contents is None:
-        raise PreventUpdate
+        return [], {'display': 'none'}, ""
     else:
         div_list = []
         TMonWidgets.xapiData = []
