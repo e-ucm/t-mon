@@ -120,7 +120,6 @@ def init_storage(main, pathname):
      Output('run-analyse', 'style'),
      Output('content', 'children'),
      Output('output-t-mon', 'style'),
-     Output('t-mon-tabs', 'value'),
      Output('url', 'pathname')
      ],
     [Input('parent-directory', 'n_clicks'),
@@ -143,10 +142,13 @@ def update_browser(n_clicks_parent, folder_n_clicks, file_n_clicks, n_clicks_run
     # Slice the string up to the index if "/dashboard/" is found
     if index != -1:
         newstatepathname = statepathname[:index]
+        dashboard_url = statepathname[index:]
         run_dashboard=True
     else:
         newstatepathname = statepathname
+        dashboard_url = ""
         run_dashboard=False
+    print(f"run_dashboard : {run_dashboard}")
     # Remove the .n_clicks suffix
     if 'parent-directory' in triggered_prop_id and int(n_clicks_parent)>0:
         print(f"Current Path : {browser.current_path} - State : {newstatepathname} ")
@@ -176,11 +178,15 @@ def update_browser(n_clicks_parent, folder_n_clicks, file_n_clicks, n_clicks_run
                 html.Hr(),
             ]))
         pathname=newstatepathname
-        print(f"Pathname : {pathname} - State : {newstatepathname}")
-        if(len(err) > 0):
-            return browser.current_path, folder_buttons, file_buttons, run_analyse_style, html.Div(div_list), {'display': 'none'}, "home", f"{pathname}/dashboard/"
+        if run_dashboard:
+            dashboardpath=f"{dashboard_url}"
         else:
-            return browser.current_path, folder_buttons, file_buttons, run_analyse_style, html.Div(div_list), {'display': 'block'}, "home", f"{pathname}/dashboard/"
+            dashboardpath=f"/dashboard/"
+        print(f"Pathname : {pathname} - State : {newstatepathname} - dashboardurl : {dashboard_url}")
+        if(len(err) > 0):
+            return browser.current_path, folder_buttons, file_buttons, run_analyse_style, html.Div(div_list), {'display': 'none'}, f"{pathname}{dashboardpath}" 
+        else:
+            return browser.current_path, folder_buttons, file_buttons, run_analyse_style, html.Div(div_list), {'display': 'block'}, f"{pathname}{dashboardpath}"
     elif "-button"in triggered_prop_id:
         cleaned_prop_id = triggered_prop_id.replace(".n_clicks", "")
         button_id = json.loads(cleaned_prop_id)
@@ -197,7 +203,7 @@ def update_browser(n_clicks_parent, folder_n_clicks, file_n_clicks, n_clicks_run
     file_buttons = [html.Button(f, id={'type': 'file-button', 'index': f}, n_clicks=0, style={'backgroundColor': 'green'}) for f in browser.files if f.endswith(browser.accept)]
     run_analyse_style = {'display': 'none'} if browser._isdir(browser.current_path) else {'display': 'block'}
     print("Pathname:", pathname)
-    return browser.current_path, folder_buttons, file_buttons, run_analyse_style, html.H1(""), {'display': 'none'}, "home", pathname
+    return browser.current_path, folder_buttons, file_buttons, run_analyse_style, html.H1(""), {'display': 'none'}, pathname
 
 simvaBrowserBody = html.Div(
     [

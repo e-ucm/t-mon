@@ -5,6 +5,7 @@ from dash.exceptions import PreventUpdate
 import TMonWidgets
 
 TMonUpload=html.Div([
+    dcc.Location(id="url", refresh=False),
     dcc.Upload(
         id='upload-data',
         children=html.Div([
@@ -30,7 +31,7 @@ TMonUpload=html.Div([
 @callback(
     [Output('output-treatment', 'children'), 
      Output('output-t-mon', 'style'),
-     Output('t-mon-tabs', 'value')],
+     Output('url', 'pathname')],
     Input('upload-data', 'contents'),
     State('upload-data', 'filename'),
     State('upload-data', 'last_modified')
@@ -55,4 +56,4 @@ def update_output(list_of_contents, list_of_names, list_of_dates):
             div_list.append(html.Hr())
         if nbError == len(list_of_names):
             style={'display': 'none'}
-        return div_list, style, "home"
+        return div_list, style, "/dashboard/home_tab"

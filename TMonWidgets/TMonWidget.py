@@ -6,30 +6,42 @@ from TMonWidgets.MultiSelector import searchValueFromMultiSelector
 from vis import xAPISGPlayersProgress
 
 @callback(
-    [Output("users-multi-dynamic-dropdown", "options"),
+    [Output("users-multi-dynamic-dropdown", "value"),
+     Output("users-multi-dynamic-dropdown", "options"),
      Output('tabs-content', 'children'),
-     Output('url-t-mon', 'pathname')],
+     Output('url-t-mon', 'pathname'), 
+     Output('t-mon-tabs', 'value')],
     Input('t-mon-tabs', 'value'),
     Input("users-multi-dynamic-dropdown", "search_value"),
     Input("users-multi-dynamic-dropdown", "value"),
     State('url-t-mon', 'pathname')
 )
 def update_output(tab, user_search_value, user_value, stateUrl):
-    # Find the position of "/dashboard/"
-    index = stateUrl.find("/dashboard/")
+    print(f"stateUrl: {stateUrl}")
+    if stateUrl is None or stateUrl == "":
+        stateUrlValue=""
+    else:
+        stateUrlValue=stateUrl
+    index = stateUrlValue.find("/dashboard")
     # Slice the string up to the index if "/dashboard/" is found
     if index != -1:
-        newStateUrl = stateUrl[index:]
+        urlValues = stateUrlValue[index:].replace("/dashboard/", "")
+        dashboard_data=True
     else:
-        newStateUrl = stateUrl
-    print(f"Path : {stateUrl} - {newStateUrl}")
-    if not user_search_value and not tab:
-        raise PreventUpdate
+        urlValues = ""
+        dashboard_data = False
+    if dashboard_data:
+        new_tab=urlValues
+    else:
+        new_tab=None
+    if new_tab:
+        tab=new_tab
+    print(f"Tab: {tab} - New Tab: {new_tab} - URL : {urlValues}")
     # Normalize the JSON data to a pandas DataFrame
     if len(TMonWidgets.xapiData) > 0:
         df = pd.json_normalize(TMonWidgets.xapiData)
         filtered_df, user_unique_options=searchValueFromMultiSelector(df, "actor.name", user_search_value, user_value)
-        if tab == 'home':
+        if tab == 'home_tab':
            content=[
                html.H2('T-Mon Home Page.'),
                html.H3('Please select another tab to see default visualisations with this data.')
@@ -158,9 +170,9 @@ def update_output(tab, user_search_value, user_value, stateUrl):
             ])
         else:
             tab_content = html.Div()
-        return user_unique_options, tab_content, f"{tab}"
+        return user_value, user_unique_options, tab_content, f"{tab}", tab
     else:
-        return [], html.Div(), ""
+        return [],[], html.Div(), "", "home_tab"
     
 TMonHeader=html.Div([
     html.H1(children='T-Mon'),
@@ -173,8 +185,8 @@ TMonBody=html.Div([
     html.Div(id='output-t-mon', style={'display': 'none'}, children=[
         dcc.Dropdown(id='users-multi-dynamic-dropdown', multi=True),
         html.Div(
-            dcc.Tabs(id="t-mon-tabs", value="home", children=[
-                dcc.Tab(label='HomePage', value='home'),
+            dcc.Tabs(id="t-mon-tabs", value="home_tab", children=[
+                dcc.Tab(label='HomePage', value='home_tab'),
                 dcc.Tab(label='Progress', value='progress_tab'),
                 dcc.Tab(label='Videos', value='video_tab'),
                 dcc.Tab(label='Completable', value='completable_tab'),
