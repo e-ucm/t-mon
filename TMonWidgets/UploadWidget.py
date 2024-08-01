@@ -56,4 +56,4 @@ def update_output(list_of_contents, list_of_names, list_of_dates):
             div_list.append(html.Hr())
         if nbError == len(list_of_names):
             style={'display': 'none'}
-        return div_list, style, "/dashboard/home_tab"
+        return div_list, style, "/dashboard/tab=home_tab"

@@ -181,7 +181,7 @@ def update_browser(n_clicks_parent, folder_n_clicks, file_n_clicks, n_clicks_run
         if run_dashboard:
             dashboardpath=f"{dashboard_url}"
         else:
-            dashboardpath=f"/dashboard/home_tab"
+            dashboardpath=f"/dashboard/tab=home_tab"
         print(f"Pathname : {pathname} - State : {newstatepathname} - dashboardurl : {dashboard_url}")
         if(len(err) > 0):
             return browser.current_path, folder_buttons, file_buttons, run_analyse_style, html.Div(div_list), {'display': 'none'}, f"{pathname}{dashboardpath}" 
