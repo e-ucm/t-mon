@@ -2,6 +2,7 @@ import requests
 import xml.etree.ElementTree as ET
 import boto3
 import boto3.session
+from botocore.exceptions import ClientError
 from jwt import JWT
 import os
 import json
@@ -123,36 +124,54 @@ class SimvaBrowser:
         )
 
     def _list_files(self, path):
-        s3_client = self._s3_client()
-        folder = s3_client.list_objects_v2(Bucket=self.bucket_name,
-                                           Prefix=path,
-                                           Delimiter=self.delimiter)
-        files = []
-        contents = folder.get('Contents')
-        print(f"Folder : {folder}")
-        if contents:
-            for o in contents:
-                files.append(o.get('Key')[len(self.current_path):])
-        return files
-
+        try:
+            s3_client = self._s3_client()
+            folder = s3_client.list_objects_v2(Bucket=self.bucket_name,
+                                            Prefix=path,
+                                            Delimiter=self.delimiter)
+            files = []
+            contents = folder.get('Contents')
+            print(f"Folder : {folder}")
+            if contents:
+                for o in contents:
+                    files.append(o.get('Key')[len(self.current_path):])
+            return files
+        except ClientError as e:
+            print(f"An error occurred: {e}")
+            if e.response['Error']['Code'] == 'AccessDenied':
+                print("Access denied. Check your IAM policies and bucket policies.")
+            return []
+        
     def _list_folders(self, path):
-        s3_client = self._s3_client()
-        folder = s3_client.list_objects_v2(Bucket=self.bucket_name,
-                                           Prefix=path,
-                                           Delimiter=self.delimiter)
-        folders = []
-        contents = folder.get('CommonPrefixes')
-        if contents:
-            for o in contents:
-                folders.append(o.get('Prefix')[len(self.current_path):])
-        if self.current_path == self.base_path:
-            folders=[dir_id for dir_id in folders if dir_id in self.accepted_activities]
-        return folders
+        try:
+            s3_client = self._s3_client()
+            folder = s3_client.list_objects_v2(Bucket=self.bucket_name,
+                                            Prefix=path,
+                                            Delimiter=self.delimiter)
+            folders = []
+            contents = folder.get('CommonPrefixes')
+            if contents:
+                for o in contents:
+                    folders.append(o.get('Prefix')[len(self.current_path):])
+            if self.current_path == self.base_path:
+                folders=[dir_id for dir_id in folders if dir_id in self.accepted_activities]
+            return folders
+        except ClientError as e:
+            print(f"An error occurred: {e}")
+            if e.response['Error']['Code'] == 'AccessDenied':
+                print("Access denied. Check your IAM policies and bucket policies.")
+            return []
 
     def get_file_content(self, path):
-        s3_client = self._s3_client()
-        file = s3_client.get_object(Bucket=self.bucket_name, Key=path)
-        return file['Body'].read()
+        try:
+            s3_client = self._s3_client()
+            file = s3_client.get_object(Bucket=self.bucket_name, Key=path)
+            return file['Body'].read()
+        except ClientError as e:
+            print(f"An error occurred: {e}")
+            if e.response['Error']['Code'] == 'AccessDenied':
+                print("Access denied. Check your IAM policies and bucket policies.")
+            return []
 
     def _isdir(self, path):
         return path.endswith(self.delimiter)
@@ -163,3 +182,22 @@ class SimvaBrowser:
         if self._isdir(self.current_path):
             self.dirs = self._list_folders(self.current_path)
             self.files = self._list_files(self.current_path)
+
+    def file_exists(self, path):
+        """
+        Check if a file exists in the S3 bucket at the given path.
+
+        :param path: The path of the file in the S3 bucket.
+        :return: True if the file exists, False otherwise.
+        """
+        try:
+            s3_client = self._s3_client()
+            file = s3_client.get_object(Bucket=self.bucket_name, Key=path)
+            file.load()
+            return True, ""
+        except ClientError as e:
+            if e.response['Error']['Code'] == '404':
+                return False, e.response['Error']['Message']
+            else:
+                print(f"An error occurred: {e}")
+                return False, e.response['Error']['Message']

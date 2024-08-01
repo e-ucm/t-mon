@@ -168,10 +168,15 @@ def update_browser(n_clicks_parent, folder_n_clicks, file_n_clicks, n_clicks_run
         div_list= []
         out=[]
         err=[]
-        content_string = browser.get_file_content(current_path)
-        load_players_info_from_content(
-            content_string, current_path, TMonWidgets.xapiData, out, err
-        )
+        fileExists, errorFileExist=browser.file_exists(current_path)
+        if fileExists:
+            content_string = browser.get_file_content(current_path)
+            load_players_info_from_content(
+                content_string, current_path, TMonWidgets.xapiData, out, err
+            )
+        else:
+            err.append(f"File at {current_path} don't exist or you don't have access.")
+            err.append(errorFileExist)
         div_list.append(html.Div([
                 html.Div(out),
                 html.Div(err),
