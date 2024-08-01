@@ -175,8 +175,14 @@ def update_browser(n_clicks_parent, folder_n_clicks, file_n_clicks, n_clicks_run
                 content_string, current_path, TMonWidgets.xapiData, out, err
             )
         else:
-            err.append(f"File at {current_path} don't exist or you don't have access.")
-            err.append(errorFileExist)
+            if errorFileExist['Code']=="NoSuchKey":
+                err.append(f"Specified file at {current_path} don't exist.")
+            elif errorFileExist['Code']=='AccessDenied':
+                 err.append(f"Access denied to Specified file {current_path}. Check your IAM policies and bucket policies.")
+            else:
+                err.append(errorFileExist['Code'])
+                err.append(errorFileExist['Message'])
+                err.append(errorFileExist['Key'])
         div_list.append(html.Div([
                 html.Div(out),
                 html.Div(err),

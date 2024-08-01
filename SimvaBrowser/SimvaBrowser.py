@@ -193,11 +193,11 @@ class SimvaBrowser:
         try:
             s3_client = self._s3_client()
             file = s3_client.get_object(Bucket=self.bucket_name, Key=path)
-            file.load()
+            file['Body'].read()
             return True, ""
         except ClientError as e:
             if e.response['Error']['Code'] == '404':
-                return False, e.response['Error']['Message']
+                return False, e.response['Error']
             else:
                 print(f"An error occurred: {e}")
-                return False, e.response['Error']['Message']
+                return False, e.response['Error']
