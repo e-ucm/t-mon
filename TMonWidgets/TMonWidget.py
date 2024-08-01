@@ -5,17 +5,17 @@ import pandas as pd
 import TMonWidgets
 from TMonWidgets.MultiSelector import searchValueFromMultiSelector
 from vis import xAPISGPlayersProgress
-from urllib.parse import unquote
+from urllib.parse import unquote, urlencode
 
 def get_value_from_url(url, valueId, urlValuesDelimiter='&'):
-    decoded_string = unquote(url)
+    decoded_string = unquote(url).replace('+', ' ')
     values=decoded_string.split(urlValuesDelimiter)
     print(f"{url} - {values}")
     for val in values:
         index=val.find(valueId)
         if index != -1:
             return val[index+len(valueId):]
-    return url
+    return None
 
 homepagecontent=[
    html.H2('T-Mon Home Page.'),
@@ -26,6 +26,7 @@ homepagecontent=[
     [
         Output('t-mon-tabs', 'value'),
         Output("users-multi-dynamic-dropdown", "value"),
+        Output("object-multi-dynamic-dropdown", "value")
     ],
     Input('output-t-mon', 'style'), 
     State('url-t-mon', 'pathname')
@@ -34,7 +35,6 @@ def update_tab(style, stateUrl):
     if style == {"display":"block"} : 
         print(f"StateUrl: {stateUrl}")
         new_tab=None
-        new_users=None
         urlValues=None
         dashboard_data=False
         index = stateUrl.find("/dashboard/")
@@ -45,20 +45,16 @@ def update_tab(style, stateUrl):
         if dashboard_data and urlValues:
             new_tab=get_value_from_url(urlValues, "tab=")
             users=get_value_from_url(urlValues, "actor.name=")
-            new_users=users.split(",")
+            object=get_value_from_url(urlValues, "object.id=")
         else:
             new_tab="home_tab"
-            new_users=[]
-        if new_tab != "":
-            tab=new_tab
-        else:
-            tab="home_tab"
-        if new_users:
-            user_value=new_users
-        else:
-            user_value=[]
-        print(f"Tab: {tab} - URL : {urlValues} - user_value : {user_value}")
-        return tab, user_value
+            users=None
+            object=None
+        tab=new_tab
+        user_value=users.split(",") if users else []
+        object_value=object.split(",") if object else []
+        print(f"Tab: {tab} - URL : {urlValues} - user_value : {user_value} - object_value: {object_value}")
+        return tab, user_value, object_value
     else:
         raise PreventUpdate
 
@@ -66,23 +62,27 @@ def update_tab(style, stateUrl):
     [
         Output('url-t-mon', 'pathname'),        
         Output("users-multi-dynamic-dropdown", "options"),
+        Output('object-multi-dynamic-dropdown', "options"),
         Output('tabs-content', 'children'),
      ],
     Input('t-mon-tabs', 'value'),
     Input("users-multi-dynamic-dropdown", "search_value"),
     Input("users-multi-dynamic-dropdown", "value"),
+    Input("object-multi-dynamic-dropdown", "search_value"),
+    Input("object-multi-dynamic-dropdown", "value"),
 )
-def update_output(tab, user_search_value, user_value):
+def update_output(tab, user_search_value, user_value, object_search_value, object_value):
     ctx = dash.callback_context
     triggered=ctx.triggered
     triggered_prop_id = ctx.triggered[0]['prop_id']
     res=f"Triggered : {triggered} - {triggered_prop_id}"
     print(res)
     # Normalize the JSON data to a pandas DataFrame
-    if 'users-multi-dynamic-dropdown' in triggered_prop_id or 't-mon-tabs' in triggered_prop_id:
+    if 'object-multi-dynamic-dropdown' in triggered_prop_id or 'users-multi-dynamic-dropdown' in triggered_prop_id or 't-mon-tabs' in triggered_prop_id:
         if len(TMonWidgets.xapiData) > 0:
             df = pd.json_normalize(TMonWidgets.xapiData)
             filtered_df, user_unique_options=searchValueFromMultiSelector(df, "actor.name", user_search_value, user_value)
+            filtered_df, object_unique_options=searchValueFromMultiSelector(filtered_df, "object.id", object_search_value, object_value)
             if tab == 'home_tab':
                 tab_content = html.Div(html.Div(homepagecontent))
             elif tab == 'progress_tab':
@@ -208,14 +208,19 @@ def update_output(tab, user_search_value, user_value):
                 ])
             else:
                 tab_content = html.Div()
-            url=f"tab={tab}"
+            new_query_params = { 'tab': tab }
             if user_value and len(user_value)>0:
-                url=f"{url}&actor.name={",".join(user_value)}"
-            print(f"url:{url}")
-            return f"{url}", user_unique_options, tab_content
+                new_query_params["actor.name"]=",".join(user_value)
+            if object_value and len(object_value)>0:
+                new_query_params["object.id"]=",".join(object_value)
+            print(f"Query param url:{new_query_params}")
+            # Construct a new query string with unique parameters
+            new_query_string = urlencode(new_query_params, safe=" ")
+            print(f"new_query_string: {new_query_string}")
+            return f"{new_query_string}", user_unique_options,object_unique_options, tab_content
         else:
             url=f"tab=home_tab"
-            return f"{url}",[], html.Div(homepagecontent)
+            return url,[], [], html.Div(homepagecontent)
     else:
         raise PreventUpdate
     
@@ -229,6 +234,7 @@ TMonBody=html.Div([
     dcc.Location(id='url-t-mon', refresh=False), # Location component for URL handling
     html.Div(id='output-t-mon', style={'display': 'none'}, children=[
         dcc.Dropdown(id='users-multi-dynamic-dropdown', multi=True),
+        dcc.Dropdown(id='object-multi-dynamic-dropdown', multi=True),
         html.Div(
             dcc.Tabs(id="t-mon-tabs", value="home_tab", children=[
                 dcc.Tab(label='HomePage', value='home_tab'),
