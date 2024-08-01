@@ -4,7 +4,7 @@ from dash.exceptions import PreventUpdate
 import pandas as pd
 import TMonWidgets
 from TMonWidgets.MultiSelector import searchValueFromMultiSelector
-from vis import xAPISGPlayersProgress
+from vis import xAPISGPlayersProgress, xAPISGVideosSeenSkipped
 from urllib.parse import unquote, urlencode
 
 def get_value_from_url(url, valueId, urlValuesDelimiter='&'):
@@ -58,6 +58,26 @@ def update_tab(style, stateUrl):
     else:
         raise PreventUpdate
 
+
+def filterObjectIdDependingTab(df, value, tab):
+    if tab == "progress_tab":
+        vals=df.loc[df["object.definition.type"]=="https://w3id.org/xapi/seriousgames/activity-types/serious-game"]["object.id"].unique()
+    elif tab == "video_tab":
+        vals=df.loc[df["object.definition.type"]=="https://w3id.org/xapi/seriousgames/activity-types/Cutscene"]["object.id"].unique()
+    elif tab == "completable_tab":
+        vals=df.loc[df["object.definition.type"]=="https://w3id.org/xapi/seriousgames/activity-types/level"]["object.id"].unique()
+    elif tab == "alternative_tab":
+        vals=df.loc[df["object.definition.type"]=="https://w3id.org/xapi/seriousgames/activity-types/Alternative"]["object.id"].unique()
+    elif tab == "interaction_tab":
+        vals=df.loc[df["object.definition.type"]=="https://w3id.org/xapi/seriousgames/activity-types/Screen"]["object.id"].unique()
+    elif tab == "accessible_tab":
+        vals=df.loc[df["object.definition.type"]=="https://w3id.org/xapi/seriousgames/activity-types/Screen"]["object.id"].unique()
+    elif tab == "menu_tab":
+        vals=df.loc[df["object.definition.type"]=="https://w3id.org/xapi/seriousgames/activity-types/Screen"]["object.id"].unique()
+    else:
+        vals=value
+    return vals
+
 @callback(
     [
         Output('url-t-mon', 'pathname'),        
@@ -83,6 +103,7 @@ def update_output(tab, user_search_value, user_value, object_search_value, objec
             df = pd.json_normalize(TMonWidgets.xapiData)
             filtered_df, user_unique_options=searchValueFromMultiSelector(df, "actor.name", user_search_value, user_value)
             filtered_df, object_unique_options=searchValueFromMultiSelector(filtered_df, "object.id", object_search_value, object_value)
+            object_unique_options=filterObjectIdDependingTab(df, object_unique_options, tab)
             if tab == 'home_tab':
                 tab_content = html.Div(html.Div(homepagecontent))
             elif tab == 'progress_tab':
@@ -109,16 +130,10 @@ def update_output(tab, user_search_value, user_value, object_search_value, objec
                 tab_content = html.Div(html.Div(content))
             elif tab == 'video_tab':
                 tab_content= html.Div([
-                    html.H3('Tab content 2'),
+                    html.H3('Video Seen/Skipped'),
                     dcc.Graph(
-                        id='graph-2-tabs-dcc',
-                        figure={
-                            'data': [{
-                                'x': [1, 2, 3],
-                                'y': [5, 10, 6],
-                                'type': 'bar'
-                            }]
-                        }
+                        id='video-skipped-seen',
+                        figure=xAPISGVideosSeenSkipped.VideoSeenSkippedBarChart(filtered_df)
                     )
                 ])
             elif tab == 'completable_tab':
