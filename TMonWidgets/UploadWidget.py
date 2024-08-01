@@ -29,16 +29,17 @@ TMonUpload=html.Div([
 ])
 
 @callback(
-    [Output('output-treatment', 'children'), 
-     Output('output-t-mon', 'style'),
-     Output('url', 'pathname')],
+    [
+        Output('output-treatment', 'children'), 
+        Output('output-t-mon', 'style')
+    ],
     Input('upload-data', 'contents'),
     State('upload-data', 'filename'),
     State('upload-data', 'last_modified')
 )
 def update_output(list_of_contents, list_of_names, list_of_dates):
     if list_of_contents is None:
-        return [], {'display': 'none'}, ""
+        return [], {'display': 'none'}
     else:
         div_list = []
         TMonWidgets.xapiData = []
@@ -56,4 +57,5 @@ def update_output(list_of_contents, list_of_names, list_of_dates):
             div_list.append(html.Hr())
         if nbError == len(list_of_names):
             style={'display': 'none'}
-        return div_list, style, "/dashboard/tab=home_tab"
+        return div_list, style
+

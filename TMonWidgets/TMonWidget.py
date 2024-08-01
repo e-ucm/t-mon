@@ -31,7 +31,7 @@ homepagecontent=[
     State('url-t-mon', 'pathname')
 )
 def update_tab(style, stateUrl):
-    if style:
+    if style == {"display":"block"} : 
         print(f"StateUrl: {stateUrl}")
         new_tab=None
         new_users=None
