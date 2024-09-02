@@ -46,7 +46,7 @@ class SimvaBrowser:
         }
 
         # Make POST request to API and get token
-        response = requests.post(f"{self.simva_api_url}/users/login", headers={"Content-Type": "application/json"}, data=json.dumps(payload))
+        response = requests.post(f"{self.simva_api_url}users/login", headers={"Content-Type": "application/json"}, data=json.dumps(payload))
 
         # Check if the request was successful
         if response.status_code == 200:
@@ -64,7 +64,7 @@ class SimvaBrowser:
         headers = {'Content-Type': 'application/json'}
         if self.jwt:
             headers['Authorization'] = f'Bearer {self.jwt}'
-        url = f"{self.simva_api_url}/activities"
+        url = f"{self.simva_api_url}activities"
         response = requests.get(url, headers=headers)
         if response.status_code == 200:
             data = response.json()
@@ -89,6 +89,7 @@ class SimvaBrowser:
             'DurationSeconds': 3600,
             'WebIdentityToken': self.auth.get('oidc_auth_token', {}).get("access_token")
         }
+        print(f"Data : {data}")
         response = requests.post(self.storage_url, data=data, verify=self.ca_file)
         print(f"Response : {response.text}")
 

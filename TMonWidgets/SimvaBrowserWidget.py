@@ -18,7 +18,7 @@ flask=KeycloakClient(homepage=False)
     Output('login-logout-button', 'children'),
     [Input('main-login', 'children')]
 )
-def login_logout_button(main):
+def login_logout_button_displayed(main):
     if flask.oidc.user_loggedin:
         return "Logout"
     else:
