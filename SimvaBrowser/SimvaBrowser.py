@@ -207,7 +207,7 @@ class SimvaBrowser:
                 for o in contents:
                     folders.append(o.get('Prefix')[len(self.current_path):])
             if self.current_path == self.base_path:
-                folders=[{"id":dir.get("_id") + "/","name": dir.get('name') + "/"} for dir in self.accepted_activities if dir.get("_id") + "/" in folders]
+                folders=[{"id":dir.get("_id") + "/","name": dir.get('name')} for dir in self.accepted_activities if dir.get("_id") + "/" in folders]
             else:
                 folders=[{"id":dir_id, "name":dir_id} for dir_id in folders]
             return folders

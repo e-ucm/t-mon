@@ -97,7 +97,7 @@ def init_storage(main, pathname):
             browser.current_path=browser.base_path + newpathname[1:]
         print(f"Pathname set to {pathname} - {browser.current_path} - {browser.base_path}")
         browser._update_files()
-        folder_buttons = [html.Button(f.get("name"), id={'type': 'folder-button', 'index': f.get("id")}, n_clicks=0) for f in browser.dirs]
+        folder_buttons = [html.Button(f"{f.get("name")} ({f.get("id")})", id={'type': 'folder-button', 'index': f.get("id")}, n_clicks=0) for f in browser.dirs]
         file_buttons = [html.Button(f, id={'type': 'file-button', 'index': f}, n_clicks=0, style={'backgroundColor': 'green'}) for f in browser.files if f.endswith(browser.accept)]
         run_analyse_style = {'display': 'none'}
         if not browser._isdir(browser.current_path):
@@ -219,7 +219,7 @@ def update_browser(n_clicks_parent, folder_n_clicks, file_n_clicks, n_clicks_run
         print("Nothing to do ! Prevent update")
         raise PreventUpdate
     browser._update_files()
-    folder_buttons = [html.Button(f.get("name"), id={'type': 'folder-button', 'index': f.get("id")}, n_clicks=0) for f in browser.dirs]
+    folder_buttons = [html.Button(f"{f.get("name")} ({f.get("id")})", id={'type': 'folder-button', 'index': f.get("id")}, n_clicks=0) for f in browser.dirs]
     file_buttons = [html.Button(f, id={'type': 'file-button', 'index': f}, n_clicks=0, style={'backgroundColor': 'green'}) for f in browser.files if f.endswith(browser.accept)]
     run_analyse_style = {'display': 'none'} if browser._isdir(browser.current_path) else {'display': 'block'}
     print("Pathname:", pathname)
