@@ -97,13 +97,18 @@ def init_storage(main, pathname):
             browser.current_path=browser.base_path + newpathname[1:]
         print(f"Pathname set to {pathname} - {browser.current_path} - {browser.base_path}")
         browser._update_files()
-        folder_buttons = [html.Button(f, id={'type': 'folder-button', 'index': f}, n_clicks=0) for f in browser.dirs]
+        folder_buttons = [html.Button(f.get("name"), id={'type': 'folder-button', 'index': f.get("id")}, n_clicks=0) for f in browser.dirs]
         file_buttons = [html.Button(f, id={'type': 'file-button', 'index': f}, n_clicks=0, style={'backgroundColor': 'green'}) for f in browser.files if f.endswith(browser.accept)]
         run_analyse_style = {'display': 'none'}
         if not browser._isdir(browser.current_path):
             run_analyse_style = {'display': 'block'}
+        print(f'Study : {browser.actual_study} -Activity : {browser.actual_activity} - File : {browser.actual_selected_file}')
+        actual_study=browser.actual_study
+        actual_activity=browser.actual_activity
         appLayout = html.Div([
             html.H3(id='current-path', children=browser.current_path),
+            html.H4(id='current-study', children=actual_study),
+            html.H4(id='current-activity', children=actual_activity),
             html.Button('..', id='parent-directory', n_clicks=0, style={'display': 'block'}),
             html.Div(id='folders-div', children=folder_buttons),
             html.Div(id='files-div', children=file_buttons),
@@ -115,6 +120,8 @@ def init_storage(main, pathname):
 
 @callback(
     [Output('current-path', 'children'),
+     Output('current-study', 'children'),
+     Output('current-activity', 'children'),
      Output('folders-div', 'children'),
      Output('files-div', 'children'),
      Output('run-analyse', 'style'),
@@ -194,10 +201,12 @@ def update_browser(n_clicks_parent, folder_n_clicks, file_n_clicks, n_clicks_run
         else:
             dashboardpath=f"/dashboard/tab=home_tab"
         print(f"Pathname : {pathname} - State : {newstatepathname} - dashboardurl : {dashboard_url}")
+        actual_study=browser.actual_study if browser.actual_study is not None else "Select a study"
+        actual_activity=browser.actual_activity if browser.actual_activity is not None else ""
         if(len(err) > 0):
-            return browser.current_path, folder_buttons, file_buttons, run_analyse_style, html.Div(div_list), {'display': 'none'}, f"{pathname}{dashboardpath}" 
+            return browser.current_path,actual_study, actual_activity, folder_buttons, file_buttons, run_analyse_style, html.Div(div_list), {'display': 'none'}, f"{pathname}{dashboardpath}" 
         else:
-            return browser.current_path, folder_buttons, file_buttons, run_analyse_style, html.Div(div_list), {'display': 'block'}, f"{pathname}{dashboardpath}"
+            return browser.current_path,actual_study, actual_activity, folder_buttons, file_buttons, run_analyse_style, html.Div(div_list), {'display': 'block'}, f"{pathname}{dashboardpath}"
     elif "-button"in triggered_prop_id:
         cleaned_prop_id = triggered_prop_id.replace(".n_clicks", "")
         button_id = json.loads(cleaned_prop_id)
@@ -210,17 +219,21 @@ def update_browser(n_clicks_parent, folder_n_clicks, file_n_clicks, n_clicks_run
         print("Nothing to do ! Prevent update")
         raise PreventUpdate
     browser._update_files()
-    folder_buttons = [html.Button(f, id={'type': 'folder-button', 'index': f}, n_clicks=0) for f in browser.dirs]
+    folder_buttons = [html.Button(f.get("name"), id={'type': 'folder-button', 'index': f.get("id")}, n_clicks=0) for f in browser.dirs]
     file_buttons = [html.Button(f, id={'type': 'file-button', 'index': f}, n_clicks=0, style={'backgroundColor': 'green'}) for f in browser.files if f.endswith(browser.accept)]
     run_analyse_style = {'display': 'none'} if browser._isdir(browser.current_path) else {'display': 'block'}
     print("Pathname:", pathname)
-    return browser.current_path, folder_buttons, file_buttons, run_analyse_style, html.H1(""), {'display': 'none'}, pathname
+    actual_study=browser.actual_study if browser.actual_study is not None else "Select a study"
+    actual_activity=browser.actual_activity if browser.actual_activity is not None else "Select an activity"
+    return browser.current_path, actual_study, actual_activity, folder_buttons, file_buttons, run_analyse_style, html.H1(""), {'display': 'none'}, pathname
 
 simvaBrowserBody = html.Div(
     [
         dcc.Location(id='url', refresh=False), # Location component for URL handling
         html.Div(id='browser_div', children=[
                 html.H3(id='current-path'),
+                html.H4(id='current-study'),
+                html.H4(id='current-activity'),
                 html.Button('..', id='parent-directory', n_clicks=0, style={'display': 'none'}),
                 html.Div(id='folders-div', children=[]),
                 html.Div(id='files-div', children=[]),
