@@ -15,8 +15,9 @@ class SimvaBrowser:
 
         #SIMVA
         self.auth = auth
-        self.accepted_activities=[]
         self.accepted_studies=[]
+        self.study_directories=[]
+        self.accepted_activities=[]
         self.actual_activity=None
         self.actual_study=None
         self.actual_selected_file=None
@@ -59,6 +60,7 @@ class SimvaBrowser:
             # Print the result
             print("STUDY : Data received:", data)
             self.accepted_studies=data
+            self.study_directories=[{"id":dir.get("_id") + "/","name": dir.get('name')} for dir in self.accepted_studies]
         else:
             print(f"Error: {response.text}")
 
@@ -66,6 +68,12 @@ class SimvaBrowser:
         study=[study for study in self.accepted_studies if study.get("_id") == studyId]
         if len(study)>0:
             return study[0]
+        return None
+    
+    def _get_accepted_activity_from_id(self, activityId):
+        activity=[activity for activity in self.accepted_activities if activity.get("_id") == activityId]
+        if len(activity)>0:
+            return activity[0]
         return None
     
     def _load_selected_test_from_simva_api(self, testId):
@@ -153,11 +161,18 @@ class SimvaBrowser:
         except ClientError as e:
             print(f"An error occurred: {e}")
             if e.response['Error']['Code'] == 'AccessDenied':
-                print("Access denied. Check your IAM policies and bucket policies.")
+                print("Access denied.")
             return []
 
     def _isdir(self, path):
         return path.endswith(self.delimiter)
+
+    def _getStudyIdFromPath(self,path):
+        added_path=path.replace(self.base_path, "").split("/")
+        studyId=None
+        if len(added_path) >= 1:
+            studyId=added_path[0]
+        return studyId
 
     def _update_files(self):
         self.files = []
@@ -176,12 +191,7 @@ class SimvaBrowser:
                 actual_study_id=self.added_path[0]
                 self.actual_activity=None
                 if actual_study_id not in [study.get("_id") for study in self.accepted_studies]:
-                    self.current_path=self.base_path
-                    self.current_level=0
-                    self.actual_study=None
-                    self.actual_activity=None
-                    self.actual_selected_file=None
-                    self.dirs=studyDirs
+                    self._reset_browser()
                 else:
                     self.actual_study=self._get_accepted_study_from_id(actual_study_id)
                 if self.current_level == 2:
@@ -194,6 +204,13 @@ class SimvaBrowser:
                     self.files=self._list_files(self.current_path)
             self.files=self._list_files(self.current_path)
 
+    def _reset_browser(self):
+        self.current_path=self.base_path
+        self.current_level=0
+        self.actual_study=None
+        self.actual_activity=None
+        self.actual_selected_file=None
+
     def file_exists(self, path):
         """
         Check if a file exists in the S3 bucket at the given path.
@@ -201,14 +218,19 @@ class SimvaBrowser:
         :param path: The path of the file in the S3 bucket.
         :return: True if the file exists, False otherwise.
         """
-        try:
-            s3_client = self._s3_client()
-            file = s3_client.get_object(Bucket=self.bucket_name, Key=path)
-            file['Body'].read()
-            return True, ""
-        except ClientError as e:
-            if e.response['Error']['Code'] == '404':
-                return False, e.response['Error']
-            else:
-                print(f"An error occurred: {e}")
-                return False, e.response['Error']
+        if self._getStudyIdFromPath(path) in [study.get("_id") for study in self.accepted_studies]:
+            try:
+                s3_client = self._s3_client()
+                file = s3_client.get_object(Bucket=self.bucket_name, Key=path)
+                file['Body'].read()
+                return True, ""
+            except ClientError as e:
+                if e.response['Error']['Code'] == '404':
+                    return False, e.response['Error']
+                else:
+                    print(f"An error occurred: {e}")
+                    return False, e.response['Error']
+        else:
+            self._reset_browser()
+            self._update_files()
+            return False, {"Code":"AccessDenied", "Message":"You cannot access."}
