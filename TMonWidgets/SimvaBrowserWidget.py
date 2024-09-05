@@ -8,8 +8,7 @@ import TMonWidgets
 #Import LoadProcessStatements.py
 from LoadProcessStatements import load_players_info_from_content
 # Import SimvaBrowser class from SimvaBrowser.py
-from SimvaBrowser.SimvaAPIBrowser import SimvaBrowser
-from SimvaBrowser.MinioBrowser import MinioBrowser
+from SimvaBrowser.SimvaBrowser import SimvaBrowser
 # Import KeycloakClient class containing a Flask OIDC server from KeycloakClient.py
 from SimvaBrowser.KeycloakClient import KeycloakClient
 flask=KeycloakClient(homepage=False)
@@ -81,9 +80,8 @@ def update_connection_status(input_value):
 def init_storage(main, pathname):
     if flask.oidc.user_loggedin:
         # Initialize SimvaBrowser
-        global browser, simvaAPI
-        simvaAPI = SimvaBrowser(session)
-        browser = MinioBrowser()
+        global browser
+        browser = SimvaBrowser(session)
         if pathname is None or pathname == '/':
             browser.current_path= browser.base_path
         else:
@@ -104,9 +102,9 @@ def init_storage(main, pathname):
         run_analyse_style = {'display': 'none'}
         if not browser._isdir(browser.current_path):
             run_analyse_style = {'display': 'block'}
-        print(f'Study : {simvaAPI.actual_study} -Activity : {simvaAPI.actual_activity} - File : {simvaAPI.actual_selected_file}')
-        actual_study=simvaAPI.actual_study
-        actual_activity=simvaAPI.actual_activity
+        print(f'Study : {browser.actual_study} -Activity : {browser.actual_activity} - File : {browser.actual_selected_file}')
+        actual_study=browser.actual_study.get("name") if browser.actual_study is not None else "Select a study"
+        actual_activity=browser.actual_activity.get("name") if browser.actual_activity is not None else "Select an activity"
         appLayout = html.Div([
             html.H3(id='current-path', children=browser.current_path),
             html.H4(id='current-study', children=actual_study),
@@ -203,8 +201,8 @@ def update_browser(n_clicks_parent, folder_n_clicks, file_n_clicks, n_clicks_run
         else:
             dashboardpath=f"/dashboard/tab=home_tab"
         print(f"Pathname : {pathname} - State : {newstatepathname} - dashboardurl : {dashboard_url}")
-        actual_study=simvaAPI.actual_study if simvaAPI.actual_study is not None else "Select a study"
-        actual_activity=simvaAPI.actual_activity if simvaAPI.actual_activity is not None else ""
+        actual_study=browser.actual_study.get("name") if browser.actual_study is not None else "Select a study"
+        actual_activity=browser.actual_activity.get("name") if browser.actual_activity is not None else ""
         if(len(err) > 0):
             return browser.current_path,actual_study, actual_activity, folder_buttons, file_buttons, run_analyse_style, html.Div(div_list), {'display': 'none'}, f"{pathname}{dashboardpath}" 
         else:
@@ -225,8 +223,8 @@ def update_browser(n_clicks_parent, folder_n_clicks, file_n_clicks, n_clicks_run
     file_buttons = [html.Button(f, id={'type': 'file-button', 'index': f}, n_clicks=0, style={'backgroundColor': 'green'}) for f in browser.files if f.endswith(browser.accept)]
     run_analyse_style = {'display': 'none'} if browser._isdir(browser.current_path) else {'display': 'block'}
     print("Pathname:", pathname)
-    actual_study=simvaAPI.actual_study if simvaAPI.actual_study is not None else "Select a study"
-    actual_activity=simvaAPI.actual_activity if simvaAPI.actual_activity is not None else "Select an activity"
+    actual_study=browser.actual_study.get("name") if browser.actual_study is not None else "Select a study"
+    actual_activity=browser.actual_activity.get("name") if browser.actual_activity is not None else "Select an activity"
     return browser.current_path, actual_study, actual_activity, folder_buttons, file_buttons, run_analyse_style, html.H1(""), {'display': 'none'}, pathname
 
 simvaBrowserBody = html.Div(

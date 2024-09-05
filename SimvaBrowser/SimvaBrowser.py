@@ -9,62 +9,45 @@ import json
 
 class SimvaBrowser:
     def __init__(self, auth, accept='.json', ca_file=None, delimiter='/', client_secret_file="client_secrets.json"):
+        #GENERAL
         basedir = os.path.abspath(f"{os.path.dirname(__file__)}/../")
         self.secret_file=self._load_secret_file(os.path.join(basedir, client_secret_file))
+
+        #SIMVA
         self.auth = auth
-        self.accept = accept
-        self.ca_file = ca_file
         self.accepted_activities=[]
         self.accepted_studies=[]
         self.actual_activity=None
         self.actual_study=None
         self.actual_selected_file=None
+        self.simva_api_url = self.secret_file.get("simva").get("api_url")
+        jwt_parser = JWT()
+        self.jwt = self.auth.get('oidc_auth_token', {}).get("access_token")
+        self.access_token=jwt_parser.decode(self.jwt, do_verify=False)
+        self._load_selected_studies_from_simva_api()
+
+        #MINIO
+        self.accept = accept
+        self.ca_file = ca_file
         self.storage_url = self.secret_file.get("minio").get("storage_url")
         self.bucket_name = self.secret_file.get("minio").get("bucket_name")
-        self.traces_folder = self.secret_file.get("minio").get("users_folder")
-        self.simva_api_url = self.secret_file.get("simva").get("api_url")
+        self.access_key_id = self.secret_file.get("minio").get("access_key_id")
+        self.secret_access_key = self.secret_file.get("minio").get("secret_access_key")
+        self.traces_folder = self.secret_file.get("minio").get("output_folder")
         self.delimiter = delimiter
-        jwt_parser = JWT()
-        self.access_token = jwt_parser.decode(self.auth.get('oidc_auth_token', {}).get("access_token"), do_verify=False)
-        
-        self._storage_login()
-        
-        self.base_path = self.traces_folder + self.delimiter + self.access_token['preferred_username'] + self.delimiter
+        self.base_path = self.traces_folder + self.delimiter
         self.current_path = self.base_path
-        self._login_to_simva_api()
-        self._load_selected_studies_from_simva_api()
-        self._load_selected_activities_from_simva_api()
-        self._update_files()
+        self.current_level = 0
 
+        self._update_files()
+    
+    #GENERAL 
     def _load_secret_file(self, file_path):
         with open(file_path, 'r') as file:
             secret_data = json.load(file)
         return secret_data
 
-    def _login_to_simva_api(self):
-        admin_username = self.secret_file.get("simva").get("admin_username").lower()
-        admin_password = self.secret_file.get("simva").get("admin_password")
-        # Define the payload
-        payload = {
-            "username": f"{admin_username}",
-            "password": f"{admin_password}",
-        }
-
-        # Make POST request to API and get token
-        response = requests.post(f"{self.simva_api_url}users/login", headers={"Content-Type": "application/json"}, data=json.dumps(payload))
-
-        # Check if the request was successful
-        if response.status_code == 200:
-            response_data = response.json()
-            token = response_data.get("token")
-            if token:
-                self.jwt = f"{token}"
-            else:
-                print("Token not found in the response.")
-        else:
-            print(f"Failed to get token, status code: {response.status_code}")
-            print(response.text)
-
+    #SIMVA API Logged
     def _load_selected_studies_from_simva_api(self):
         headers = {'Content-Type': 'application/json'}
         if self.jwt:
@@ -73,43 +56,23 @@ class SimvaBrowser:
         response = requests.get(url, headers=headers)
         if response.status_code == 200:
             data = response.json()
-            username = self.access_token.get('preferred_username')
-            user_data = [item for item in data if username in item.get("owners",[])]
             # Print the result
             print("STUDY : Data received:", data)
-            print("preferred_username:", username)
-            print("user_data : ", user_data)
-            self.accepted_studies=user_data
+            self.accepted_studies=data
         else:
             print(f"Error: {response.text}")
 
-    def _load_selected_activities_from_simva_api(self):
-        headers = {'Content-Type': 'application/json'}
-        if self.jwt:
-            headers['Authorization'] = f'Bearer {self.jwt}'
-        url = f"{self.simva_api_url}activities"
-        response = requests.get(url, headers=headers)
-        if response.status_code == 200:
-            data = response.json()
-            username = self.access_token.get('preferred_username')
-            user_data = [item for item in data if username in item.get("owners",[])]
-            gameplay_data = [item for item in user_data if item.get("type") == 'gameplay']
-            filtered = [item for item in gameplay_data if item.get("extra_data").get("config").get("trace_storage")]
-            # Print the result
-            print("ACTIVITIES : Data received:", data)
-            print("preferred_username:", username)
-            print("user_data : ", user_data)
-            print("gameplay_data : ", gameplay_data)
-            print("filtered : ",filtered)
-            self.accepted_activities=filtered
-        else:
-            print(f"Error: {response.text}")
+    def _get_accepted_study_from_id(self, studyId):
+        study=[study for study in self.accepted_studies if study.get("_id") == studyId]
+        if len(study)>0:
+            return study[0]
+        return None
     
     def _load_selected_test_from_simva_api(self, testId):
         headers = {'Content-Type': 'application/json'}
         if self.jwt:
             headers['Authorization'] = f'Bearer {self.jwt}'
-        url = f"{self.simva_api_url}tests/{testId}"
+        url = f"{self.simva_api_url}studies/{self.actual_study.get("_id")}/tests/{testId}"
         response = requests.get(url, headers=headers)
         if response.status_code == 200:
             data = response.json()
@@ -118,13 +81,14 @@ class SimvaBrowser:
             return data
         else:
             print(f"Error: {response.text}")
+            return None
 
 
     def _load_selected_activity_from_simva_api(self, activityId):
         headers = {'Content-Type': 'application/json'}
         if self.jwt:
             headers['Authorization'] = f'Bearer {self.jwt}'
-        url = f"{self.simva_api_url}activities:{activityId}"
+        url = f"{self.simva_api_url}activities/{activityId}"
         response = requests.get(url, headers=headers)
         if response.status_code == 200:
             data = response.json()
@@ -133,46 +97,32 @@ class SimvaBrowser:
             return data
         else:
             print(f"Error: {response.text}")
-    
-    def _storage_login(self):
-        data = {
-            'Action': 'AssumeRoleWithWebIdentity',
-            'Version': '2011-06-15',
-            'DurationSeconds': 3600,
-            'WebIdentityToken': self.auth.get('oidc_auth_token', {}).get("access_token")
-        }
-        print(f"Data : {data}")
-        response = requests.post(self.storage_url, data=data, verify=self.ca_file)
-        print(f"Response : {response.text}")
+            return None
 
-        if response.status_code != 200:
-            print('Problems getting temporary credentials')
-            print(response.text)
-            return
-        
-        if 'application/xml' not in response.headers['Content-Type']:
-            print('Expected XML response, got:', response.headers['Content-Type'])
-            print(response.text)
-            return
-        
-        try:
-            ns = {'sts': 'https://sts.amazonaws.com/doc/2011-06-15/'}
-            root = ET.fromstring(response.text)
-            credentials = root.find('sts:AssumeRoleWithWebIdentityResult', ns).find('sts:Credentials', ns)
-            self.access_key_id = credentials.find('sts:AccessKeyId', ns).text
-            self.secret_access_key = credentials.find('sts:SecretAccessKey', ns).text
-            self.session_token = credentials.find('sts:SessionToken', ns).text
-        except ET.ParseError as e:
-            print('Error parsing XML response:', e)
-            print(response.text)
+    def _list_activities_from_study(self, study):
+        activities=[]
+        if study is not None:
+            print(study)
+            for testid in study.get("tests"):
+                print("Test :"+ testid)
+                test=self._load_selected_test_from_simva_api(testid)
+                if test is not None:
+                    for activityId in test.get("activities"):
+                        print("Activity :"+ activityId)
+                        activity=self._load_selected_activity_from_simva_api(activityId)
+                        print(activity)
+                        if activity is not None:
+                            if activity.get("type") == 'gameplay' and activity.get("extra_data").get("config").get("trace_storage"):
+                                activities.append(activity)
+        return activities
 
+    #MINIO
     def _s3_client(self):
         return boto3.client(
             's3',
             endpoint_url=self.storage_url,
             aws_access_key_id=self.access_key_id,
             aws_secret_access_key=self.secret_access_key,
-            aws_session_token=self.session_token,
             verify=self.ca_file
         )
 
@@ -189,28 +139,6 @@ class SimvaBrowser:
                 for o in contents:
                     files.append(o.get('Key')[len(self.current_path):])
             return files
-        except ClientError as e:
-            print(f"An error occurred: {e}")
-            if e.response['Error']['Code'] == 'AccessDenied':
-                print("Access denied. Check your IAM policies and bucket policies.")
-            return []
-        
-    def _list_folders(self, path):
-        try:
-            s3_client = self._s3_client()
-            folder = s3_client.list_objects_v2(Bucket=self.bucket_name,
-                                            Prefix=path,
-                                            Delimiter=self.delimiter)
-            folders = []
-            contents = folder.get('CommonPrefixes')
-            if contents:
-                for o in contents:
-                    folders.append(o.get('Prefix')[len(self.current_path):])
-            if self.current_path == self.base_path:
-                folders=[{"id":dir.get("_id") + "/","name": dir.get('name')} for dir in self.accepted_activities if dir.get("_id") + "/" in folders]
-            else:
-                folders=[{"id":dir_id, "name":dir_id} for dir_id in folders]
-            return folders
         except ClientError as e:
             print(f"An error occurred: {e}")
             if e.response['Error']['Code'] == 'AccessDenied':
@@ -234,30 +162,37 @@ class SimvaBrowser:
     def _update_files(self):
         self.files = []
         self.dirs = []
-        if self.current_path == self.base_path:
-            self.actual_study=None
-            self.actual_activity=None
-            self.actual_selected_file=None
-        else:
-            added_path=self.current_path.replace(self.base_path, "").split("/")
-            if len(added_path)>=1 and added_path[0] not in [activity.get("_id") for activity in self.accepted_activities]:
-                self.current_path=self.base_path
-                self.actual_study=None
-                self.actual_activity=None
-                self.actual_selected_file=None
-            else:
-                actual_activity_id=added_path[0] if len(added_path)>=1 else None
-                actual_activity_name = [item.get("name") for item in self.accepted_activities if item.get("_id") == actual_activity_id]
-                self.actual_activity=f"{actual_activity_name[0]} - {actual_activity_id}" if len(actual_activity_name)>0 else None
-                actual_study_id=added_path[1] if len(added_path)>=2 else None
-                actual_study_name = [item.get("name") for item in self.accepted_studies if item.get("_id") == actual_study_id]
-                self.actual_study=f"{actual_study_name[0]} - {actual_study_id}" if len(actual_study_name)>0 else None
-                self.actual_selected_file=added_path[1] if len(added_path)==2 else None
-                print("Added Path :")
-                print(added_path)
+        self.added_path=self.current_path.replace(self.base_path, "").split("/")
+        self.current_level=len(self.current_path.replace(self.base_path, "").split("/"))
+        print("AddedPath")
+        print(self.added_path)
+        studyDirs=[{"id":dir.get("_id") + "/","name": dir.get('name')} for dir in self.accepted_studies]
         if self._isdir(self.current_path):
-            self.dirs = self._list_folders(self.current_path)
-            self.files = self._list_files(self.current_path)
+            if self.current_level == 1:
+                self.dirs=studyDirs
+                self.actual_study=None
+                self.accepted_activities=[]
+            elif self.current_level >= 2:
+                actual_study_id=self.added_path[0]
+                self.actual_activity=None
+                if actual_study_id not in [study.get("_id") for study in self.accepted_studies]:
+                    self.current_path=self.base_path
+                    self.current_level=0
+                    self.actual_study=None
+                    self.actual_activity=None
+                    self.actual_selected_file=None
+                    self.dirs=studyDirs
+                else:
+                    self.actual_study=self._get_accepted_study_from_id(actual_study_id)
+                if self.current_level == 2:
+                    self.accepted_activities=self._list_activities_from_study(self.actual_study)
+                    activityDirs=[{"id":dir.get("_id") + "/","name": dir.get('name')} for dir in self.accepted_activities]
+                    self.dirs=activityDirs
+                else:
+                    actual_activity_id=self.added_path[1]
+                    self.actual_activity=self._load_selected_activity_from_simva_api(actual_activity_id)
+                    self.files=self._list_files(self.current_path)
+            self.files=self._list_files(self.current_path)
 
     def file_exists(self, path):
         """

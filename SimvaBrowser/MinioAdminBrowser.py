@@ -1,17 +1,14 @@
-import requests
 import xml.etree.ElementTree as ET
 import boto3
 import boto3.session
 from botocore.exceptions import ClientError
-from jwt import JWT
 import os
 import json
 
 class MinioBrowser:
-    def __init__(self, auth, accept='.json', ca_file=None, delimiter='/', client_secret_file="client_secrets.json"):
+    def __init__(self, accept='.json', ca_file=None, delimiter='/', client_secret_file="client_secrets.json"):
         basedir = os.path.abspath(f"{os.path.dirname(__file__)}/../")
         self.secret_file=self._load_secret_file(os.path.join(basedir, client_secret_file))
-        self.auth=auth
         self.accept = accept
         self.ca_file = ca_file
         self.storage_url = self.secret_file.get("minio").get("storage_url")
@@ -23,10 +20,6 @@ class MinioBrowser:
         self.base_path = self.traces_folder + self.delimiter
         self.current_path = self.base_path
         self.current_level = 0
-
-        jwt_parser = JWT()
-        self.jwt = self.auth.get('oidc_auth_token', {}).get("access_token")
-        self.access_token=jwt_parser.decode(self.jwt, do_verify=False)
         self._update_files()
 
     def _load_secret_file(self, file_path):
@@ -34,45 +27,12 @@ class MinioBrowser:
             secret_data = json.load(file)
         return secret_data
 
-    def _storage_login(self):
-        data = {
-            'Action': 'AssumeRoleWithWebIdentity',
-            'Version': '2011-06-15',
-            'DurationSeconds': 3600,
-            'WebIdentityToken': self.auth.get('oidc_auth_token', {}).get("access_token")
-        }
-        print(f"Data : {data}")
-        response = requests.post(self.storage_url, data=data, verify=self.ca_file)
-        print(f"Response : {response.text}")
-
-        if response.status_code != 200:
-            print('Problems getting temporary credentials')
-            print(response.text)
-            return
-        
-        if 'application/xml' not in response.headers['Content-Type']:
-            print('Expected XML response, got:', response.headers['Content-Type'])
-            print(response.text)
-            return
-        
-        try:
-            ns = {'sts': 'https://sts.amazonaws.com/doc/2011-06-15/'}
-            root = ET.fromstring(response.text)
-            credentials = root.find('sts:AssumeRoleWithWebIdentityResult', ns).find('sts:Credentials', ns)
-            self.access_key_id = credentials.find('sts:AccessKeyId', ns).text
-            self.secret_access_key = credentials.find('sts:SecretAccessKey', ns).text
-            self.session_token = credentials.find('sts:SessionToken', ns).text
-        except ET.ParseError as e:
-            print('Error parsing XML response:', e)
-            print(response.text)
-
     def _s3_client(self):
         return boto3.client(
             's3',
             endpoint_url=self.storage_url,
             aws_access_key_id=self.access_key_id,
             aws_secret_access_key=self.secret_access_key,
-            aws_session_token=self.session_token,
             verify=self.ca_file
         )
 
