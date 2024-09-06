@@ -91,7 +91,6 @@ class SimvaBrowser:
             print(f"Error: {response.text}")
             return None
 
-
     def _load_selected_activity_from_simva_api(self, activityId):
         headers = {'Content-Type': 'application/json'}
         if self.jwt:
@@ -135,6 +134,8 @@ class SimvaBrowser:
         )
 
     def _list_files(self, path):
+        _,path =self._getStudyIdAndUpdatedPathFromPath(path)
+        print("updated path : "+path)
         try:
             s3_client = self._s3_client()
             folder = s3_client.list_objects_v2(Bucket=self.bucket_name,
@@ -145,34 +146,38 @@ class SimvaBrowser:
             print(f"Folder : {folder}")
             if contents:
                 for o in contents:
-                    files.append(o.get('Key')[len(self.current_path):])
+                    files.append(o.get('Key')[len(path):])
+            print("Files at {path} :")
+            print(files)
             return files
-        except ClientError as e:
-            print(f"An error occurred: {e}")
-            if e.response['Error']['Code'] == 'AccessDenied':
-                print("Access denied. Check your IAM policies and bucket policies.")
-            return []
-
-    def get_file_content(self, path):
-        try:
-            s3_client = self._s3_client()
-            file = s3_client.get_object(Bucket=self.bucket_name, Key=path)
-            return file['Body'].read()
         except ClientError as e:
             print(f"An error occurred: {e}")
             if e.response['Error']['Code'] == 'AccessDenied':
                 print("Access denied.")
             return []
 
+    def get_file_content(self, path):
+        _,path =self._getStudyIdAndUpdatedPathFromPath(path)
+        try:
+            s3_client = self._s3_client()
+            file = s3_client.get_object(Bucket=self.bucket_name, Key=path)
+            return path, file['Body'].read()
+        except ClientError as e:
+            print(f"An error occurred: {e}")
+            if e.response['Error']['Code'] == 'AccessDenied':
+                print("Access denied.")
+            return path, []
+
     def _isdir(self, path):
         return path.endswith(self.delimiter)
 
-    def _getStudyIdFromPath(self,path):
+    def _getStudyIdAndUpdatedPathFromPath(self,path):
         added_path=path.replace(self.base_path, "").split("/")
         studyId=None
         if len(added_path) >= 1:
             studyId=added_path[0]
-        return studyId
+            path=path.replace(studyId + "/", "")
+        return studyId, path
 
     def _update_files(self):
         self.files = []
@@ -195,14 +200,23 @@ class SimvaBrowser:
                 else:
                     self.actual_study=self._get_accepted_study_from_id(actual_study_id)
                 if self.current_level == 2:
+                    self.actual_study=self._get_accepted_study_from_id(actual_study_id)
                     self.accepted_activities=self._list_activities_from_study(self.actual_study)
                     activityDirs=[{"id":dir.get("_id") + "/","name": dir.get('name')} for dir in self.accepted_activities]
                     self.dirs=activityDirs
                 else:
+                    self.actual_study=self._get_accepted_study_from_id(actual_study_id)
                     actual_activity_id=self.added_path[1]
                     self.actual_activity=self._load_selected_activity_from_simva_api(actual_activity_id)
                     self.files=self._list_files(self.current_path)
             self.files=self._list_files(self.current_path)
+        else:
+            if self.current_level >= 1:
+                actual_study_id=self.added_path[0]
+                self.actual_study=self._get_accepted_study_from_id(actual_study_id)
+                if self.current_level >= 2:
+                    actual_activity_id=self.added_path[1]
+                    self.actual_activity=self._load_selected_activity_from_simva_api(actual_activity_id)
 
     def _reset_browser(self):
         self.current_path=self.base_path
@@ -218,19 +232,23 @@ class SimvaBrowser:
         :param path: The path of the file in the S3 bucket.
         :return: True if the file exists, False otherwise.
         """
-        if self._getStudyIdFromPath(path) in [study.get("_id") for study in self.accepted_studies]:
+        studyId,path=self._getStudyIdAndUpdatedPathFromPath(path)
+        status=False
+        error={"Code":"", "Message":"", "Key": ""}
+        if studyId in [study.get("_id") for study in self.accepted_studies]:
             try:
                 s3_client = self._s3_client()
                 file = s3_client.get_object(Bucket=self.bucket_name, Key=path)
                 file['Body'].read()
-                return True, ""
+                status=True
             except ClientError as e:
                 if e.response['Error']['Code'] == '404':
-                    return False, e.response['Error']
+                    error=e.response['Error']
                 else:
                     print(f"An error occurred: {e}")
-                    return False, e.response['Error']
+                    error=e.response['Error']
         else:
             self._reset_browser()
             self._update_files()
-            return False, {"Code":"AccessDenied", "Message":"You cannot access."}
+            error={"Code":"AccessDenied", "Message":"You cannot access data from this study."}
+        return path, status, error

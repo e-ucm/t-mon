@@ -106,7 +106,7 @@ def init_storage(main, pathname):
         actual_study=browser.actual_study.get("name") if browser.actual_study is not None else "Select a study"
         actual_activity=browser.actual_activity.get("name") if browser.actual_activity is not None else "Select an activity"
         appLayout = html.Div([
-            html.H3(id='current-path', children=browser.current_path),
+            html.H3(id='current-path', children=browser.current_path, style={'display': 'none'}),
             html.H4(id='current-study', children=actual_study),
             html.H4(id='current-activity', children=actual_activity),
             html.Button('..', id='parent-directory', n_clicks=0, style={'display': 'block'}),
@@ -175,17 +175,17 @@ def update_browser(n_clicks_parent, folder_n_clicks, file_n_clicks, n_clicks_run
         div_list= []
         out=[]
         err=[]
-        fileExists, errorFileExist=browser.file_exists(current_path)
+        current_file_path, fileExists, errorFileExist=browser.file_exists(current_path)
         if fileExists:
-            content_string = browser.get_file_content(current_path)
+            current_file_path, content_string = browser.get_file_content(current_path)
             load_players_info_from_content(
-                content_string, current_path, TMonWidgets.xapiData, out, err
+                content_string, current_file_path, TMonWidgets.xapiData, out, err
             )
         else:
             if errorFileExist['Code']=="NoSuchKey":
-                err.append(f"Specified file at {current_path} don't exist.")
+                err.append(f"Specified file at {current_file_path} don't exist.")
             elif errorFileExist['Code']=='AccessDenied':
-                 err.append(f"Access denied to Specified file {current_path}. Check your IAM policies and bucket policies.")
+                 err.append(f"Access denied to Specified file {current_file_path}. Check your IAM policies and bucket policies.")
             else:
                 err.append(errorFileExist['Code'])
                 err.append(errorFileExist['Message'])
@@ -231,7 +231,7 @@ simvaBrowserBody = html.Div(
     [
         dcc.Location(id='url', refresh=False), # Location component for URL handling
         html.Div(id='browser_div', children=[
-                html.H3(id='current-path'),
+                html.H3(id='current-path', style={'display': 'none'}),
                 html.H4(id='current-study'),
                 html.H4(id='current-activity'),
                 html.Button('..', id='parent-directory', n_clicks=0, style={'display': 'none'}),
