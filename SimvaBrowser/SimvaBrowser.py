@@ -1,8 +1,4 @@
 import requests
-import xml.etree.ElementTree as ET
-import boto3
-import boto3.session
-from botocore.exceptions import ClientError
 from jwt import JWT
 import os
 import json
@@ -23,6 +19,7 @@ class SimvaBrowser:
         self.actual_test=None
         self.actual_activity=None
         self.actual_selected_file=None
+        self.actual_file_url=None
         self.simva_api_url = self.secret_file.get("simva").get("api_url")
         jwt_parser = JWT()
         self.jwt = self.auth.get('oidc_auth_token', {}).get("access_token")
@@ -32,11 +29,7 @@ class SimvaBrowser:
         #MINIO
         self.accept = accept
         self.ca_file = ca_file
-        self.storage_url = self.secret_file.get("minio").get("storage_url")
-        self.bucket_name = self.secret_file.get("minio").get("bucket_name")
-        self.access_key_id = self.secret_file.get("minio").get("access_key_id")
-        self.secret_access_key = self.secret_file.get("minio").get("secret_access_key")
-        self.traces_folder = self.secret_file.get("minio").get("output_folder")
+        self.traces_folder = "output"
         self.delimiter = delimiter
         self.base_path = self.traces_folder + self.delimiter
         self.current_path = self.base_path
@@ -114,6 +107,21 @@ class SimvaBrowser:
             print(f"Error: {response.text}")
             return None
 
+    def _get_minio_url_from_simva_api(self, activityId):
+        headers = {'Content-Type': 'application/json'}
+        if self.jwt:
+            headers['Authorization'] = f'Bearer {self.jwt}'
+        url = f"{self.simva_api_url}activities/{activityId}/presignedurl"
+        response = requests.get(url, headers=headers)
+        if response.status_code == 200:
+            data = response.json()
+            # Print the result
+            print("PRESIGNED URL : Data received:", data)
+            return data
+        else:
+            print(f"Error: {response.text}")
+            return None
+
     def _list_test_from_study(self, study):
         tests=[]
         if study is not None:
@@ -136,52 +144,7 @@ class SimvaBrowser:
                     if activity.get("type") == 'gameplay' and activity.get("extra_data").get("config").get("trace_storage"):
                         activities.append(activity)
         return activities
-
-    #MINIO
-    def _s3_client(self):
-        return boto3.client(
-            's3',
-            endpoint_url=self.storage_url,
-            aws_access_key_id=self.access_key_id,
-            aws_secret_access_key=self.secret_access_key,
-            verify=self.ca_file
-        )
-
-    def _list_files(self, path):
-        studyId,testId,path=self._getStudyIdTestIdAndUpdatedPathFromPath(path)
-        print("updated path : "+path)
-        try:
-            s3_client = self._s3_client()
-            folder = s3_client.list_objects_v2(Bucket=self.bucket_name,
-                                            Prefix=path,
-                                            Delimiter=self.delimiter)
-            files = []
-            contents = folder.get('Contents')
-            print(f"Folder : {folder}")
-            if contents:
-                for o in contents:
-                    files.append(o.get('Key')[len(path):])
-            print("Files at {path} :")
-            print(files)
-            return files
-        except ClientError as e:
-            print(f"An error occurred: {e}")
-            if e.response['Error']['Code'] == 'AccessDenied':
-                print("Access denied.")
-            return []
-
-    def get_file_content(self, path):
-        studyId,testId,path=self._getStudyIdTestIdAndUpdatedPathFromPath(path)
-        try:
-            s3_client = self._s3_client()
-            file = s3_client.get_object(Bucket=self.bucket_name, Key=path)
-            return path, file['Body'].read()
-        except ClientError as e:
-            print(f"An error occurred: {e}")
-            if e.response['Error']['Code'] == 'AccessDenied':
-                print("Access denied.")
-            return path, []
-
+    
     def _isdir(self, path):
         return path.endswith(self.delimiter)
 
@@ -223,6 +186,8 @@ class SimvaBrowser:
                     if self.current_level >=4:
                         actual_activity_id=self.added_path[2]
                         self.actual_activity=self._load_selected_activity_from_simva_api(actual_activity_id)
+                        result=self._get_minio_url_from_simva_api(actual_activity_id)
+                        self.actual_file_url=result.get("url") if result is not None else None
                     else:
                         self.actual_activity=None
                 else:
@@ -232,17 +197,27 @@ class SimvaBrowser:
         if self.current_level == 0:
             print(studyDirs)
             self.dirs=studyDirs
+            self.files=[]
+            self.actual_file_url=None
         elif self.current_level == 2:
             print(self.actual_study)
             print(testDirs)
             self.dirs=testDirs
+            self.files=[]
+            self.actual_file_url=None
         elif self.current_level == 3:
             print(self.actual_test)
             print(activityDirs)
             self.dirs=activityDirs
+            self.files=[]
+            self.actual_file_url=None
         else:
-            self.dirs=[]
-            self.files=self._list_files(self.current_path)
+            if self._isdir(path=self.current_path):
+                self.dirs=[]
+                self.files=["traces.json"] if self.actual_file_url is not None else []
+            else:
+                self.dirs=[]
+                self.files=[]
 
     def _reset_browser(self):
         self.current_path=self.base_path
@@ -252,34 +227,27 @@ class SimvaBrowser:
         self.actual_activity=None
         self.actual_test=None
         self.actual_selected_file=None
+        self.actual_file_url=None
 
         self.accepted_tests=[]
         self.accepted_activities=[]
 
-    def file_exists(self, path):
-        """
-        Check if a file exists in the S3 bucket at the given path.
-
-        :param path: The path of the file in the S3 bucket.
-        :return: True if the file exists, False otherwise.
-        """
-        studyId,testId,path=self._getStudyIdTestIdAndUpdatedPathFromPath(path)
-        status=False
-        error={"Code":"", "Message":"", "Key": ""}
-        if studyId in [study.get("_id") for study in self.accepted_studies]:
+    def get_file_content_from_url(self):
+        if self.actual_file_url is not None:
             try:
-                s3_client = self._s3_client()
-                file = s3_client.get_object(Bucket=self.bucket_name, Key=path)
-                file['Body'].read()
-                status=True
-            except ClientError as e:
-                if e.response['Error']['Code'] == '404':
-                    error=e.response['Error']
-                else:
-                    print(f"An error occurred: {e}")
-                    error=e.response['Error']
-        else:
-            self._reset_browser()
-            self._update_files()
-            error={"Code":"AccessDenied", "Message":"You cannot access data from this study."}
-        return path, status, error
+                # Send an HTTP GET request to the provided URL
+                response = requests.get(self.actual_file_url)
+                
+                # Raise an exception if the request was unsuccessful (HTTP code other than 200)
+                response.raise_for_status()
+                print("get_file_content_from_url :")
+                print(self.actual_file_url)
+                
+                # Return the content of the file as text
+                return self.current_path, response.text
+            
+            except requests.exceptions.RequestException as e:
+                print(f"Error fetching file content: {e}")
+                return self.current_path, None
+        else: 
+            return self.current_path, None

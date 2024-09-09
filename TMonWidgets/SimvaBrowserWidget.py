@@ -6,7 +6,7 @@ from dash.exceptions import PreventUpdate
 import json
 import TMonWidgets
 #Import LoadProcessStatements.py
-from LoadProcessStatements import load_players_info_from_content
+from LoadProcessStatements import load_from_string
 # Import SimvaBrowser class from SimvaBrowser.py
 from SimvaBrowser.SimvaBrowser import SimvaBrowser
 # Import KeycloakClient class containing a Flask OIDC server from KeycloakClient.py
@@ -178,21 +178,10 @@ def update_browser(n_clicks_parent, folder_n_clicks, file_n_clicks, n_clicks_run
         div_list= []
         out=[]
         err=[]
-        current_file_path, fileExists, errorFileExist=browser.file_exists(current_path)
-        if fileExists:
-            current_file_path, content_string = browser.get_file_content(current_path)
-            load_players_info_from_content(
-                content_string, current_file_path, TMonWidgets.xapiData, out, err
-            )
-        else:
-            if errorFileExist['Code']=="NoSuchKey":
-                err.append(f"Specified file at {current_file_path} don't exist.")
-            elif errorFileExist['Code']=='AccessDenied':
-                 err.append(f"Access denied to Specified file {current_file_path}. Check your IAM policies and bucket policies.")
-            else:
-                err.append(errorFileExist['Code'])
-                err.append(errorFileExist['Message'])
-                err.append(errorFileExist['Key'])
+        current_file_path, content_string = browser.get_file_content_from_url()
+        load_from_string(
+            content_string, TMonWidgets.xapiData, out, err
+        )
         div_list.append(html.Div([
                 html.Div(out),
                 html.Div(err),
