@@ -15,11 +15,13 @@ class SimvaBrowser:
 
         #SIMVA
         self.auth = auth
-        self.accepted_studies=[]
         self.study_directories=[]
+        self.accepted_studies=[]
+        self.accepted_tests=[]
         self.accepted_activities=[]
-        self.actual_activity=None
         self.actual_study=None
+        self.actual_test=None
+        self.actual_activity=None
         self.actual_selected_file=None
         self.simva_api_url = self.secret_file.get("simva").get("api_url")
         jwt_parser = JWT()
@@ -70,6 +72,12 @@ class SimvaBrowser:
             return study[0]
         return None
     
+    def _get_accepted_test_from_id(self, testId):
+        test=[test for test in self.accepted_tests if test.get("_id") == testId]
+        if len(test)>0:
+            return test[0]
+        return None
+
     def _get_accepted_activity_from_id(self, activityId):
         activity=[activity for activity in self.accepted_activities if activity.get("_id") == activityId]
         if len(activity)>0:
@@ -106,21 +114,27 @@ class SimvaBrowser:
             print(f"Error: {response.text}")
             return None
 
-    def _list_activities_from_study(self, study):
-        activities=[]
+    def _list_test_from_study(self, study):
+        tests=[]
         if study is not None:
             print(study)
             for testid in study.get("tests"):
                 print("Test :"+ testid)
                 test=self._load_selected_test_from_simva_api(testid)
                 if test is not None:
-                    for activityId in test.get("activities"):
-                        print("Activity :"+ activityId)
-                        activity=self._load_selected_activity_from_simva_api(activityId)
-                        print(activity)
-                        if activity is not None:
-                            if activity.get("type") == 'gameplay' and activity.get("extra_data").get("config").get("trace_storage"):
-                                activities.append(activity)
+                    tests.append(test)
+        return tests
+
+    def _list_activities_from_test(self, test):
+        activities=[]
+        if test is not None:
+            for activityId in test.get("activities"):
+                print("Activity :"+ activityId)
+                activity=self._load_selected_activity_from_simva_api(activityId)
+                print(activity)
+                if activity is not None:
+                    if activity.get("type") == 'gameplay' and activity.get("extra_data").get("config").get("trace_storage"):
+                        activities.append(activity)
         return activities
 
     #MINIO
@@ -134,7 +148,7 @@ class SimvaBrowser:
         )
 
     def _list_files(self, path):
-        _,path =self._getStudyIdAndUpdatedPathFromPath(path)
+        studyId,testId,path=self._getStudyIdTestIdAndUpdatedPathFromPath(path)
         print("updated path : "+path)
         try:
             s3_client = self._s3_client()
@@ -157,7 +171,7 @@ class SimvaBrowser:
             return []
 
     def get_file_content(self, path):
-        _,path =self._getStudyIdAndUpdatedPathFromPath(path)
+        studyId,testId,path=self._getStudyIdTestIdAndUpdatedPathFromPath(path)
         try:
             s3_client = self._s3_client()
             file = s3_client.get_object(Bucket=self.bucket_name, Key=path)
@@ -171,13 +185,17 @@ class SimvaBrowser:
     def _isdir(self, path):
         return path.endswith(self.delimiter)
 
-    def _getStudyIdAndUpdatedPathFromPath(self,path):
+    def _getStudyIdTestIdAndUpdatedPathFromPath(self,path):
         added_path=path.replace(self.base_path, "").split("/")
         studyId=None
+        testId=None
         if len(added_path) >= 1:
             studyId=added_path[0]
             path=path.replace(studyId + "/", "")
-        return studyId, path
+        if len(added_path) >= 2:
+            testId=added_path[1]
+            path=path.replace(testId + "/", "")
+        return studyId, testId, path
 
     def _update_files(self):
         self.files = []
@@ -187,43 +205,56 @@ class SimvaBrowser:
         print("AddedPath")
         print(self.added_path)
         studyDirs=[{"id":dir.get("_id") + "/","name": dir.get('name')} for dir in self.accepted_studies]
-        if self._isdir(self.current_path):
-            if self.current_level == 1:
-                self.dirs=studyDirs
-                self.actual_study=None
-                self.accepted_activities=[]
-            elif self.current_level >= 2:
-                actual_study_id=self.added_path[0]
-                self.actual_activity=None
-                if actual_study_id not in [study.get("_id") for study in self.accepted_studies]:
-                    self._reset_browser()
-                else:
-                    self.actual_study=self._get_accepted_study_from_id(actual_study_id)
-                if self.current_level == 2:
-                    self.actual_study=self._get_accepted_study_from_id(actual_study_id)
-                    self.accepted_activities=self._list_activities_from_study(self.actual_study)
+        if self.current_level >= 1:
+            actual_study_id=self.added_path[0]
+            if actual_study_id not in [study.get("_id") for study in self.accepted_studies]:
+                self._reset_browser()
+            if self.current_level >= 2:
+                self.actual_study=self._get_accepted_study_from_id(actual_study_id)
+                self.accepted_tests=self._list_test_from_study(self.actual_study)
+                print(self.accepted_tests)
+                testDirs=[{"id":dir.get("_id") + "/","name": dir.get('name')} for dir in self.accepted_tests]
+                if self.current_level >=3:
+                    actual_test_id=self.added_path[1]
+                    self.actual_test=self._get_accepted_test_from_id(actual_test_id)
+                    self.accepted_activities=self._list_activities_from_test(self.actual_test)
                     activityDirs=[{"id":dir.get("_id") + "/","name": dir.get('name')} for dir in self.accepted_activities]
                     self.dirs=activityDirs
+                    if self.current_level >=4:
+                        actual_activity_id=self.added_path[2]
+                        self.actual_activity=self._load_selected_activity_from_simva_api(actual_activity_id)
+                    else:
+                        self.actual_activity=None
                 else:
-                    self.actual_study=self._get_accepted_study_from_id(actual_study_id)
-                    actual_activity_id=self.added_path[1]
-                    self.actual_activity=self._load_selected_activity_from_simva_api(actual_activity_id)
-                    self.files=self._list_files(self.current_path)
-            self.files=self._list_files(self.current_path)
+                    self.actual_test=None
+            else:
+                self.actual_study=None
+        if self.current_level == 0:
+            print(studyDirs)
+            self.dirs=studyDirs
+        elif self.current_level == 2:
+            print(self.actual_study)
+            print(testDirs)
+            self.dirs=testDirs
+        elif self.current_level == 3:
+            print(self.actual_test)
+            print(activityDirs)
+            self.dirs=activityDirs
         else:
-            if self.current_level >= 1:
-                actual_study_id=self.added_path[0]
-                self.actual_study=self._get_accepted_study_from_id(actual_study_id)
-                if self.current_level >= 2:
-                    actual_activity_id=self.added_path[1]
-                    self.actual_activity=self._load_selected_activity_from_simva_api(actual_activity_id)
+            self.dirs=[]
+            self.files=self._list_files(self.current_path)
 
     def _reset_browser(self):
         self.current_path=self.base_path
         self.current_level=0
+        
         self.actual_study=None
         self.actual_activity=None
+        self.actual_test=None
         self.actual_selected_file=None
+
+        self.accepted_tests=[]
+        self.accepted_activities=[]
 
     def file_exists(self, path):
         """
@@ -232,7 +263,7 @@ class SimvaBrowser:
         :param path: The path of the file in the S3 bucket.
         :return: True if the file exists, False otherwise.
         """
-        studyId,path=self._getStudyIdAndUpdatedPathFromPath(path)
+        studyId,testId,path=self._getStudyIdTestIdAndUpdatedPathFromPath(path)
         status=False
         error={"Code":"", "Message":"", "Key": ""}
         if studyId in [study.get("_id") for study in self.accepted_studies]:

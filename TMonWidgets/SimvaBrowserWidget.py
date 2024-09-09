@@ -104,10 +104,12 @@ def init_storage(main, pathname):
             run_analyse_style = {'display': 'block'}
         print(f'Study : {browser.actual_study} -Activity : {browser.actual_activity} - File : {browser.actual_selected_file}')
         actual_study=browser.actual_study.get("name") if browser.actual_study is not None else "Select a study"
+        actual_test=browser.actual_test.get("name") if browser.actual_test is not None else "Select an test"
         actual_activity=browser.actual_activity.get("name") if browser.actual_activity is not None else "Select an activity"
         appLayout = html.Div([
             html.H3(id='current-path', children=browser.current_path, style={'display': 'none'}),
             html.H4(id='current-study', children=actual_study),
+            html.H4(id='current-test', children=actual_test),
             html.H4(id='current-activity', children=actual_activity),
             html.Button('..', id='parent-directory', n_clicks=0, style={'display': 'block'}),
             html.Div(id='folders-div', children=folder_buttons),
@@ -121,6 +123,7 @@ def init_storage(main, pathname):
 @callback(
     [Output('current-path', 'children'),
      Output('current-study', 'children'),
+     Output('current-test', 'children'),
      Output('current-activity', 'children'),
      Output('folders-div', 'children'),
      Output('files-div', 'children'),
@@ -202,11 +205,12 @@ def update_browser(n_clicks_parent, folder_n_clicks, file_n_clicks, n_clicks_run
             dashboardpath=f"/dashboard/tab=home_tab"
         print(f"Pathname : {pathname} - State : {newstatepathname} - dashboardurl : {dashboard_url}")
         actual_study=browser.actual_study.get("name") if browser.actual_study is not None else "Select a study"
-        actual_activity=browser.actual_activity.get("name") if browser.actual_activity is not None else ""
+        actual_test=browser.actual_test.get("name") if browser.actual_test is not None else "Select a test"
+        actual_activity=browser.actual_activity.get("name") if browser.actual_activity is not None else "Select an activity"
         if(len(err) > 0):
-            return browser.current_path,actual_study, actual_activity, folder_buttons, file_buttons, run_analyse_style, html.Div(div_list), {'display': 'none'}, f"{pathname}{dashboardpath}" 
+            return browser.current_path,actual_study, actual_test, actual_activity, folder_buttons, file_buttons, run_analyse_style, html.Div(div_list), {'display': 'none'}, f"{pathname}{dashboardpath}" 
         else:
-            return browser.current_path,actual_study, actual_activity, folder_buttons, file_buttons, run_analyse_style, html.Div(div_list), {'display': 'block'}, f"{pathname}{dashboardpath}"
+            return browser.current_path,actual_study, actual_test, actual_activity, folder_buttons, file_buttons, run_analyse_style, html.Div(div_list), {'display': 'block'}, f"{pathname}{dashboardpath}"
     elif "-button"in triggered_prop_id:
         cleaned_prop_id = triggered_prop_id.replace(".n_clicks", "")
         button_id = json.loads(cleaned_prop_id)
@@ -224,8 +228,9 @@ def update_browser(n_clicks_parent, folder_n_clicks, file_n_clicks, n_clicks_run
     run_analyse_style = {'display': 'none'} if browser._isdir(browser.current_path) else {'display': 'block'}
     print("Pathname:", pathname)
     actual_study=browser.actual_study.get("name") if browser.actual_study is not None else "Select a study"
+    actual_test=browser.actual_test.get("name") if browser.actual_test is not None else "Select a test"
     actual_activity=browser.actual_activity.get("name") if browser.actual_activity is not None else "Select an activity"
-    return browser.current_path, actual_study, actual_activity, folder_buttons, file_buttons, run_analyse_style, html.H1(""), {'display': 'none'}, pathname
+    return browser.current_path, actual_study,actual_test, actual_activity, folder_buttons, file_buttons, run_analyse_style, html.H1(""), {'display': 'none'}, pathname
 
 simvaBrowserBody = html.Div(
     [
@@ -233,6 +238,7 @@ simvaBrowserBody = html.Div(
         html.Div(id='browser_div', children=[
                 html.H3(id='current-path', style={'display': 'none'}),
                 html.H4(id='current-study'),
+                html.H4(id='current-test'),
                 html.H4(id='current-activity'),
                 html.Button('..', id='parent-directory', n_clicks=0, style={'display': 'none'}),
                 html.Div(id='folders-div', children=[]),
