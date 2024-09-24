@@ -27,7 +27,8 @@ class KeycloakClient:
         self.oidc = OpenIDConnect(self.flaskServer)
         issuer_url = self.oidc.client_secrets.get('issuer')
         client_id = self.oidc.client_secrets.get('client_id')
-        httpSecure= "https" if self.oidc.client_secrets.get('secure', "False") == "true" else "http"
+        print(self.oidc.client_secrets)
+        httpSecure= "https" if self.oidc.client_secrets.get('secure', "False") == "True" else "http"
         host=self.oidc.client_secrets.get('host', '0.0.0.0')
         port=self.oidc.client_secrets.get('port', 8050)
         self.accountpage=f"{issuer_url}/account?referrer={client_id}&referrer_uri={httpSecure}://{host}:{port}"
