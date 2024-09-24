@@ -81,7 +81,7 @@ class SimvaBrowser:
         headers = {'Content-Type': 'application/json'}
         if self.jwt:
             headers['Authorization'] = f'Bearer {self.jwt}'
-        url = f"{self.simva_api_url}studies/{self.actual_study.get("_id")}/tests/{testId}"
+        url = f"{self.simva_api_url}studies/{self.actual_study.get('_id')}/tests/{testId}"
         response = requests.get(url, headers=headers)
         if response.status_code == 200:
             data = response.json()
