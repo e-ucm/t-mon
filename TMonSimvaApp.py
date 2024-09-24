@@ -5,6 +5,7 @@ from TMonWidgets import SimvaBrowserWidget, TMonWidget
 app = Dash(__name__, server=SimvaBrowserWidget.flask.flaskServer)
 
 # If you set host or port differently
+print(app.server.config)
 httpSecure= "https" if app.server.config.get('SECURE', False) == "True" else "http"
 debug=app.server.config.get('DEBUG', "False")
 host = app.server.config.get('HOST', '0.0.0.0')

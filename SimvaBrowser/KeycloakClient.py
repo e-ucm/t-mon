@@ -31,7 +31,7 @@ class KeycloakClient:
         httpSecure= "https" if self.oidc.client_secrets.get('secure') == "True" else "http"
         host=self.oidc.client_secrets.get('host')
         port=self.oidc.client_secrets.get('port')
-        refereruri="{httpSecure}://{host}:{port}"
+        refereruri=f"{httpSecure}://{host}:{port}"
         print(refereruri)
         self.accountpage=f"{issuer_url}/account?referrer={client_id}&referrer_uri={refereruri}"
         self.homepage="/"
