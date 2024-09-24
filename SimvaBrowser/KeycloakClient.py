@@ -28,10 +28,12 @@ class KeycloakClient:
         issuer_url = self.oidc.client_secrets.get('issuer')
         client_id = self.oidc.client_secrets.get('client_id')
         print(self.oidc.client_secrets)
-        httpSecure= "https" if self.oidc.client_secrets.get('secure', "False") == "True" else "http"
-        host=self.oidc.client_secrets.get('host', '0.0.0.0')
-        port=self.oidc.client_secrets.get('port', 8050)
-        self.accountpage=f"{issuer_url}/account?referrer={client_id}&referrer_uri={httpSecure}://{host}:{port}"
+        httpSecure= "https" if self.oidc.client_secrets.get('secure') == "True" else "http"
+        host=self.oidc.client_secrets.get('host')
+        port=self.oidc.client_secrets.get('port')
+        refereruri="{httpSecure}://{host}:{port}"
+        print(refereruri)
+        self.accountpage=f"{issuer_url}/account?referrer={client_id}&referrer_uri={refereruri}"
         self.homepage="/"
         if homepage:
             @self.flaskServer.route(self.homepage)
