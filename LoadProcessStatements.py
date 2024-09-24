@@ -79,9 +79,9 @@ def load_players_info_from_file(file, xapiData, out, err):
     with open(file, encoding="utf-8") as f:
         str = f.read()
         load_from_string(str, xapiData, out, err)
-        print(f"Info log ({len(out)} lines):\n{'\n'.join(out)}")
+        print(f"Info log ({len(out)} lines):\n" + "\n".join(out))
         if len(err) > 0:
-            print(f"ERRORS FOUND ({len(err)} lines):\n{'\n'.join(err)}")
+            print(f"ERRORS FOUND ({len(err)} lines):\n" + "\n".join(err))
             sys.exit(-1)
 
 def load_players_info_from_uploaded_content(filecontent, filename, xapiData, out, err):
