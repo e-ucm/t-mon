@@ -19,7 +19,7 @@ class KeycloakClient:
             'OIDC_ID_TOKEN_COOKIE_SECURE': False,
             'OIDC_USER_INFO_ENABLED': True,
             'OIDC_OPENID_REALM': 'simva',
-            'OIDC_SCOPES': ['openid', 'email', 'profile', 'roles', 'policy_role_attribute', 'web-origins', 'basic'],
+            'OIDC_SCOPES': ['openid', 'email', 'profile', 'roles', 'web-origins', 'basic'],
             'OIDC_INTROSPECTION_AUTH_METHOD': 'client_secret_post'
         })
         self.oidc = OpenIDConnect(self.flaskServer)
