@@ -3,6 +3,7 @@ import logging
 import os
 from flask import Flask, redirect, url_for, session, request
 from flask_oidc import OpenIDConnect
+from werkzeug.middleware.proxy_fix import ProxyFix
 
 logging.basicConfig(level=logging.DEBUG)
 logger = logging.getLogger(__name__)
@@ -10,6 +11,7 @@ logger = logging.getLogger(__name__)
 class KeycloakClient:
     def __init__(self, client_secret_file="client_secrets.json", homepage = True):
         self.flaskServer = Flask(__name__)
+        self.flaskServer.wsgi_app = ProxyFix(self.flaskServer.wsgi_app, x_for=1, x_host=1, x_port=1, x_proto=1, x_prefix=1)
         basedir = os.path.abspath(f"{os.path.dirname(__file__)}/../")
         self.flaskServer.config.update({
             'SECRET_KEY': 'SomethingNotEntirelySecret',
@@ -19,7 +21,7 @@ class KeycloakClient:
             'OIDC_ID_TOKEN_COOKIE_SECURE': False,
             'OIDC_USER_INFO_ENABLED': True,
             'OIDC_OPENID_REALM': 'simva',
-            'OIDC_SCOPES': ['openid', 'email', 'profile', 'roles', 'web-origins', 'basic'],
+            'OIDC_SCOPES': ['openid', 'email', 'profile', 'roles', 'web-origins'],
             'OIDC_INTROSPECTION_AUTH_METHOD': 'client_secret_post'
         })
         self.oidc = OpenIDConnect(self.flaskServer)
