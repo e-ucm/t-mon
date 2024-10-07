@@ -18,7 +18,7 @@ class KeycloakClient:
             'TESTING': True,
             'DEBUG': True,
             'OIDC_CLIENT_SECRETS': os.path.join(basedir, client_secret_file),
-            'OIDC_ID_TOKEN_COOKIE_SECURE': False,
+            'OIDC_ID_TOKEN_COOKIE_SECURE': True,
             'OIDC_USER_INFO_ENABLED': True,
             'OIDC_OPENID_REALM': 'simva',
             'OIDC_SCOPES': ['openid', 'email', 'profile', 'roles', 'web-origins'],
@@ -29,6 +29,16 @@ class KeycloakClient:
         client_id = self.oidc.client_secrets.get('client_id')
         host=self.oidc.client_secrets.get('host')
         port=self.oidc.client_secrets.get('port')
+        ssl_cert_file=self.oidc.client_secrets.get('ssl_cert_file')
+        if(ssl_cert_file):
+            self.flaskServer.config.update({
+                'SSL_CERT_FILE': ssl_cert_file,
+                'SSL_VERIFY': True
+            })
+        else:
+            self.flaskServer.config.update({
+                'SSL_VERIFY': False
+            })
         refereruri=f"https://{host}" if self.oidc.client_secrets.get('secure') == "True" else f"http://{host}:{port}" 
         print(refereruri)
         self.accountpage=f"{issuer_url}/account?referrer={client_id}&referrer_uri={refereruri}"
