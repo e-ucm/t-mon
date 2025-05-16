@@ -2,7 +2,7 @@ from dash import Dash, html
 from TMonWidgets import UploadWidget, TMonWidget
 
 # Initialize the app
-TMonApp = Dash(__name__)
+TMonApp = Dash(__name__, serve_locally=True)
 # App layout
 TMonApp.layout = html.Div([
         TMonWidget.TMonHeader,

@@ -2,7 +2,7 @@ from dash import Dash, html
 from TMonWidgets import SimvaBrowserWidget, TMonWidget
 
 # Initialize Dash app with Flask server
-app = Dash(__name__, server=SimvaBrowserWidget.flask.flaskServer)
+app = Dash(__name__, server=SimvaBrowserWidget.flask.flaskServer, serve_locally=True)
 
 # Layout of the dashboard
 app.layout=html.Div(
