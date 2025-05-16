@@ -29,16 +29,6 @@ class KeycloakClient:
         client_id = self.oidc.client_secrets.get('client_id')
         host=self.oidc.client_secrets.get('host')
         port=self.oidc.client_secrets.get('port')
-        #ssl_cert_file=self.oidc.client_secrets.get('ssl_cert_file')
-        #if(ssl_cert_file):
-        #    self.flaskServer.config.update({
-        #        'SSL_CERT_FILE': ssl_cert_file,
-        #        'SSL_VERIFY': True
-        #    })
-        #else:
-        #    self.flaskServer.config.update({
-        #        'SSL_VERIFY': False
-        #    })
         refereruri=f"https://{host}" if self.oidc.client_secrets.get('secure') == "True" else f"http://{host}:{port}" 
         print(refereruri)
         self.accountpage=f"{issuer_url}/account?referrer={client_id}&referrer_uri={refereruri}"
@@ -118,9 +108,5 @@ class KeycloakClient:
                 return redirect(redirect_uri)
 
 if __name__ == '__main__':
-    import requests
-    # Ensure the certificate is trusted
-    requests.packages.urllib3.disable_warnings()  # Optional, suppress SSL warnings
-    #os.environ['REQUESTS_CA_BUNDLE'] = '/usr/local/share/ca-certificates/internal-CA.crt'
     flask = KeycloakClient()
     flask.flaskServer.run(debug=True, port=5000)
