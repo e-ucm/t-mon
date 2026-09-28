@@ -210,7 +210,7 @@ def poll_lrs_data(n_intervals):
         # The initial load fell back to trace files, so there is no LRS window to poll.
         raise PreventUpdate
 
-    payload=current_browser._get_lrs_data_from_simva_api(
+    payload=current_browser._get_lrs_statements(
         objectId=current_browser.analysis_object_id,
         is_activity=current_browser.analysis_is_activity
     )

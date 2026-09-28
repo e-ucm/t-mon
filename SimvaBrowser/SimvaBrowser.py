@@ -1,4 +1,5 @@
 from datetime import datetime, timedelta, timezone
+from urllib.parse import urlsplit, urlunsplit
 import re
 
 import requests
@@ -13,9 +14,21 @@ LRS_STATEMENT_KEYS = ("statements", "data", "results")
 # Keys under which an LRS advertises the next page of statements.
 LRS_MORE_KEYS = ("more_url", "more")
 
+# Version announced to the LRS on every statements request. The header is not
+# optional there: a request without it is rejected instead of answered.
+LRS_API_VERSION = "2.0.0"
+
+# Path of the xAPI prefix, and of the statements resource under it. The endpoint in
+# the secrets file may or may not already carry the prefix.
+LRS_XAPI_PATH = "xapi"
+LRS_STATEMENTS_PATH = "statements"
+
 # Upper bound on pages followed for a single query. A malformed LRS that keeps
-# advertising a next page would otherwise loop forever.
-LRS_MAX_PAGES = 200
+# advertising a next page would otherwise loop forever. The bound is generous on
+# purpose: an LRS that caps a page at a few dozen statements needs thousands of
+# pages to return a whole classroom session, and stopping halfway would silently
+# truncate the very data the read is for.
+LRS_MAX_PAGES = 500
 
 # How far back each incremental query reaches behind the previous one, in seconds.
 # An LRS can index a statement a moment after it was stored, so a window closed at
@@ -138,6 +151,87 @@ def _join_url(base_url, path):
     return f"{base_url.rstrip('/')}/{path.lstrip('/')}"
 
 
+def lrs_origin_url(url):
+    """
+    Return the scheme and host of a URL, the base a relative `more` page resolves on.
+
+    An LRS advertises the next batch of statements as a path
+    (`/xapi/statements?...`), which only means something against the very server
+    that handed it over.
+
+    Args:
+        url (str): An absolute URL.
+
+    Returns:
+        str or None: The origin, or None when the URL is missing or not absolute.
+    """
+    if not url:
+        return None
+    parts = urlsplit(str(url).strip())
+    if not parts.scheme or not parts.netloc:
+        return None
+    return urlunsplit((parts.scheme, parts.netloc, "/", "", ""))
+
+
+def lrs_statements_url(endpoint):
+    """
+    Return the statements URL of the LRS at `endpoint`, or None if it is unusable.
+
+    The endpoint may be configured as the bare host, as the host plus the xAPI
+    prefix, or with that prefix already in lower case. The prefix is recognised
+    whatever its case and normalised to lower case, because the LRS routes are case
+    sensitive and only answer the lower case spelling, while a path of any other
+    shape is kept as written.
+
+    Args:
+        endpoint (str): The `lrs.endpoint` value from the secrets file.
+
+    Returns:
+        str or None: The absolute statements URL, or None when the endpoint is
+            missing or is not an absolute URL.
+    """
+    if not endpoint:
+        return None
+    parts = urlsplit(str(endpoint).strip())
+    if not parts.scheme or not parts.netloc:
+        print(f"LRS : endpoint {endpoint!r} is not an absolute URL, the LRS cannot be read directly")
+        return None
+    segments = [segment for segment in parts.path.split("/") if segment]
+    if segments and segments[-1].lower() == LRS_XAPI_PATH:
+        segments[-1] = LRS_XAPI_PATH
+    else:
+        segments.append(LRS_XAPI_PATH)
+    origin = urlunsplit((parts.scheme, parts.netloc, "/", "", ""))
+    return f"{origin}{'/'.join(segments)}/{LRS_STATEMENTS_PATH}"
+
+
+def simva_statement_iri(external_url, *ids):
+    """
+    Build the activity IRI that SimVA files a statement under.
+
+    SimVA groups the statements of an activity under its own activity URL and those
+    of a whole session under the session URL, repeating both in the grouping of
+    every statement's context, which is what an LRS query on them matches.
+
+    Args:
+        external_url (str): The SimVA external URL, the deployment domain without
+            any service subdomain.
+        *ids: The path segments identifying the simlet, session and activity, in
+            that order, dropping the ones a level does not have.
+
+    Returns:
+        str or None: The IRI, or None when the external URL or any of the ids is
+            missing. A gap is never closed, since dropping one would address some
+            other activity and return its statements in its place.
+    """
+    base = (external_url or "").strip().rstrip("/")
+    if not base:
+        return None
+    if any(part is None or part == "" for part in ids):
+        return None
+    return "/".join([base] + [str(part).strip("/") for part in ids])
+
+
 def utcnow():
     """
     Current UTC time.
@@ -246,12 +340,45 @@ class SimvaBrowser:
         self.session_endpoint=None
         self.activity_endpoint=None
         self.simva_api_url = self.secret_file.get("simva").get("api_url")
+        # Statements are read from the LRS itself, with the credentials it gives for
+        # that purpose, instead of asking the SimVA API to proxy them: the API only
+        # serves what a signed-in user may see and hands it over a page at a time,
+        # while the LRS answers the whole query and answers it completely.
+        lrs_config=self.secret_file.get("lrs") or {}
         # Optional tuning for the incremental LRS reads; sensible default when absent.
-        simva_config=self.secret_file.get("simva") or {}
         try:
-            self.lrs_lag_seconds=max(0, int(simva_config.get("lrs_lag_seconds", LRS_LAG_SECONDS)))
+            self.lrs_lag_seconds=max(0, int(lrs_config.get("lrs_lag_seconds", LRS_LAG_SECONDS)))
         except (TypeError, ValueError):
             self.lrs_lag_seconds=LRS_LAG_SECONDS
+        self.lrs_statements_url=lrs_statements_url(lrs_config.get("endpoint"))
+        self.lrs_origin=lrs_origin_url(self.lrs_statements_url)
+        self.lrs_username=lrs_config.get("username")
+        self.lrs_password=lrs_config.get("password")
+        # The IRIs SimVA stores its statements under are built from the deployment
+        # domain, which the API host only carries as a subdomain.
+        self.simva_external_url=self._get_simva_external_url()
+        self.lrs_direct=bool(
+            self.lrs_statements_url
+            and self.lrs_username
+            and self.lrs_password
+            and self.simva_external_url
+        )
+        if self.lrs_direct:
+            print(
+                f"LRS : statements will be read from {self.lrs_statements_url} as {self.lrs_username} "
+                f"(statement IRIs under {self.simva_external_url})"
+            )
+        else:
+            missing=[name for name, value in (
+                ("lrs.endpoint", self.lrs_statements_url),
+                ("lrs.username", self.lrs_username),
+                ("lrs.password", self.lrs_password),
+                ("simva.external_url", self.simva_external_url),
+            ) if not value]
+            print(
+                f"LRS : {', '.join(missing)} not set in the secrets file, statements will be read "
+                "through the SimVA API instead of the LRS itself"
+            )
         jwt_parser = JWT()
         self.jwt = self.auth.get('oidc_auth_token', {}).get("access_token")
         self.access_token=jwt_parser.decode(self.jwt, do_verify=False)
@@ -283,6 +410,61 @@ class SimvaBrowser:
         with open(file_path, 'r') as file:
             secret_data = json.load(file)
         return secret_data
+
+    def _get_simva_external_url(self):
+        """
+        Resolve the SimVA external URL, the base every statement IRI is built from.
+
+        SimVA files its statements under the deployment domain itself, without the
+        service subdomain, so `https://simva-api.example.org/` and the IRIs
+        `https://example.org/simlets/48/sessions/73` share nothing but that domain.
+        The value is read from `simva.external_url` when the secrets file carries it,
+        and otherwise derived by dropping the first label of the API host, which is
+        how the SimVA stack names its subdomains.
+
+        Returns:
+            str or None: The external URL without a trailing slash, or None when it
+                is neither configured nor derivable.
+        """
+        configured=(self.secret_file.get("simva") or {}).get("external_url")
+        if configured:
+            return str(configured).strip().rstrip("/")
+        parts=urlsplit(str(self.simva_api_url or "").strip())
+        if not parts.scheme or not parts.netloc or not parts.hostname:
+            return None
+        labels=parts.hostname.split(".")
+        if len(labels) < 2:
+            print(
+                f"LRS : cannot work out the SimVA external URL from {self.simva_api_url!r}, "
+                "set simva.external_url in client_secrets.json to read the LRS directly"
+            )
+            return None
+        return urlunsplit((parts.scheme, ".".join(labels[1:]), "", "", ""))
+
+    def _get_statement_iri(self, objectId, is_activity):
+        """
+        Return the IRI SimVA files the statements of the current selection under.
+
+        An activity's statements are grouped under its own activity URL and a whole
+        session's under the session URL, and an LRS query on either IRI with
+        `related_activities` returns them all.
+
+        Args:
+            objectId (str): The id of the object to read, an activity id or a
+                session id depending on `is_activity`.
+            is_activity (bool): True for a single activity, False for a session.
+
+        Returns:
+            str or None: The IRI, or None when the study, test or external URL is
+                missing, in which case no query can address this selection.
+        """
+        simlet_id=self._get_id_from_object(self.actual_study, 'simlet', 'id')
+        if is_activity:
+            session_id=self._get_id_from_object(self.actual_test, 'session', 'id')
+            return simva_statement_iri(
+                self.simva_external_url, "simlets", simlet_id, "sessions", session_id, "activities", objectId
+            )
+        return simva_statement_iri(self.simva_external_url, "simlets", simlet_id, "sessions", objectId)
 
     def _check_health_endpoint(self):
         """
@@ -516,15 +698,18 @@ class SimvaBrowser:
             print(f"Error: {response.text}")
             return None
 
-    def _get_lrs_data_from_simva_api(self, objectId, is_activity=True):
+    def _get_lrs_statements(self, objectId, is_activity=True):
         """
-        Get LRS (Learning Record Store) data from the SimVA API.
+        Get the xAPI statements of one activity or of a whole session.
 
-        Retrieves every xAPI statement for a single activity or for a whole
-        test/session, depending on `is_activity`. The endpoint answers with a
-        Multi-Statements LRS Result that is only the first page: each response may carry
-        a `more_url` naming the next batch, and it is followed until absent, so no page
-        is left behind.
+        The statements are read from the LRS itself whenever the secrets file holds
+        credentials for it: the query carries the IRI SimVA files the selection under
+        and every page the LRS advertises through `more` is followed, so nothing is
+        left behind. A deployment without those credentials falls back to the SimVA
+        API route that proxies the same query.
+
+        Each answer is a Multi-Statements LRS Result and only the first page of it:
+        the rest is walked through the `more` cursor the response carries.
 
         The call is incremental: the previous upper bound is reused as the next lower
         bound, so repeated calls only fetch what arrived since the last successful one.
@@ -534,21 +719,43 @@ class SimvaBrowser:
         Args:
             objectId (str): The ID of the object to query. An activity id when
                 `is_activity` is True, a test/session id otherwise.
-            is_activity (bool): True to query an activity endpoint, False to query the
-                session (test) endpoint scoped by the currently selected study.
+            is_activity (bool): True to query a single activity, False to query the
+                whole session (test) the currently selected study owns.
 
         Returns:
             list or None: All statements read across every page, or None if any request
                 in the chain failed.
         """
-        headers = {'Content-Type': 'application/json'}
-        if self.jwt:
-            headers['Authorization'] = f'Bearer {self.jwt}'
-        if is_activity:
-            url = f"{self.simva_api_url}{self.activity_endpoint}/{objectId}/lrs/statements"
+        auth=None
+        if self.lrs_direct:
+            iri=self._get_statement_iri(objectId, is_activity)
+            if iri is None:
+                print(
+                    f"LRS : no statement IRI for {'activity' if is_activity else 'session'} {objectId}, "
+                    "the study, test or simva.external_url is missing"
+                )
+                self.lrs_error = "the study or test of this selection is not known, so the LRS cannot be queried for it"
+                return None
+            url=self.lrs_statements_url
+            page_base=self.lrs_origin
+            headers={'Content-Type': 'application/json', 'X-Experience-API-Version': LRS_API_VERSION}
+            auth=(self.lrs_username, self.lrs_password)
+            # `related_activities` also matches the IRIs a statement repeats in its
+            # context, which is where SimVA records the activity and the session, and
+            # `ascending` keeps the pages in order, so the merge and the charts see
+            # the statements in the order they happened.
+            params={"activity": iri, "related_activities": "true", "ascending": "true"}
         else:
-            actual_simlet_id = self._get_id_from_object(self.actual_study, 'simlet', 'id')
-            url = f"{self.simva_api_url}{self.simlet_endpoint}/{actual_simlet_id}/{self.session_endpoint}/{objectId}/lrs/statements"
+            headers = {'Content-Type': 'application/json'}
+            if self.jwt:
+                headers['Authorization'] = f'Bearer {self.jwt}'
+            page_base=self.simva_api_url
+            params={}
+            if is_activity:
+                url = f"{self.simva_api_url}{self.activity_endpoint}/{objectId}/lrs/statements"
+            else:
+                actual_simlet_id = self._get_id_from_object(self.actual_study, 'simlet', 'id')
+                url = f"{self.simva_api_url}{self.simlet_endpoint}/{actual_simlet_id}/{self.session_endpoint}/{objectId}/lrs/statements"
         # Build the window without touching the stored watermark, so a failed request
         # leaves the previous window to be retried instead of being skipped.
         # Both bounds trail the current time by the configured lag, so each query
@@ -566,7 +773,7 @@ class SimvaBrowser:
         # statements seen twice are dropped by identity, so the overlap costs a
         # request and never a duplicate.
         now_text = format_lrs_instant(utcnow() - (lag if previous_until is not None else timedelta(0)))
-        params = {"until": now_text}
+        params["until"] = now_text
         if previous_until is not None:
             # If the stored watermark cannot be read back, fall back to a full read
             # rather than querying a window we cannot bound.
@@ -574,10 +781,13 @@ class SimvaBrowser:
             if previous is None:
                 print(f"LRS watermark {previous_until!r} is unreadable; reading the full history")
             else:
-                params["from"] = format_lrs_instant(previous - lag)
+                # `since` rather than its xAPI 2.0 spelling `from`, which several LRS
+                # deployments accept and then match nothing against, answering an empty
+                # page as if the activity had produced no statement at all.
+                params["since"] = format_lrs_instant(previous - lag)
         print(f"LRS request {url} params={params} (lag={self.lrs_lag_seconds}s)")
         try:
-            response = requests.get(url, headers=headers, params=params)
+            response = requests.get(url, headers=headers, params=params, auth=auth)
         except Exception as e:
             print(f"LRS request failed for {url}: {e}")
             self.lrs_error = f"the LRS could not be reached ({e})"
@@ -591,8 +801,8 @@ class SimvaBrowser:
         pages = 1
         visited = {url}
         # The next page already carries the window, so it is requested verbatim
-        # instead of re-applying from/until on top of the LRS cursor.
-        next_url = next_lrs_page_url(response.json(), self.simva_api_url)
+        # instead of re-applying the window on top of the LRS cursor.
+        next_url = next_lrs_page_url(response.json(), page_base)
         while next_url is not None:
             if next_url in visited:
                 print(f"LRS advertises an already visited page ({next_url}); stopping to avoid a loop")
@@ -601,20 +811,18 @@ class SimvaBrowser:
                 print(f"LRS pagination stopped after {LRS_MAX_PAGES} pages; remaining statements are not fetched")
                 break
             visited.add(next_url)
-            try:
-                page = requests.get(next_url, headers=headers)
-            except Exception as e:
-                print(f"LRS page request failed for {next_url}: {e}")
-                self.lrs_error = f"page {pages + 1} of the LRS result could not be reached ({e})"
+            page = self._fetch_lrs_page(next_url, headers, auth)
+            if page is None:
+                self.lrs_error = f"page {pages + 1} of the LRS result could not be reached ({next_url})"
                 return None
             if page.status_code != 200:
                 print(f"LRS page {next_url} returned {page.status_code}: {page.text}")
-                self.lrs_error = f"page {pages + 1} of the LRS result answered {page.status_code}"
+                self.lrs_error = f"page {pages + 1} of the LRS result answered {page.status_code} ({next_url})"
                 return None
             data = page.json()
             statements.extend(extract_statements(data))
             pages += 1
-            next_url = next_lrs_page_url(data, self.simva_api_url)
+            next_url = next_lrs_page_url(data, page_base)
 
         # Only now is the whole window proven to be read, so commit the watermark.
         self.from_time = previous_until
@@ -622,6 +830,32 @@ class SimvaBrowser:
         self.lrs_error = None
         print(f"LRS DATA : {len(statements)} statement(s) over {pages} page(s)")
         return statements
+
+    def _fetch_lrs_page(self, url, headers, auth=None):
+        """
+        Fetch one `more` page exactly as the LRS handed it over, authenticated the
+        same way as the first request.
+
+        The cursor already carries the whole query, so the URL is used verbatim: no
+        parameter is added, removed or rewritten. The request repeats the credentials
+        of the query that produced it, so a `more` page is authorised exactly like
+        the first one whether it resolved on the LRS or back through the API.
+
+        Args:
+            url (str): The `more` value, resolved against its server but otherwise
+                untouched.
+            headers (dict): The headers of the originating request, version included.
+            auth (tuple, optional): The credentials of the originating request, the
+                LRS ones for a direct read and None through the API.
+
+        Returns:
+            The response, or None if the host could not be reached at all.
+        """
+        try:
+            return requests.get(url, headers=headers, auth=auth)
+        except Exception as e:
+            print(f"LRS page request failed for {url}: {e}")
+            return None
 
     def _list_activities_from_test(self, test):
         """
@@ -956,7 +1190,7 @@ class SimvaBrowser:
             self.actual_file_url=None
             self.dirs=[]
             self.files=[]
-            payload=self._get_lrs_data_from_simva_api(objectId=self.added_path[1], is_activity=False)
+            payload=self._get_lrs_statements(objectId=self.added_path[1], is_activity=False)
             self.analysis_object_id=self.added_path[1]
             # Keep None on failure so get_analysis_content can still fall back to traces.
             self.lrs_data=None if payload is None else merge_statements([], payload)[0]
@@ -973,7 +1207,7 @@ class SimvaBrowser:
             if self.health_ok:
                 self.dirs=[]
                 self.files=[]
-                payload=self._get_lrs_data_from_simva_api(objectId=actual_activity_id, is_activity=True)
+                payload=self._get_lrs_statements(objectId=actual_activity_id, is_activity=True)
                 self.analysis_object_id=actual_activity_id
                 self.lrs_data=None if payload is None else merge_statements([], payload)[0]
                 self.analysis_ready=True
