@@ -1,10 +1,171 @@
+from datetime import datetime, timezone
+
 import requests
 from jwt import JWT
 import os
 import json
 
+
+# Keys under which an LRS may wrap the statement list in its response body.
+LRS_STATEMENT_KEYS = ("statements", "data", "results")
+
+# Keys under which an LRS advertises the next page of statements.
+LRS_MORE_KEYS = ("more_url", "more")
+
+# Upper bound on pages followed for a single query. A malformed LRS that keeps
+# advertising a next page would otherwise loop forever.
+LRS_MAX_PAGES = 200
+
+
+def extract_statements(payload):
+    """
+    Return the list of xAPI statements carried by an LRS payload.
+
+    An LRS answers either with a bare statement array or with an envelope such as
+    {"statements": [...]}, and this module also accumulates its own plain arrays, so
+    all three shapes are accepted.
+
+    Args:
+        payload: A list of statements, an envelope dict, or None.
+
+    Returns:
+        list: The statements. A dict carrying no known envelope key is returned as a
+            single element list, so a lone statement is never silently dropped.
+    """
+    if payload is None:
+        return []
+    if isinstance(payload, list):
+        return payload
+    if isinstance(payload, dict):
+        for key in LRS_STATEMENT_KEYS:
+            if isinstance(payload.get(key), list):
+                return payload[key]
+        return [payload]
+    return []
+
+
+def statement_identity(statement):
+    """
+    Build a stable identity for an xAPI statement, used to deduplicate polls.
+
+    Prefers the statement id, which the LRS guarantees unique per statement. Falls back
+    to a hash of the whole statement for statements without an id, so polling still
+    converges instead of growing the data set without bound.
+    """
+    if isinstance(statement, dict):
+        identifier = statement.get("id")
+        if identifier:
+            return f"id:{identifier}"
+        return "hash:" + json.dumps(statement, sort_keys=True, default=str)
+    return "hash:" + json.dumps(statement, sort_keys=True, default=str)
+
+
+def merge_statements(existing, incoming):
+    """
+    Merge newly polled statements into the ones already held.
+
+    Dedupes on statement identity, keeping the incoming copy on collision so an
+    updated statement replaces its earlier version, and orders the result by
+    timestamp so the charts and the data table stay chronological.
+
+    Args:
+        existing: Statements already loaded for the current selection.
+        incoming: Statements returned by the latest poll.
+
+    Returns:
+        tuple: (merged statements, count of statements that were actually new).
+    """
+    merged = {}
+    for statement in extract_statements(existing):
+        merged[statement_identity(statement)] = statement
+    known = set(merged)
+    added = 0
+    for statement in extract_statements(incoming):
+        identity = statement_identity(statement)
+        if identity not in known:
+            added += 1
+        merged[identity] = statement
+
+    def sort_key(statement):
+        timestamp = statement.get("timestamp") if isinstance(statement, dict) else None
+        # Statements without a timestamp sort last, keeping the rest chronological.
+        return (timestamp is None, timestamp or "")
+
+    return sorted(merged.values(), key=sort_key), added
+
+
+def next_lrs_page_url(data, base_url=None):
+    """
+    Return the URL of the next batch of statements advertised by an LRS result.
+
+    An xAPI `statements` response is a Multi-Statements LRS Result: besides the
+    statements it may carry a `more` (xAPI 1.0.2) or `more_url` (xAPI 2.0) key holding
+    the URL of the following page, and the client is expected to follow it until it is
+    absent. Some LRS also express it as a link object, so a few shapes are accepted.
+
+    Args:
+        data: A decoded LRS response body.
+        base_url (str, optional): Used to resolve a relative `more` value.
+
+    Returns:
+        str or None: The absolute next-page URL, or None when this is the last page.
+    """
+    if not isinstance(data, dict):
+        return None
+    for key in LRS_MORE_KEYS:
+        value = data.get(key)
+        if isinstance(value, str) and value:
+            return value if value.startswith("http") else _join_url(base_url, value)
+        if isinstance(value, dict):
+            for nested in ("href", "url", "more_url", "more"):
+                if isinstance(value.get(nested), str) and value[nested]:
+                    return value[nested]
+    return None
+
+
+def _join_url(base_url, path):
+    """Resolve a relative LRS page path against the API base."""
+    if not base_url:
+        return path
+    return f"{base_url.rstrip('/')}/{path.lstrip('/')}"
+
+
 class SimvaBrowser:
+    """
+    A browser interface for interacting with the SimVA (SimVascular) API.
+
+    This class provides methods to navigate studies, tests, activities, and
+    retrieve files and LRS (Learning Record Store) data from a SimVA instance.
+
+    Typical usage:
+
+        browser = SimvaBrowser(auth)
+        studies = browser.accepted_studies
+        browser.select_study(study_id)
+        tests = browser.accepted_tests
+        browser.select_test(test_id)
+        activities = browser.accepted_activities
+        browser.select_activity(activity_id)
+        file_content = browser.get_file_content()
+    """
+
     def __init__(self, auth, accept='.json', ca_file=None, delimiter='/', client_secret_file="client_secrets.json"):
+        """
+        Initialize the browser and load the initial SimVA data.
+
+        Loads the client secrets, decodes the OIDC access token, probes the API health
+        endpoint to resolve the correct endpoint names, loads the accepted studies and
+        performs the initial file listing.
+
+        Args:
+            auth (dict): Authentication payload, expected to contain an
+                'oidc_auth_token' mapping with an 'access_token' entry.
+            accept (str): Accepted content type for trace files.
+            ca_file (str, optional): Path to a CA bundle used for MinIO requests.
+            delimiter (str): Path delimiter used to build the virtual paths.
+            client_secret_file (str): Name of the secrets file, resolved relative to
+                the parent directory of this module.
+        """
         #GENERAL
         basedir = os.path.abspath(f"{os.path.dirname(__file__)}/../")
         self.secret_file=self._load_secret_file(os.path.join(basedir, client_secret_file))
@@ -20,6 +181,12 @@ class SimvaBrowser:
         self.actual_activity=None
         self.actual_selected_file=None
         self.actual_file_url=None
+        self.lrs_data=None
+        self.analysis_ready=False
+        self.analysis_is_activity=None
+        self.analysis_object_id=None
+        self.until_time=None
+        self.from_time=None
         self.health_ok=False
         self.simlet_endpoint=None
         self.session_endpoint=None
@@ -44,11 +211,31 @@ class SimvaBrowser:
     
     #GENERAL 
     def _load_secret_file(self, file_path):
+        """
+        Load secret data from a JSON file.
+
+        Args:
+            file_path (str): Path to the JSON secret file.
+
+        Returns:
+            dict: Parsed secret data containing configuration values.
+        """
         with open(file_path, 'r') as file:
             secret_data = json.load(file)
         return secret_data
 
     def _check_health_endpoint(self):
+        """
+        Check the health of the SimVA API endpoint.
+
+        Determines the API endpoint paths based on the health check response.
+        Sets simlet_endpoint, session_endpoint, and activity_endpoint accordingly.
+
+        If the health endpoint returns 200, uses standard endpoints:
+            - simlets, sessions, activities
+        Otherwise, uses alternative endpoints:
+            - studies, tests, activities
+        """
         health_url = f"{self.simva_api_url}health"
         headers = {'Content-Type': 'application/json'}
         print("HEALTH : Checking health endpoint...")
@@ -65,6 +252,20 @@ class SimvaBrowser:
             self.activity_endpoint="activities"
 
     def _get_id_from_object(self, object, type, name):
+        """
+        Extract an ID or name from a SimVA API response object.
+
+        Args:
+            object (dict): The API response object.
+            type (str): The type of object ('simlet', 'session', or 'activity').
+            name (str): Either 'id' or 'name' to extract.
+
+        Returns:
+            The requested id or name value, or None if not found.
+
+        Raises:
+            ValueError: If name is not 'id' or 'name', or type is invalid when health_ok.
+        """
         if object is None:
             return None
         if not name in ["id", "name"]:
@@ -83,6 +284,16 @@ class SimvaBrowser:
         
     #SIMVA API Logged
     def _load_selected_studies_from_simva_api(self):
+        """
+        Load accepted studies from the SimVA API.
+
+        Sends a GET request to the simlets endpoint with JWT authorization.
+        Populates accepted_studies and study_directories from the response.
+
+        Sets:
+            self.accepted_studies (list): List of study objects from the API.
+            self.study_directories (list): List of directories with study id/name.
+        """
         headers = {'Content-Type': 'application/json'}
         if self.jwt:
             headers['Authorization'] = f'Bearer {self.jwt}'
@@ -98,6 +309,17 @@ class SimvaBrowser:
             print(f"Error: {response.text}")
 
     def _load_selected_simlet_tests_list_from_simva_api(self):
+        """
+        Load selected simlet tests list from the SimVA API.
+
+        Retrieves tests for the currently selected study/simlet.
+
+        Args:
+            None (uses self.actual_study to get the simlet id)
+
+        Returns:
+            list or None: List of test objects, or None if simlet id is not available.
+        """
         headers = {'Content-Type': 'application/json'}
         if self.jwt:
             headers['Authorization'] = f'Bearer {self.jwt}'
@@ -116,6 +338,15 @@ class SimvaBrowser:
             return None
     
     def _list_test_from_study(self, study):
+        """
+        List tests from a study object.
+
+        Args:
+            study (dict): A study object containing a 'tests' list.
+
+        Returns:
+            list: List of test objects loaded from the API.
+        """
         tests=[]
         if study is not None:
             print(study)
@@ -127,6 +358,15 @@ class SimvaBrowser:
         return tests
 
     def _load_selected_test_from_simva_api(self, testId):
+        """
+        Load a selected test from the SimVA API.
+
+        Args:
+            testId (str): The ID of the test to retrieve.
+
+        Returns:
+            dict or None: The test data if found, None otherwise.
+        """
         headers = {'Content-Type': 'application/json'}
         if self.jwt:
             headers['Authorization'] = f'Bearer {self.jwt}'
@@ -143,6 +383,15 @@ class SimvaBrowser:
             return None
 
     def _load_selected_test_activities_from_simva_api(self, testId):
+        """
+        Load selected test activities from the SimVA API.
+
+        Args:
+            testId (str): The ID of the test whose activities to retrieve.
+
+        Returns:
+            dict or None: The activity data if found, None otherwise.
+        """
         headers = {'Content-Type': 'application/json'}
         if self.jwt:
             headers['Authorization'] = f'Bearer {self.jwt}'
@@ -162,6 +411,15 @@ class SimvaBrowser:
             return None
 
     def _get_minio_url_from_simva_api(self, activityId):
+        """
+        Get a presigned URL from the SimVA API for an activity.
+
+        Args:
+            activityId (str): The ID of the activity.
+
+        Returns:
+            dict or None: The response containing a presigned URL, or None on error.
+        """
         headers = {'Content-Type': 'application/json'}
         if self.jwt:
             headers['Authorization'] = f'Bearer {self.jwt}'
@@ -176,7 +434,99 @@ class SimvaBrowser:
             print(f"Error: {response.text}")
             return None
 
+    def _get_lrs_data_from_simva_api(self, objectId, is_activity=True):
+        """
+        Get LRS (Learning Record Store) data from the SimVA API.
+
+        Retrieves every xAPI statement for a single activity or for a whole
+        test/session, depending on `is_activity`. The endpoint answers with a
+        Multi-Statements LRS Result that is only the first page: each response may carry
+        a `more_url` naming the next batch, and it is followed until absent, so no page
+        is left behind.
+
+        The call is incremental: the previous upper bound is reused as the next lower
+        bound, so repeated calls only fetch what arrived since the last successful one.
+        The watermark advances only after every page has been read, so a failure part
+        way through re-reads the whole window next time instead of skipping statements.
+
+        Args:
+            objectId (str): The ID of the object to query. An activity id when
+                `is_activity` is True, a test/session id otherwise.
+            is_activity (bool): True to query an activity endpoint, False to query the
+                session (test) endpoint scoped by the currently selected study.
+
+        Returns:
+            list or None: All statements read across every page, or None if any request
+                in the chain failed.
+        """
+        headers = {'Content-Type': 'application/json'}
+        if self.jwt:
+            headers['Authorization'] = f'Bearer {self.jwt}'
+        if is_activity:
+            url = f"{self.simva_api_url}{self.activity_endpoint}/{objectId}/lrs/statements"
+        else:
+            actual_simlet_id = self._get_id_from_object(self.actual_study, 'simlet', 'id')
+            url = f"{self.simva_api_url}{self.simlet_endpoint}/{actual_simlet_id}/{self.session_endpoint}/{objectId}/lrs/statements"
+        # Build the window without touching the stored watermark, so a failed request
+        # leaves the previous window to be retried instead of being skipped.
+        previous_until = self.until_time
+        now = datetime.now(timezone.utc).isoformat().replace('+00:00', 'Z')
+        params = {"until": now}
+        if previous_until is not None:
+            params["from"] = previous_until
+        print(f"LRS request {url} params={params}")
+        try:
+            response = requests.get(url, headers=headers, params=params)
+        except Exception as e:
+            print(f"LRS request failed for {url}: {e}")
+            return None
+        if response.status_code != 200:
+            print(f"LRS request for {url} returned {response.status_code}: {response.text}")
+            return None
+
+        statements = extract_statements(response.json())
+        pages = 1
+        visited = {url}
+        # The next page already carries the window, so it is requested verbatim
+        # instead of re-applying from/until on top of the LRS cursor.
+        next_url = next_lrs_page_url(response.json(), self.simva_api_url)
+        while next_url is not None:
+            if next_url in visited:
+                print(f"LRS advertises an already visited page ({next_url}); stopping to avoid a loop")
+                break
+            if pages >= LRS_MAX_PAGES:
+                print(f"LRS pagination stopped after {LRS_MAX_PAGES} pages; remaining statements are not fetched")
+                break
+            visited.add(next_url)
+            try:
+                page = requests.get(next_url, headers=headers)
+            except Exception as e:
+                print(f"LRS page request failed for {next_url}: {e}")
+                return None
+            if page.status_code != 200:
+                print(f"LRS page {next_url} returned {page.status_code}: {page.text}")
+                return None
+            data = page.json()
+            statements.extend(extract_statements(data))
+            pages += 1
+            next_url = next_lrs_page_url(data, self.simva_api_url)
+
+        # Only now is the whole window proven to be read, so commit the watermark.
+        self.from_time = previous_until
+        self.until_time = now
+        print(f"LRS DATA : {len(statements)} statement(s) over {pages} page(s)")
+        return statements
+
     def _list_activities_from_test(self, test):
+        """
+        List activities from a test object.
+
+        Args:
+            test (dict): A test object containing an 'activities' list.
+
+        Returns:
+            list: List of activity objects that have type 'gameplay' with trace_storage enabled.
+        """
         activities=[]
         if test is not None:
             for activityId in test.get("activities"):
@@ -189,9 +539,30 @@ class SimvaBrowser:
         return activities
     
     def _isdir(self, path):
+        """
+        Check if a path represents a directory.
+
+        Args:
+            path (str): The path to check.
+
+        Returns:
+            bool: True if the path ends with the delimiter (indicating a directory), False otherwise.
+        """
         return path.endswith(self.delimiter)
 
-    def _getStudyIdTestIdAndUpdatedPathFromPath(self,path):
+    def _getStudyIdTestIdAndUpdatedPathFromPath(self, path):
+        """
+        Extract study ID, test ID, and updated path from a full path.
+
+        Splits the path relative to base_path into study ID, test ID, and remaining path.
+
+        Args:
+            path (str): The full path to parse.
+
+        Returns:
+            tuple: (studyId, testId, path) where studyId and testId are strings or None,
+                   and path is the remaining path after removing study and test IDs.
+        """
         added_path=path.replace(self.base_path, "").split("/")
         studyId=None
         testId=None
@@ -204,6 +575,15 @@ class SimvaBrowser:
         return studyId, testId, path
 
     def get_file_content_from_url(self):
+        """
+        Get file content from the actual file URL.
+
+        Sends an HTTP GET request to the stored actual_file_url and returns the
+        content along with the current path.
+
+        Returns:
+            tuple: (current_path, content) where content is the file text or None on error.
+        """
         if self.actual_file_url is not None:
             try:
                 # Send an HTTP GET request to the provided URL
@@ -223,7 +603,96 @@ class SimvaBrowser:
         else: 
             return self.current_path, None
         
+    def get_lrs_content(self):
+        """
+        Serialize the LRS statements of the current selection for analysis.
+
+        Returns the statements as a JSON document, using the same string contract as
+        get_file_content_from_url so both can feed load_from_string directly.
+
+        Returns:
+            str or None: The statements as a JSON string, or None when no LRS data
+                has been fetched for the current selection.
+        """
+        if self.lrs_data is None:
+            return None
+        return json.dumps(extract_statements(self.lrs_data))
+
+    def _get_session_traces_content(self):
+        """
+        Build the analysis content for a whole session from its activity trace files.
+
+        Used as a fallback when the session level LRS endpoint is unavailable: walks
+        every accepted activity, resolves its presigned MinIO URL and concatenates the
+        retrieved statements.
+
+        Returns:
+            str or None: The concatenated statements as a JSON string, or None when no
+                trace could be retrieved for any activity.
+        """
+        statements=[]
+        for activity in self.accepted_activities or []:
+            activity_id=self._get_id_from_object(activity, 'activity', 'id')
+            if activity_id is None:
+                continue
+            result=self._get_minio_url_from_simva_api(activity_id)
+            if result is None:
+                continue
+            url=result.get("url")
+            if not url:
+                continue
+            try:
+                response=requests.get(url)
+                response.raise_for_status()
+                data=response.json()
+            except Exception as e:
+                print(f"Error fetching traces for activity {activity_id}: {e}")
+                continue
+            statements.extend(extract_statements(data))
+        if not statements:
+            return None
+        return json.dumps(statements)
+
+    def get_analysis_content(self):
+        """
+        Get the content to analyse for the current selection.
+
+        Tries, in order, the LRS statements of the current session/activity, the
+        presigned trace file of the selected activity, and finally the trace files of
+        every activity in the session. The LRS endpoints are newer than the MinIO
+        trace storage, so the trace files remain the reliable fallback.
+
+        Returns:
+            tuple: (current_path, content) where content is a JSON string, or None
+                when no content is available.
+        """
+        content = self.get_lrs_content()
+        if content is not None:
+            return self.current_path, content
+        if self.analysis_is_activity and self.actual_file_url is None:
+            activity_id=self._get_id_from_object(self.actual_activity, 'activity', 'id')
+            if activity_id is not None:
+                result=self._get_minio_url_from_simva_api(activity_id)
+                self.actual_file_url=result.get("url") if result is not None else None
+        current_path, content = self.get_file_content_from_url()
+        if content is not None:
+            return current_path, content
+        if not self.analysis_is_activity:
+            content = self._get_session_traces_content()
+            if content is not None:
+                return self.current_path, content
+        return self.current_path, None
+
     def _update_files(self):
+        """
+        Update the browser's file and directory listing based on the current path.
+
+        Navigates the directory structure based on the added_path relative to base_path.
+        Updates self.files, self.dirs, self.actual_study, and self.actual_file_url accordingly.
+
+        If added_path has more than 1 element, navigates into study directory.
+        Otherwise resets to root level with study directories displayed.
+        """
         self.files = []
         self.dirs = []
         self.added_path=self.current_path.replace(self.base_path, "").split("/")
@@ -240,6 +709,12 @@ class SimvaBrowser:
             self.actual_file_url=None
 
     def _reset_browser(self):
+        """
+        Reset the browser to the initial state.
+
+        Resets the current path to base_path, clears all selected study/test/activity
+        and file state, and clears accepted tests and activities lists.
+        """
         self.current_path=self.base_path
         self.current_level=0
         
@@ -248,11 +723,27 @@ class SimvaBrowser:
         self.actual_test=None
         self.actual_selected_file=None
         self.actual_file_url=None
-
+        self.lrs_data=None
+        self.analysis_ready=False
+        self.analysis_is_activity=None
+        self.until_time=None
+        self.from_time=None
+        
         self.accepted_tests=[]
         self.accepted_activities=[]
 
     def _update_study(self):
+        """
+        Update the browser state for a study/simlet selection.
+
+        Navigates to the study specified by added_path[0], loads its tests,
+        and prepares test directories for browsing.
+
+        Sets:
+            self.actual_study: The selected study object.
+            self.accepted_tests: List of test objects for the study.
+            self.dirs: Test directories with id/name.
+        """
         print(f"self.current_level: {self.current_level} - Study/Simlet")
         actual_study_id=self.added_path[0]
         print(f"actual_study_id: {actual_study_id}")
@@ -278,6 +769,17 @@ class SimvaBrowser:
             self._reset_browser()
 
     def _update_tests(self):
+        """
+        Update the browser state for a test selection.
+
+        Navigates to the test specified by added_path[1], loads its activities,
+        and prepares activity directories for browsing.
+
+        Sets:
+            self.actual_test: The selected test object.
+            self.accepted_activities: List of activity objects for the test.
+            self.dirs: Activity directories with id/name.
+        """
         actual_test_id=self.added_path[1]
         print(f"actual_test_id: {actual_test_id}")
         print(f"self.accepted_tests: {self.accepted_tests}")
@@ -306,13 +808,51 @@ class SimvaBrowser:
             self.actual_file_url=None
 
     def _update_activities(self):
+        """
+        Update the browser state for an activity selection.
+
+        Navigates to the activity specified by added_path[2]. If the activity ID is
+        "Analysis", prepares the session level analysis. Otherwise, retrieves the
+        presigned URL and file information for the activity.
+
+        Whenever the selection is directly analysable, the corresponding LRS
+        statements are fetched into self.lrs_data and the selection is flagged with
+        self.analysis_ready so the caller can launch the analysis right away:
+        is_activity=False for the session level "Analysis" entry, is_activity=True
+        when a single activity is selected.
+
+        Sets:
+            self.actual_activity: The selected activity object.
+            self.actual_file_url: Presigned URL for accessing activity traces.
+            self.dirs: Directory listing (empty for activities).
+            self.files: List of files available (traces.json or "Run analysis").
+            self.lrs_data: LRS statements for the session or the activity, None otherwise.
+            self.analysis_ready: True when the current selection can be analysed.
+            self.analysis_is_activity: True for an activity, False for a session.
+            self.analysis_object_id: The id the statements were queried with, reused by polling.
+        """
         print(f"self.current_level: {self.current_level} - Activities")
         actual_activity_id=self.added_path[2]
+        self.analysis_ready=False
+        self.analysis_is_activity=None
+        self.analysis_object_id=None
+        self.lrs_data=None
+        # Every new selection is read from scratch: carrying the previous window over
+        # would make the next object's own history invisible to the incremental query.
+        self.until_time=None
+        self.from_time=None
         if actual_activity_id == "Analysis":
             self.actual_activity=None
             self.actual_file_url=None
             self.dirs=[]
-            self.files=["Run analysis"]
+            self.files=[]
+            payload=self._get_lrs_data_from_simva_api(objectId=self.added_path[1], is_activity=False)
+            self.analysis_object_id=self.added_path[1]
+            # Keep None on failure so get_analysis_content can still fall back to traces.
+            self.lrs_data=None if payload is None else merge_statements([], payload)[0]
+            self.analysis_ready=True
+            self.analysis_is_activity=False
+            return
         print(f"actual_activity_id: {actual_activity_id}")
         print(f"self.accepted_activities: {self.accepted_activities}")
         actual_activities=[activity for activity in self.accepted_activities if f"{self._get_id_from_object(activity, 'activity', 'id')}" == f"{actual_activity_id}"]
@@ -320,11 +860,20 @@ class SimvaBrowser:
             self.actual_activity=actual_activities[0]
             print(f"actual_activity_id: {actual_activity_id}")
             print(f"self.actual_activity: {self.actual_activity}")
-            result=self._get_minio_url_from_simva_api(actual_activity_id)
-            self.actual_file_url=result.get("url") if result is not None else None
-            if self._isdir(path=self.current_path):
-                self.dirs=[]
-                self.files=["traces.json"] if self.actual_file_url is not None else []
-            else:
+            if self.health_ok:
                 self.dirs=[]
                 self.files=[]
+                payload=self._get_lrs_data_from_simva_api(objectId=actual_activity_id, is_activity=True)
+                self.analysis_object_id=actual_activity_id
+                self.lrs_data=None if payload is None else merge_statements([], payload)[0]
+                self.analysis_ready=True
+                self.analysis_is_activity=True
+            else: 
+                result=self._get_minio_url_from_simva_api(actual_activity_id)
+                self.actual_file_url=result.get("url") if result is not None else None
+                if self._isdir(path=self.current_path):
+                    self.dirs=[]
+                    self.files=["traces.json"] if self.actual_file_url is not None else []
+                else:
+                    self.dirs=[]
+                    self.files=[]

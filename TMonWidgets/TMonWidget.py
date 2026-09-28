@@ -3,6 +3,7 @@ from dash import html, dash_table, dcc, callback, Output, Input, State
 from dash.exceptions import PreventUpdate
 import pandas as pd
 import TMonWidgets
+from LoadProcessStatements import resolve_actor_name_column, flatten_for_display
 from TMonWidgets.MultiSelector import searchValueFromMultiSelector
 from vis import xAPISGPlayersProgress, xAPISGVideosSeenSkipped
 from urllib.parse import unquote, urlencode
@@ -90,17 +91,21 @@ def filterObjectIdDependingTab(df, value, tab):
     Input("users-multi-dynamic-dropdown", "value"),
     Input("object-multi-dynamic-dropdown", "search_value"),
     Input("object-multi-dynamic-dropdown", "value"),
+    # Bumped by the poller only when new statements arrived, so a tick with no new
+    # data leaves this untouched and nothing is redrawn.
+    Input("lrs-data-version", "data"),
 )
-def update_output(tab, user_search_value, user_value, object_search_value, object_value):
+def update_output(tab, user_search_value, user_value, object_search_value, object_value, lrs_data_version=None):
     ctx = dash.callback_context
     triggered=ctx.triggered
     triggered_prop_id = ctx.triggered[0]['prop_id']
     res=f"Triggered : {triggered} - {triggered_prop_id}"
     print(res)
     # Normalize the JSON data to a pandas DataFrame
-    if 'object-multi-dynamic-dropdown' in triggered_prop_id or 'users-multi-dynamic-dropdown' in triggered_prop_id or 't-mon-tabs' in triggered_prop_id:
+    if 'object-multi-dynamic-dropdown' in triggered_prop_id or 'users-multi-dynamic-dropdown' in triggered_prop_id or 't-mon-tabs' in triggered_prop_id or 'lrs-data-version' in triggered_prop_id:
         if len(TMonWidgets.xapiData) > 0:
             df = pd.json_normalize(TMonWidgets.xapiData)
+            df = resolve_actor_name_column(df)
             filtered_df, user_unique_options=searchValueFromMultiSelector(df, "actor.name", user_search_value, user_value)
             filtered_df, object_unique_options=searchValueFromMultiSelector(filtered_df, "object.id", object_search_value, object_value)
             object_unique_options=filterObjectIdDependingTab(df, object_unique_options, tab)
@@ -207,13 +212,16 @@ def update_output(tab, user_search_value, user_value, object_search_value, objec
                     )
                 ])
             elif tab == 'data_tab':
-                # Convert the DataFrame to a dictionary suitable for DataTable
-                data = filtered_df.to_dict('records')
+                # Flatten nested statement values (e.g. context.contextActivities.parent,
+                # an array per the xAPI spec) into sub-columns, on a display-only copy:
+                # the charts share filtered_df and must keep one row per statement.
+                table_df = flatten_for_display(filtered_df)
+                data = table_df.where(pd.notna(table_df), None).to_dict('records')
                 tab_content= html.Div([
                     html.H3("Length table : " + str(len(data))),
                     dash_table.DataTable(
                         id='table-all-xapi-data',
-                        columns=[{"name": i, "id": i} for i in filtered_df.columns],
+                        columns=[{"name": i, "id": i} for i in table_df.columns],
                         data=data,
                         filter_action='native',
                         sort_action="native",
@@ -263,7 +271,27 @@ TMonBody=html.Div([
                 dcc.Tab(label='xAPI Data', value='data_tab')
             ])
         ),
-        html.Div(id="tabs-content")
+        html.Div(id="tabs-content"),
+        # Live updates: only meaningful once statements have been loaded, so these
+        # controls live inside the panel that is revealed by a successful analysis.
+        html.Hr(),
+        html.Div([
+            dcc.Checklist(
+                id='lrs-poll-enabled',
+                options=[{'label': ' Live updates', 'value': 'on'}],
+                value=[],
+                style={'display': 'inline-block', 'marginRight': '15px'}
+            ),
+            dcc.Dropdown(
+                id='lrs-poll-rate',
+                options=[{'label': f'{s} seconds', 'value': s} for s in (5, 10, 30, 60, 300)],
+                value=10,
+                clearable=False,
+                style={'display': 'inline-block', 'width': '140px'}
+            ),
+            html.Span(id='lrs-poll-count', children='', style={'marginLeft': '15px'}),
+        ]),
+        html.Div(id='lrs-poll-status', children='', style={'fontSize': '0.85em', 'color': '#555'})
     ])
 ])
 TMonFooter=html.Div([

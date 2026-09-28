@@ -8,7 +8,7 @@ import TMonWidgets
 #Import LoadProcessStatements.py
 from LoadProcessStatements import load_from_string, load_players_info_from_uploaded_content
 # Import SimvaBrowser class from SimvaBrowser.py
-from SimvaBrowser.SimvaBrowser import SimvaBrowser
+from SimvaBrowser.SimvaBrowser import SimvaBrowser, merge_statements
 # Import KeycloakClient class containing a Flask OIDC server from KeycloakClient.py
 from SimvaBrowser.KeycloakClient import KeycloakClient
 from datetime import datetime
@@ -83,6 +83,127 @@ def update_connection_status(input_value):
     else:
         return 'Not logged in'
     
+def get_analysis_outputs(pathname, dashboardpath):
+    """
+    Run the analysis over the current browser selection and build the callback outputs.
+
+    Loads the statements resolved by SimvaBrowser.get_analysis_content (LRS statements
+    for the selected session/activity, or the presigned trace file), then appends the
+    dashboard route to the URL so the T-Mon tabs open with the data already loaded.
+    """
+    run_analyse_style={'display': 'none'}
+    TMonWidgets.xapiData=[]
+    out=[]
+    err=[]
+    current_file_path, content_string = browser.get_analysis_content()
+    if content_string is None:
+        err.append(
+            f"No xAPI statements available for {browser.current_path}. "
+            "The LRS endpoint returned no data and no trace file could be retrieved."
+        )
+    else:
+        load_from_string(
+            content_string, TMonWidgets.xapiData, out, err
+        )
+    div_list=[html.Div([
+            html.Div(out),
+            html.Div(err),
+            html.Hr(),
+        ])]
+    print(f"Pathname : {pathname} - dashboardpath : {dashboardpath}")
+    actual_study=browser._get_id_from_object(browser.actual_study, 'simlet', 'name') if browser.actual_study is not None else "Select a study"
+    actual_test=browser._get_id_from_object(browser.actual_test, 'session', 'name') if browser.actual_test is not None else "Select an test"
+    actual_activity=browser._get_id_from_object(browser.actual_activity, 'activity', 'name') if browser.actual_activity is not None else "Select an activity"
+    tmon_style = {'display': 'none'} if len(err) > 0 else {'display': 'block'}
+    return browser.current_path, actual_study, actual_test, actual_activity, [], [], run_analyse_style, html.Div(div_list), tmon_style, f"{pathname}{dashboardpath}"
+
+
+def reload_xapi_data_from_selection():
+    """
+    Rebuild the shared xAPI statement list from the browser's current selection.
+
+    Reused by the initial analysis and by the poller so both normalize the statements
+    the same way. Returns the number of statements now loaded.
+    """
+    TMonWidgets.xapiData=[]
+    content = browser.get_lrs_content()
+    if content is None:
+        return 0
+    load_from_string(content, TMonWidgets.xapiData, [], [])
+    return len(TMonWidgets.xapiData)
+
+
+# Dash callback to let the user choose how often the LRS is polled
+@callback(
+    [Output('lrs-poll-interval', 'interval'),
+     Output('lrs-poll-interval', 'disabled')],
+    [Input('lrs-poll-rate', 'value'),
+     Input('lrs-poll-enabled', 'value')]
+)
+def set_poll_rate(rate, enabled):
+    """
+    Apply the chosen polling period to the timer.
+
+    Polling only makes sense once a session or activity is loaded, so the timer stays
+    disabled until the user turns it on, keeping the server idle otherwise. The
+    control's own state is the feedback here; `lrs-poll-status` is left to the poller
+    so no two callbacks write the same property.
+    """
+    if not rate:
+        raise PreventUpdate
+    seconds=int(rate)
+    is_enabled=bool(enabled) and flask.oidc.user_loggedin
+    return seconds*1000, not is_enabled
+
+# Dash callback to fetch new statements as they arrive
+@callback(
+    [Output('lrs-data-version', 'data'),
+     Output('lrs-poll-status', 'children'),
+     Output('lrs-poll-count', 'children')],
+    [Input('lrs-poll-interval', 'n_intervals')]
+)
+def poll_lrs_data(n_intervals):
+    """
+    Pull statements that arrived since the last poll and refresh the dashboard.
+
+    Bumps `lrs-data-version` only when new statements were actually found, so the
+    charts and the data table redraw on real changes instead of on every tick. A
+    failed or empty response leaves the version alone, and the LRS watermark is only
+    advanced by a successful request, so nothing is skipped on a transient failure.
+    """
+    try:
+        current_browser=browser
+        if current_browser is None:
+            raise NameError("Browser is null.")
+    except NameError:
+        raise PreventUpdate
+    if not current_browser.analysis_ready or current_browser.analysis_object_id is None:
+        raise PreventUpdate
+    if current_browser.lrs_data is None:
+        # The initial load fell back to trace files, so there is no LRS window to poll.
+        raise PreventUpdate
+
+    payload=current_browser._get_lrs_data_from_simva_api(
+        objectId=current_browser.analysis_object_id,
+        is_activity=current_browser.analysis_is_activity
+    )
+    stamp=datetime.now().strftime("%H:%M:%S")
+    if payload is None:
+        raise PreventUpdate
+
+    merged, added=merge_statements(current_browser.lrs_data, payload)
+    if added == 0:
+        raise PreventUpdate
+
+    current_browser.lrs_data=merged
+    total=reload_xapi_data_from_selection()
+    print(f"POLL: {added} new statement(s) for {current_browser.current_path}, {total} total")
+    return (
+        (n_intervals, added),
+        f"+{added} new statement(s) at {stamp} - {total} total",
+        str(total)
+    )
+
 # Dash callback to handle login button click
 @callback(
     Output('browser_div', 'children'),
@@ -225,35 +346,13 @@ def update_browser(n_clicks_parent, folder_n_clicks, file_n_clicks, n_clicks_run
             pathname=browser.current_path.replace(browser.base_path, "/")
             print(f"{browser.current_path} - New Path : {pathname}")
         elif ('run-analyse' in triggered_prop_id and int(n_clicks_run_analyse)>0) or run_dashboard:
-            run_analyse_style={'display': 'none'}
-            folder_buttons=[]
-            file_buttons=[]
-            TMonWidgets.xapiData=[]
-            div_list= []
-            out=[]
-            err=[]
-            current_file_path, content_string = browser.get_file_content_from_url()
-            load_from_string(
-                content_string, TMonWidgets.xapiData, out, err
-            )
-            div_list.append(html.Div([
-                    html.Div(out),
-                    html.Div(err),
-                    html.Hr(),
-                ]))
             pathname=newstatepathname
             if run_dashboard:
                 dashboardpath=f"{dashboard_url}"
             else:
                 dashboardpath=f"/dashboard/tab=home_tab"
-            print(f"Pathname : {pathname} - State : {newstatepathname} - dashboardurl : {dashboard_url}")
-            actual_study=browser._get_id_from_object(browser.actual_study, 'simlet', 'name') if browser.actual_study is not None else "Select a study"
-            actual_test=browser._get_id_from_object(browser.actual_test, 'session', 'name') if browser.actual_test is not None else "Select an test"
-            actual_activity=browser._get_id_from_object(browser.actual_activity, 'activity', 'name') if browser.actual_activity is not None else "Select an activity"
-            if(len(err) > 0):
-                return browser.current_path,actual_study, actual_test, actual_activity, folder_buttons, file_buttons, run_analyse_style, html.Div(div_list), {'display': 'none'}, f"{pathname}{dashboardpath}" 
-            else:
-                return browser.current_path,actual_study, actual_test, actual_activity, folder_buttons, file_buttons, run_analyse_style, html.Div(div_list), {'display': 'block'}, f"{pathname}{dashboardpath}"
+            print(f"State : {newstatepathname} - dashboardurl : {dashboard_url}")
+            return get_analysis_outputs(pathname, dashboardpath)
         elif "-button"in triggered_prop_id:
             cleaned_prop_id = triggered_prop_id.replace(".n_clicks", "")
             button_id = json.loads(cleaned_prop_id)
@@ -266,6 +365,14 @@ def update_browser(n_clicks_parent, folder_n_clicks, file_n_clicks, n_clicks_run
             print("Nothing to do ! Prevent update")
             raise PreventUpdate
         browser._update_files()
+        # Entering the session level "Complete session" entry or a single activity
+        # means the selection is directly analysable: load its LRS statements and
+        # jump straight to the dashboard instead of waiting for a button click.
+        if browser.analysis_ready:
+            dashboardpath=f"/dashboard/tab=home_tab"
+            analysis_path=pathname.rstrip('/')
+            print(f"Auto analysis for {analysis_path} (is_activity={browser.analysis_is_activity})")
+            return get_analysis_outputs(analysis_path, dashboardpath)
         folder_buttons = [html.Button(f"{f.get('name')} ({f.get('id')})", id={'type': 'folder-button', 'index': f.get("id")}, n_clicks=0) for f in browser.dirs]
         file_buttons = [html.Button(f, id={'type': 'file-button', 'index': f}, n_clicks=0, style={'backgroundColor': 'green'}) for f in browser.files if f.endswith(browser.accept)]
         run_analyse_style = {'display': 'none'} if browser._isdir(browser.current_path) else {'display': 'block'}
@@ -309,7 +416,12 @@ simvaBrowserBody = html.Div(
             multiple=True
         ),
         html.Div(id='debug-browser', children=[]),
-        html.Div(id='content',children=[])
+        html.Div(id='content',children=[]),
+        # Live update plumbing: the timer is disabled until a session/activity is
+        # analysed and the user enables it, and the store only changes when the
+        # poller actually found new statements, which is what redraws the dashboard.
+        dcc.Interval(id='lrs-poll-interval', interval=10000, disabled=True, n_intervals=0),
+        dcc.Store(id='lrs-data-version', data=0),
     ]
 )
 
