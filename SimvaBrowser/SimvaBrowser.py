@@ -1,4 +1,5 @@
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
+import re
 
 import requests
 from jwt import JWT
@@ -15,6 +16,13 @@ LRS_MORE_KEYS = ("more_url", "more")
 # Upper bound on pages followed for a single query. A malformed LRS that keeps
 # advertising a next page would otherwise loop forever.
 LRS_MAX_PAGES = 200
+
+# How far back each incremental query reaches behind the previous one, in seconds.
+# An LRS can index a statement a moment after it was stored, so a window closed at
+# "now" would step over it and never return it. Re-reading a short tail catches such
+# late arrivals on a later poll; the statements seen again are dropped by identity,
+# so the overlap costs a request and not a duplicate.
+LRS_LAG_SECONDS = 60
 
 
 def extract_statements(payload):
@@ -130,6 +138,51 @@ def _join_url(base_url, path):
     return f"{base_url.rstrip('/')}/{path.lstrip('/')}"
 
 
+def utcnow():
+    """
+    Current UTC time.
+
+    Kept as a function so tests can drive the clock instead of reaching into the
+    datetime class, which cannot be patched.
+    """
+    return datetime.now(timezone.utc)
+
+
+def parse_lrs_instant(text):
+    """
+    Parse an ISO 8601 instant into an aware UTC datetime, or None if unreadable.
+
+    Avoids datetime.fromisoformat, which needs Python 3.7. The offset is applied
+    explicitly rather than dropped, so a value such as 11:00:00+02:00 is correctly
+    read as 09:00:00Z instead of being mistaken for UTC.
+    """
+    if not text:
+        return None
+    candidate = text.strip()
+    if candidate.endswith("Z"):
+        candidate = candidate[:-1] + "+00:00"
+    offset = timedelta(0)
+    # An offset sits after the time part; the date itself also contains dashes, so
+    # only look for one beyond the "T".
+    body, separator, tail = candidate.partition("T")
+    if separator:
+        match = re.search(r"([+-])(\d{2}):?(\d{2})$", tail)
+        if match:
+            sign = -1 if match.group(1) == "-" else 1
+            offset = sign * timedelta(hours=int(match.group(2)), minutes=int(match.group(3)))
+            tail = tail[:match.start()]
+    try:
+        parsed = datetime.strptime(f"{body}T{tail}"[:19], "%Y-%m-%dT%H:%M:%S")
+    except ValueError:
+        return None
+    return (parsed - offset).replace(tzinfo=timezone.utc)
+
+
+def format_lrs_instant(moment):
+    """Render an aware datetime as the UTC instant the LRS expects."""
+    return moment.astimezone(timezone.utc).isoformat().replace('+00:00', 'Z')
+
+
 class SimvaBrowser:
     """
     A browser interface for interacting with the SimVA (SimVascular) API.
@@ -182,6 +235,7 @@ class SimvaBrowser:
         self.actual_selected_file=None
         self.actual_file_url=None
         self.lrs_data=None
+        self.lrs_error=None
         self.analysis_ready=False
         self.analysis_is_activity=None
         self.analysis_object_id=None
@@ -192,6 +246,12 @@ class SimvaBrowser:
         self.session_endpoint=None
         self.activity_endpoint=None
         self.simva_api_url = self.secret_file.get("simva").get("api_url")
+        # Optional tuning for the incremental LRS reads; sensible default when absent.
+        simva_config=self.secret_file.get("simva") or {}
+        try:
+            self.lrs_lag_seconds=max(0, int(simva_config.get("lrs_lag_seconds", LRS_LAG_SECONDS)))
+        except (TypeError, ValueError):
+            self.lrs_lag_seconds=LRS_LAG_SECONDS
         jwt_parser = JWT()
         self.jwt = self.auth.get('oidc_auth_token', {}).get("access_token")
         self.access_token=jwt_parser.decode(self.jwt, do_verify=False)
@@ -226,15 +286,19 @@ class SimvaBrowser:
 
     def _check_health_endpoint(self):
         """
-        Check the health of the SimVA API endpoint.
+        Decide which SimVA API dialect this server speaks.
 
-        Determines the API endpoint paths based on the health check response.
-        Sets simlet_endpoint, session_endpoint, and activity_endpoint accordingly.
+        A 200 from the health endpoint means the current API, whose resources are
+        simlets/sessions/activities and whose statements come from the LRS. Anything
+        else is treated as the legacy API, which exposes studies/tests and stores its
+        traces in MinIO.
 
-        If the health endpoint returns 200, uses standard endpoints:
-            - simlets, sessions, activities
-        Otherwise, uses alternative endpoints:
-            - studies, tests, activities
+        That fallback is silent by nature and easy to fall into: a server that has
+        moved, renamed or protected its health route answers non-200 and every
+        statement request then goes to MinIO instead. The outcome is therefore always
+        logged, and `simva.use_lrs` in the secrets file overrides the probe for a
+        server known to speak the current API. Only set it on such a server, since it
+        also changes the field names read from every response.
         """
         health_url = f"{self.simva_api_url}health"
         headers = {'Content-Type': 'application/json'}
@@ -242,14 +306,32 @@ class SimvaBrowser:
         try:
             response = requests.get(health_url, headers=headers, timeout=5)
             self.health_ok = (response.status_code == 200)
-            self.simlet_endpoint="simlets"
-            self.session_endpoint="sessions"
-            self.activity_endpoint="activities"
-        except Exception:
+            if self.health_ok:
+                print("HEALTH : current SimVA API detected, statements will be read from the LRS")
+            else:
+                print(
+                    f"HEALTH : {health_url} answered {response.status_code}, falling back to the "
+                    "legacy API (studies/tests, traces from MinIO). If this server does speak the "
+                    "current API, set simva.use_lrs to true in client_secrets.json."
+                )
+        except Exception as e:
             self.health_ok = False
-            self.simlet_endpoint="studies"
-            self.session_endpoint="tests"
-            self.activity_endpoint="activities"
+            print(
+                f"HEALTH : {health_url} could not be reached ({e}), falling back to the legacy API "
+                "(studies/tests, traces from MinIO). If this server does speak the current API, "
+                "set simva.use_lrs to true in client_secrets.json."
+            )
+        forced = (self.secret_file.get("simva") or {}).get("use_lrs")
+        if forced is not None:
+            self.health_ok = bool(forced)
+            print(f"HEALTH : simva.use_lrs={forced} in the secrets file forces health_ok={self.health_ok}")
+        if self.health_ok:
+            self.simlet_endpoint = "simlets"
+            self.session_endpoint = "sessions"
+        else:
+            self.simlet_endpoint = "studies"
+            self.session_endpoint = "tests"
+        self.activity_endpoint = "activities"
 
     def _get_id_from_object(self, object, type, name):
         """
@@ -469,19 +551,40 @@ class SimvaBrowser:
             url = f"{self.simva_api_url}{self.simlet_endpoint}/{actual_simlet_id}/{self.session_endpoint}/{objectId}/lrs/statements"
         # Build the window without touching the stored watermark, so a failed request
         # leaves the previous window to be retried instead of being skipped.
+        # Both bounds trail the current time by the configured lag, so each query
+        # re-reads a short tail behind the last one. An LRS may index a statement just
+        # after it lands, and a window closed at "now" would step over that statement
+        # and never return it; the overlap brings it back on a later poll, where
+        # deduplication by statement identity keeps the data set clean.
         previous_until = self.until_time
-        now = datetime.now(timezone.utc).isoformat().replace('+00:00', 'Z')
-        params = {"until": now}
+        lag=timedelta(seconds=self.lrs_lag_seconds)
+        # The first read of a selection is not incremental, so it goes right up to the
+        # current time: holding back the newest seconds there would leave a live
+        # activity, whose whole history is younger than the lag, with no data at all.
+        # Later reads trail the clock by the lag and reach back before the previous
+        # upper bound, so a statement the LRS indexed late is returned again; the
+        # statements seen twice are dropped by identity, so the overlap costs a
+        # request and never a duplicate.
+        now_text = format_lrs_instant(utcnow() - (lag if previous_until is not None else timedelta(0)))
+        params = {"until": now_text}
         if previous_until is not None:
-            params["from"] = previous_until
-        print(f"LRS request {url} params={params}")
+            # If the stored watermark cannot be read back, fall back to a full read
+            # rather than querying a window we cannot bound.
+            previous = parse_lrs_instant(previous_until)
+            if previous is None:
+                print(f"LRS watermark {previous_until!r} is unreadable; reading the full history")
+            else:
+                params["from"] = format_lrs_instant(previous - lag)
+        print(f"LRS request {url} params={params} (lag={self.lrs_lag_seconds}s)")
         try:
             response = requests.get(url, headers=headers, params=params)
         except Exception as e:
             print(f"LRS request failed for {url}: {e}")
+            self.lrs_error = f"the LRS could not be reached ({e})"
             return None
         if response.status_code != 200:
             print(f"LRS request for {url} returned {response.status_code}: {response.text}")
+            self.lrs_error = f"the LRS answered {response.status_code} for {url}"
             return None
 
         statements = extract_statements(response.json())
@@ -502,9 +605,11 @@ class SimvaBrowser:
                 page = requests.get(next_url, headers=headers)
             except Exception as e:
                 print(f"LRS page request failed for {next_url}: {e}")
+                self.lrs_error = f"page {pages + 1} of the LRS result could not be reached ({e})"
                 return None
             if page.status_code != 200:
                 print(f"LRS page {next_url} returned {page.status_code}: {page.text}")
+                self.lrs_error = f"page {pages + 1} of the LRS result answered {page.status_code}"
                 return None
             data = page.json()
             statements.extend(extract_statements(data))
@@ -513,7 +618,8 @@ class SimvaBrowser:
 
         # Only now is the whole window proven to be read, so commit the watermark.
         self.from_time = previous_until
-        self.until_time = now
+        self.until_time = now_text
+        self.lrs_error = None
         print(f"LRS DATA : {len(statements)} statement(s) over {pages} page(s)")
         return statements
 
@@ -657,10 +763,12 @@ class SimvaBrowser:
         """
         Get the content to analyse for the current selection.
 
-        Tries, in order, the LRS statements of the current session/activity, the
-        presigned trace file of the selected activity, and finally the trace files of
-        every activity in the session. The LRS endpoints are newer than the MinIO
-        trace storage, so the trace files remain the reliable fallback.
+        On a server that speaks the current SimVA API the LRS is the only source, and
+        its statements are used as they are: no MinIO lookup is made, so a problem in
+        the LRS is reported as such instead of being masked by a trace file from a
+        store this deployment may not even use. Only a legacy server, recognised by a
+        failed health check, falls back to the presigned trace file and then to the
+        trace files of every activity in the session.
 
         Returns:
             tuple: (current_path, content) where content is a JSON string, or None
@@ -669,18 +777,19 @@ class SimvaBrowser:
         content = self.get_lrs_content()
         if content is not None:
             return self.current_path, content
-        if self.analysis_is_activity and self.actual_file_url is None:
-            activity_id=self._get_id_from_object(self.actual_activity, 'activity', 'id')
-            if activity_id is not None:
-                result=self._get_minio_url_from_simva_api(activity_id)
-                self.actual_file_url=result.get("url") if result is not None else None
-        current_path, content = self.get_file_content_from_url()
-        if content is not None:
-            return current_path, content
-        if not self.analysis_is_activity:
-            content = self._get_session_traces_content()
+        if not self.health_ok:
+            if self.analysis_is_activity and self.actual_file_url is None:
+                activity_id=self._get_id_from_object(self.actual_activity, 'activity', 'id')
+                if activity_id is not None:
+                    result=self._get_minio_url_from_simva_api(activity_id)
+                    self.actual_file_url=result.get("url") if result is not None else None
+            current_path, content = self.get_file_content_from_url()
             if content is not None:
-                return self.current_path, content
+                return current_path, content
+            if not self.analysis_is_activity:
+                content = self._get_session_traces_content()
+                if content is not None:
+                    return self.current_path, content
         return self.current_path, None
 
     def _update_files(self):
@@ -837,6 +946,7 @@ class SimvaBrowser:
         self.analysis_is_activity=None
         self.analysis_object_id=None
         self.lrs_data=None
+        self.lrs_error=None
         # Every new selection is read from scratch: carrying the previous window over
         # would make the next object's own history invisible to the incremental query.
         self.until_time=None

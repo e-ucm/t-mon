@@ -92,19 +92,35 @@ def get_analysis_outputs(pathname, dashboardpath):
     dashboard route to the URL so the T-Mon tabs open with the data already loaded.
     """
     run_analyse_style={'display': 'none'}
+    global poll_failures
+    # A fresh analysis starts a fresh polling run, so drop the previous failure count.
+    poll_failures = 0
     TMonWidgets.xapiData=[]
     out=[]
     err=[]
     current_file_path, content_string = browser.get_analysis_content()
     if content_string is None:
+        # Report why the LRS gave nothing: a failed request and a genuinely empty
+        # result need different fixes, and the old wording hid which one had happened.
+        detail = browser.lrs_error or "the LRS returned no statements for this selection"
+        source = "the LRS" if browser.health_ok else "the LRS and the trace store"
+        err.append(f"No xAPI statements available for {browser.current_path}: {detail}.")
         err.append(
-            f"No xAPI statements available for {browser.current_path}. "
-            "The LRS endpoint returned no data and no trace file could be retrieved."
+            "Statements are read from the LRS only; the trace store is used as a "
+            f"fallback on legacy servers. Checked: {source}."
         )
     else:
         load_from_string(
             content_string, TMonWidgets.xapiData, out, err
         )
+        if len(TMonWidgets.xapiData) == 0:
+            # An empty result is a valid answer, not a failure: say so instead of
+            # opening the dashboard on a blank set of charts.
+            err.append(
+                f"The LRS holds no statements yet for {browser.current_path}. "
+                "Statements appear here once the activity produces them; "
+                "turn on Live updates to keep this view current."
+            )
     div_list=[html.Div([
             html.Div(out),
             html.Div(err),
@@ -131,6 +147,11 @@ def reload_xapi_data_from_selection():
         return 0
     load_from_string(content, TMonWidgets.xapiData, [], [])
     return len(TMonWidgets.xapiData)
+
+
+# Consecutive failed polls, shown in the status line so a retry is visible rather than
+# silent. Reset whenever a read succeeds or a new analysis is started.
+poll_failures = 0
 
 
 # Dash callback to let the user choose how often the LRS is polled
@@ -167,10 +188,16 @@ def poll_lrs_data(n_intervals):
     Pull statements that arrived since the last poll and refresh the dashboard.
 
     Bumps `lrs-data-version` only when new statements were actually found, so the
-    charts and the data table redraw on real changes instead of on every tick. A
-    failed or empty response leaves the version alone, and the LRS watermark is only
-    advanced by a successful request, so nothing is skipped on a transient failure.
+    charts and the data table redraw on real changes instead of on every tick.
+
+    Data that lands after a poll is not lost: the query window trails the current time
+    by a lag and overlaps the previous window, so a late statement is re-read on a
+    later tick, and the LRS watermark only moves forward on a fully successful read.
+    Statements already held are dropped by identity, so the overlap and any repeated
+    delivery add nothing to the dashboard. A failed read leaves the version untouched
+    and is reported, and the next tick simply tries the same window again.
     """
+    global poll_failures
     try:
         current_browser=browser
         if current_browser is None:
@@ -189,17 +216,29 @@ def poll_lrs_data(n_intervals):
     )
     stamp=datetime.now().strftime("%H:%M:%S")
     if payload is None:
-        raise PreventUpdate
+        # Nothing moved forward, so the next tick re-reads the very same window.
+        poll_failures += 1
+        return (
+            None,
+            f"LRS unreachable at {stamp} - retrying next tick (attempt {poll_failures})",
+            str(len(current_browser.lrs_data))
+        )
 
     merged, added=merge_statements(current_browser.lrs_data, payload)
     if added == 0:
-        raise PreventUpdate
+        poll_failures = 0
+        return (
+            None,
+            f"No new statements at {stamp} - {len(merged)} total",
+            str(len(merged))
+        )
 
     current_browser.lrs_data=merged
     total=reload_xapi_data_from_selection()
+    poll_failures = 0
     print(f"POLL: {added} new statement(s) for {current_browser.current_path}, {total} total")
     return (
-        (n_intervals, added),
+        (n_intervals, added, total),
         f"+{added} new statement(s) at {stamp} - {total} total",
         str(total)
     )

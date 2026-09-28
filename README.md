@@ -60,6 +60,39 @@ After selected, all xAPI-SG statements in your JSON file will be processed (the 
 
 With the information extracted from the statements, the default set of visualizations will be displayed in different tabs in the notebook. See below for details about the visualizations included.
 
+### 4. Live updates (SIMVA)
+
+When the data comes from SIMVA, the panel below the tabs can pull statements that arrive while the
+dashboard is open:
+
+* Tick **Live updates** to start polling, and pick how often (5s to 300s).
+* Each poll reads every page the LRS advertises through `more_url`, merges the statements it has not
+  seen yet, and redraws only when something new actually arrived. The line under the controls reports
+  the last result, including when the LRS was unreachable and the next attempt is being retried.
+* Nothing is ever shown twice: statements already held are matched on their xAPI `id`, so repeating a
+  window adds nothing.
+
+An LRS can index a statement a moment after it is stored. To make sure such late arrivals are still
+picked up, every read looks a little behind the previous one and re-reads a short tail
+(`lrs_lag_seconds`, 60 by default, set under `simva` in `client_secrets.json`). Raise it if your
+server indexes slowly, lower it for a faster response. The first read of a selection is not
+incremental, so it is never held back.
+
+### If no statements are found
+
+T-Mon decides which SimVA API the server speaks from its `health` route. A server that has moved,
+renamed or protected that route answers non-200, and T-Mon then reads the legacy API and looks for
+traces in MinIO instead of the LRS. The startup log says which one was chosen:
+
+```
+HEALTH : current SimVA API detected, statements will be read from the LRS
+```
+
+If that line is missing and you see a fallback message, but your server does speak the current API,
+set `simva.use_lrs` to `true` in `client_secrets.json` to force it. Only do that on a current-API
+server, since it also changes the field names T-Mon reads from every response. When statements still
+cannot be found, the page reports the reason, for example the status the LRS answered.
+
 ## SIMVA
 
 ![simva logo](docs/images/logo-simva.png)
