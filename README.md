@@ -66,7 +66,7 @@ When the data comes from SIMVA, the panel below the tabs can pull statements tha
 dashboard is open:
 
 * Tick **Live updates** to start polling, and pick how often (5s to 300s).
-* Each poll reads every page the LRS advertises through `more_url`, merges the statements it has not
+* Each poll reads every page the LRS advertises through `more`, merges the statements it has not
   seen yet, and redraws only when something new actually arrived. The line under the controls reports
   the last result, including when the LRS was unreachable and the next attempt is being retried.
 * Nothing is ever shown twice: statements already held are matched on their xAPI `id`, so repeating a
@@ -74,9 +74,40 @@ dashboard is open:
 
 An LRS can index a statement a moment after it is stored. To make sure such late arrivals are still
 picked up, every read looks a little behind the previous one and re-reads a short tail
-(`lrs_lag_seconds`, 60 by default, set under `simva` in `client_secrets.json`). Raise it if your
+(`lrs_lag_seconds`, 60 by default, set under `lrs` in `client_secrets.json`). Raise it if your
 server indexes slowly, lower it for a faster response. The first read of a selection is not
 incremental, so it is never held back.
+
+### 5. Where the statements come from (SIMVA)
+
+Statements are read from the LRS itself, using the credentials `client_secrets.json` carries for it:
+
+```json
+"lrs": {
+    "endpoint": "https://<<SIMVA_LRS_HOST_SUBDOMAIN>>.<<SIMVA_EXTERNAL_DOMAIN>>/xAPI/",
+    "username": "<<SIMVA_LRS_USERNAME>>",
+    "password": "<<SIMVA_LRS_PASSWORD>>",
+    "lrs_lag_seconds": 60
+}
+```
+
+The query asks the LRS for the activity IRI SimVA files that activity under, or the session IRI for a
+whole session, with `related_activities` so it also matches the IRIs a statement repeats in its
+context. Every page is followed through the `more` cursor, so a selection yields its whole history
+rather than one page of it. The startup log says which way the read goes:
+
+```
+LRS : statements will be read from https://lrs.example.org/xapi/statements as lrsuser (statement IRIs under https://example.org)
+```
+
+Two things to know about it:
+
+* The IRI base is the SimVA external URL, which is not a service subdomain. Set
+  `simva.external_url` in `client_secrets.json` to state it; without it, T-Mon drops the first label
+  of `simva.api_url`, which is how the SimVA stack names its subdomains.
+* These credentials are the LRS account, not the signed-in user, so a read returns the statements of
+  the whole class for the selected activity or session, not only that user's. Leave the block out of
+  `client_secrets.json` to go through the SimVA API instead, which serves only what the user may see.
 
 ### If no statements are found
 

@@ -37,6 +37,11 @@ LRS_MAX_PAGES = 500
 # so the overlap costs a request and not a duplicate.
 LRS_LAG_SECONDS = 60
 
+# Seconds any single LRS request may take. A read walks a chain of pages, so one
+# request that never answers would leave the dashboard waiting on it forever, and a
+# read that gives up is retried with the very same window on the next poll anyway.
+LRS_REQUEST_TIMEOUT = 30
+
 
 def extract_statements(payload):
     """
@@ -787,7 +792,7 @@ class SimvaBrowser:
                 params["since"] = format_lrs_instant(previous - lag)
         print(f"LRS request {url} params={params} (lag={self.lrs_lag_seconds}s)")
         try:
-            response = requests.get(url, headers=headers, params=params, auth=auth)
+            response = requests.get(url, headers=headers, params=params, auth=auth, timeout=LRS_REQUEST_TIMEOUT)
         except Exception as e:
             print(f"LRS request failed for {url}: {e}")
             self.lrs_error = f"the LRS could not be reached ({e})"
@@ -797,12 +802,13 @@ class SimvaBrowser:
             self.lrs_error = f"the LRS answered {response.status_code} for {url}"
             return None
 
-        statements = extract_statements(response.json())
+        data=response.json()
+        statements = extract_statements(data)
         pages = 1
         visited = {url}
         # The next page already carries the window, so it is requested verbatim
         # instead of re-applying the window on top of the LRS cursor.
-        next_url = next_lrs_page_url(response.json(), page_base)
+        next_url = next_lrs_page_url(data, page_base)
         while next_url is not None:
             if next_url in visited:
                 print(f"LRS advertises an already visited page ({next_url}); stopping to avoid a loop")
@@ -849,10 +855,11 @@ class SimvaBrowser:
                 LRS ones for a direct read and None through the API.
 
         Returns:
-            The response, or None if the host could not be reached at all.
+            The response, or None if the request failed, be it an unreachable host or
+            an LRS that took longer than LRS_REQUEST_TIMEOUT to answer.
         """
         try:
-            return requests.get(url, headers=headers, auth=auth)
+            return requests.get(url, headers=headers, auth=auth, timeout=LRS_REQUEST_TIMEOUT)
         except Exception as e:
             print(f"LRS page request failed for {url}: {e}")
             return None
