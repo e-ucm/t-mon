@@ -83,6 +83,34 @@ def update_connection_status(input_value):
     else:
         return 'Not logged in'
     
+def publish_session_activities():
+    """
+    Tell the dashboard which activities the current selection is made of.
+
+    Only a whole session is a choice between activities: its statements cover all of
+    them, and the dashboard turns that into one button per activity. A single activity,
+    or a legacy server that keeps its statements in the trace store, leaves the list
+    empty and the dashboard falls back to labelling by activity id.
+
+    Returns:
+        list: The activities of the selection as [{"id": ..., "name": ...}].
+    """
+    if browser is None or browser.analysis_is_activity is not False:
+        TMonWidgets.sessionActivities=[]
+        return TMonWidgets.sessionActivities
+    activities=[]
+    for activity in browser.accepted_activities or []:
+        activity_id=browser._get_id_from_object(activity, 'activity', 'id')
+        if activity_id is None:
+            continue
+        activities.append({
+            "id": str(activity_id),
+            "name": browser._get_id_from_object(activity, 'activity', 'name') or str(activity_id)
+        })
+    TMonWidgets.sessionActivities=activities
+    return activities
+
+
 def get_analysis_outputs(pathname, dashboardpath):
     """
     Run the analysis over the current browser selection and build the callback outputs.
@@ -96,6 +124,9 @@ def get_analysis_outputs(pathname, dashboardpath):
     # A fresh analysis starts a fresh polling run, so drop the previous failure count.
     poll_failures = 0
     TMonWidgets.xapiData=[]
+    # The activity buttons belong to the selection, so they are restated with it rather
+    # than left over from the previous one.
+    publish_session_activities()
     out=[]
     err=[]
     current_file_path, content_string = browser.get_analysis_content()
@@ -335,6 +366,9 @@ def update_browser(n_clicks_parent, folder_n_clicks, file_n_clicks, n_clicks_run
             print(f"List_of_names : {list_of_names} - list_of_dates : {list_of_dates}")
             div_list = []
             TMonWidgets.xapiData = []
+            # An uploaded file belongs to no SimVA session, so the activity buttons of
+            # the previous selection do not apply to it.
+            TMonWidgets.sessionActivities = []
             nbError=0
             style={'display': 'block'}
             for c, n, d in zip(list_of_contents, list_of_names, list_of_dates):
