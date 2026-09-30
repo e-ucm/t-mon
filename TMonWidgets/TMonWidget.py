@@ -6,6 +6,20 @@ import json
 import TMonWidgets
 from LoadProcessStatements import resolve_actor_name_column, flatten_for_display
 from TMonWidgets.ActivityFilter import filter_df_by_activities, statements_activity_ids
+from TMonWidgets.ChartBuilder import (
+    AGGREGATION_LABELS,
+    CHART_TYPES,
+    COUNT_LABEL,
+    CREATED_CHARTS_PARAM,
+    MAX_CREATED_CHARTS,
+    build_chart,
+    chartable_columns,
+    decode_specs,
+    describe,
+    encode_spec,
+    normalise_spec,
+    numeric_columns,
+)
 from TMonWidgets.MultiSelector import searchValueFromMultiSelector
 from vis import xAPISGPlayersProgress, xAPISGVideosSeenSkipped
 from urllib.parse import unquote, urlencode
@@ -103,13 +117,43 @@ def hidden_activities_from_url(pathname):
     return [value for value in found.split(",") if value] if found else []
 
 
+def created_charts_from_url(pathname):
+    """
+    Read the charts a link asks for.
+
+    Args:
+        pathname (str): The dashboard URL, query parameters included.
+
+    Returns:
+        list: The chart descriptions named by the URL, empty when it names none.
+    """
+    return decode_specs(get_value_from_url(pathname or "", f"{CREATED_CHARTS_PARAM}="))
+
+
+def creator_controls_style(tab):
+    """
+    Return whether the creator row is shown, which is only in its own tab.
+
+    The row stays where it is in the layout so that the choices already made in it
+    survive a change of tab, and it is hidden everywhere else so that it does not sit
+    over the visualisations of the other tabs.
+
+    Args:
+        tab (str): The value of the open tab.
+
+    Returns:
+        dict: The style to show the row with.
+    """
+    return {'display': 'block'} if tab == 'create_tab' else {'display': 'none'}
+
+
 @callback(
-    [
-        Output('activity-filter-hidden', 'data'),
-        Output('activity-filter-div', 'children'),
-        Output('activity-filter-controls', 'style'),
-        Output('activity-filter-info', 'children'),
-    ],
+    # Declared without a list on purpose. A callback whose outputs are wrapped in a list
+    # is a multi-output one even when there is a single output, and Dash then unpacks
+    # the returned value as one element per output: a bare list would be spread over the
+    # outputs instead of being the value of the only one there is. Written this way the
+    # value is the value, list or not, which is what this callback answers with.
+    Output('activity-filter-hidden', 'data'),
     [
         Input({'type': 'activity-button', 'index': dash.dependencies.ALL}, 'n_clicks'),
         Input('activity-filter-all', 'n_clicks'),
@@ -117,41 +161,47 @@ def hidden_activities_from_url(pathname):
         # Bumped by the poller when statements arrive, so an activity that produces its
         # first ones joins the row instead of being filtered out of a view it is not in.
         Input("lrs-data-version", "data"),
-        # The URL is what a shared link carries, so a reload or a pasted link shows the
-        # same activities. Written by the same callback chain that hides the buttons, so
-        # the two settle on the same value instead of driving each other.
-        Input('url-t-mon', 'pathname'),
+        # The panel is revealed by a successful analysis, which is when the selection,
+        # and with it the statements, changes.
+        Input('output-t-mon', 'style'),
     ],
     [
         State('activity-filter-hidden', 'data'),
+        # The URL is read as a State, never as an Input: the dashboard writes its state
+        # into the URL, so an Input here would close a loop back into this callback.
+        State('url-t-mon', 'pathname'),
     ]
 )
-def update_activity_filter(button_n_clicks, all_n_clicks, none_n_clicks, lrs_data_version, pathname, hidden):
+def update_activity_filter(button_n_clicks, all_n_clicks, none_n_clicks, lrs_data_version,
+                           panel_style, hidden, pathname):
     """
-    Keep the activity buttons and the list of hidden activities in step.
+    Change which activities are out of the view, and drop what no longer applies.
 
     The store holds the activities that are *out* of the view rather than the ones in it,
     which is what makes a stale value harmless: the ids of another session are simply not
     in the data, so they hide nothing, and an activity that appears later is on until it
     is clicked.
 
-    The buttons are built from the statements currently loaded, so the row always offers
-    exactly the activities there is something to choose between.
+    Drawing the buttons is left to render_activity_filter, so that this is the only
+    callback that writes the store. Were it to draw the row as well, the store would have
+    a second writer and the two could disagree about which activities are out.
+
+    A new selection takes its state from the link, which is how a shared link or a reload
+    shows what it says, and drops the ids of activities the new selection does not have.
     """
     triggered = dash.callback_context.triggered
     triggered_prop_id = triggered[0]['prop_id'] if triggered else ''
     known = statements_activity_ids(TMonWidgets.xapiData)
     hidden = [str(value) for value in (hidden or [])]
     print(f"Activities : known={known} - hidden={hidden} - triggered={triggered_prop_id}")
-    if 'url-t-mon' in triggered_prop_id:
-        # Adopt what the link says. The URL is written from this same store, so the two
-        # always name the same view, whichever of the two is read first.
-        hidden = hidden_activities_from_url(pathname)
-    elif 'activity-filter-all' in triggered_prop_id:
+    if 'output-t-mon' in triggered_prop_id and panel_style == {"display": "block"}:
+        hidden = [activity_id for activity_id in hidden_activities_from_url(pathname)
+                  if activity_id in known]
+    elif 'activity-filter-all' in triggered_prop_id and int(all_n_clicks or 0) > 0:
         hidden = []
-    elif 'activity-filter-none' in triggered_prop_id:
+    elif 'activity-filter-none' in triggered_prop_id and int(none_n_clicks or 0) > 0:
         hidden = list(known)
-    elif 'activity-button' in triggered_prop_id:
+    elif 'activity-button' in triggered_prop_id and button_n_clicks and max(button_n_clicks) > 0:
         activity_id = str(json.loads(triggered_prop_id.rsplit('.n_clicks', 1)[0])['index'])
         # Toggling works on the activities that are in the view, since that is what the
         # user sees: the button they pressed leaves the view, and the hidden ones are
@@ -166,15 +216,41 @@ def update_activity_filter(button_n_clicks, all_n_clicks, none_n_clicks, lrs_dat
             visible = [known_id for known_id in known
                        if known_id == activity_id or known_id in visible]
         hidden = [known_id for known_id in known if known_id not in visible]
-    # Whatever the trigger, an id that names no activity of the data left behind is
-    # dropped: those are what a link to another session carries, they hide nothing, and
-    # keeping them would only put ids of another study in the next link written out.
-    hidden = [known_id for known_id in known if known_id in hidden]
     if len(known) < MIN_ACTIVITIES_TO_CHOOSE:
         # Nothing to choose between: a single activity, a selection that is an activity
         # itself, or a data set that names none. No row, and no state either, so such a
         # selection is never held to a filter that does not apply to it.
-        return [], [], {'display': 'none'}, ''
+        return []
+    # An id that names no activity of the data left behind is dropped: those are what a
+    # link to another session carries, they hide nothing, and keeping them would only put
+    # ids of another study in the next link written out.
+    return [known_id for known_id in known if known_id in hidden]
+
+
+@callback(
+    [
+        Output('activity-filter-div', 'children'),
+        Output('activity-filter-controls', 'style'),
+        Output('activity-filter-info', 'children'),
+    ],
+    [
+        Input('activity-filter-hidden', 'data'),
+        # New statements may name an activity that was not there to draw a button for.
+        Input("lrs-data-version", "data"),
+    ]
+)
+def render_activity_filter(hidden, lrs_data_version):
+    """
+    Draw the row of activity buttons for the statements currently loaded.
+
+    The buttons are built from the data rather than from a list kept alongside it, so
+    the row always offers exactly the activities there is something to choose between,
+    and one whose first statement has just arrived is there to be chosen.
+    """
+    known = statements_activity_ids(TMonWidgets.xapiData)
+    if len(known) < MIN_ACTIVITIES_TO_CHOOSE:
+        return [], {'display': 'none'}, ''
+    hidden = [str(value) for value in (hidden or [])]
     shown = [known_id for known_id in known if known_id not in hidden]
     buttons = [
         html.Button(
@@ -188,11 +264,64 @@ def update_activity_filter(button_n_clicks, all_n_clicks, none_n_clicks, lrs_dat
         for known_id in known
     ]
     return (
-        hidden,
         buttons,
         {'display': 'block'},
         f"{len(shown)} of {len(known)} activities shown",
     )
+
+
+@callback(
+    [
+        Output('created-charts', 'data'),
+        Output('chart-creator-status', 'children'),
+    ],
+    [
+        Input('chart-add', 'n_clicks'),
+        Input({'type': 'chart-remove', 'index': dash.dependencies.ALL}, 'n_clicks'),
+        # A new selection takes its charts from the link, for the same reason the
+        # activities do: this is where a shared link or a reload is read.
+        Input('output-t-mon', 'style'),
+    ],
+    [
+        State('chart-type', 'value'),
+        State('chart-x', 'value'),
+        State('chart-y', 'value'),
+        State('chart-aggregation', 'value'),
+        State('created-charts', 'data'),
+        # A State, never an Input, for the same reason as in update_activity_filter.
+        State('url-t-mon', 'pathname'),
+    ]
+)
+def update_created_charts(add_n_clicks, remove_n_clicks, panel_style, chart_type, chart_x,
+                          chart_y, chart_aggregation, charts, pathname):
+    """
+    Add and remove the charts the creator holds, and take them from a link.
+
+    This is the only callback that writes the list, so the store, the buttons that
+    remove a chart and the URL the dashboard carries it in never disagree.
+    """
+    triggered = dash.callback_context.triggered
+    triggered_prop_id = triggered[0]['prop_id'] if triggered else ''
+    charts = [chart for chart in (charts or []) if isinstance(chart, dict)]
+    status = ''
+    if 'output-t-mon' in triggered_prop_id and panel_style == {"display": "block"}:
+        charts = created_charts_from_url(pathname)
+    elif 'chart-add' in triggered_prop_id and int(add_n_clicks or 0) > 0:
+        spec = normalise_spec({
+            "type": chart_type, "x": chart_x, "y": chart_y, "aggregation": chart_aggregation
+        })
+        if spec is None:
+            status = 'Pick a column for the x axis first.'
+        elif len(charts) >= MAX_CREATED_CHARTS:
+            status = f'The dashboard holds {MAX_CREATED_CHARTS} charts at most, remove one first.'
+        else:
+            charts = charts + [spec]
+    elif 'chart-remove' in triggered_prop_id and remove_n_clicks and max(remove_n_clicks) > 0:
+        index = int(json.loads(triggered_prop_id.rsplit('.n_clicks', 1)[0])['index'])
+        if 0 <= index < len(charts):
+            charts = charts[:index] + charts[index + 1:]
+    print(f"Charts : {[describe(chart) for chart in charts]} - triggered={triggered_prop_id}")
+    return charts[:MAX_CREATED_CHARTS], status
 
 
 def filterObjectIdDependingTab(df, value, tab):
@@ -220,6 +349,15 @@ def filterObjectIdDependingTab(df, value, tab):
         Output("users-multi-dynamic-dropdown", "options"),
         Output('object-multi-dynamic-dropdown', "options"),
         Output('tabs-content', 'children'),
+        # The axes the creator offers are the columns the data actually has, so they are
+        # published from here, where the frame that names them lives.
+        Output('chart-x', 'options'),
+        Output('chart-y', 'options'),
+        # And the creator shows itself only in the tab it belongs to, so it does not sit
+        # over the other visualisations. Decided here because this is the callback that
+        # knows which tab is open, and the row keeps its place in the layout, which is
+        # what preserves the choices already made in it.
+        Output('chart-creator-controls', 'style'),
      ],
     Input('t-mon-tabs', 'value'),
     Input("users-multi-dynamic-dropdown", "search_value"),
@@ -232,8 +370,11 @@ def filterObjectIdDependingTab(df, value, tab):
     # The activities left out of the view, so clicking one of the buttons redraws
     # whatever tab is open with the statements of the remaining activities.
     Input("activity-filter-hidden", "data"),
+    # The charts to draw, so adding or removing one shows it without another round trip.
+    Input("created-charts", "data"),
 )
-def update_output(tab, user_search_value, user_value, object_search_value, object_value, lrs_data_version=None, hidden_activities=None):
+def update_output(tab, user_search_value, user_value, object_search_value, object_value,
+                  lrs_data_version=None, hidden_activities=None, created_charts=None):
     ctx = dash.callback_context
     triggered=ctx.triggered
     triggered_prop_id = ctx.triggered[0]['prop_id']
@@ -242,7 +383,7 @@ def update_output(tab, user_search_value, user_value, object_search_value, objec
     # Normalize the JSON data to a pandas DataFrame
     if ('object-multi-dynamic-dropdown' in triggered_prop_id or 'users-multi-dynamic-dropdown' in triggered_prop_id
             or 't-mon-tabs' in triggered_prop_id or 'lrs-data-version' in triggered_prop_id
-            or 'activity-filter-hidden' in triggered_prop_id):
+            or 'activity-filter-hidden' in triggered_prop_id or 'created-charts' in triggered_prop_id):
         if len(TMonWidgets.xapiData) > 0:
             df = pd.json_normalize(TMonWidgets.xapiData)
             df = resolve_actor_name_column(df)
@@ -253,6 +394,14 @@ def update_output(tab, user_search_value, user_value, object_search_value, objec
             filtered_df, user_unique_options=searchValueFromMultiSelector(df, "actor.name", user_search_value, user_value)
             filtered_df, object_unique_options=searchValueFromMultiSelector(filtered_df, "object.id", object_search_value, object_value)
             object_unique_options=filterObjectIdDependingTab(df, object_unique_options, tab)
+            # The creator is offered the axes the data has: any column on the x axis, and
+            # on the y axis only the ones holding a number, since nothing else can be
+            # summed or averaged. Counting statements needs no value at all.
+            x_options=[{'label': column, 'value': column} for column in chartable_columns(df)]
+            y_options=[{'label': COUNT_LABEL, 'value': COUNT_LABEL}] + [
+                {'label': column, 'value': column} for column in numeric_columns(df)
+            ]
+            creator_style=creator_controls_style(tab)
             if len(df) == 0:
                 # Deactivating the last activity empties the view on purpose. Say so
                 # rather than opening a tab of empty charts with no hint why. The link
@@ -271,6 +420,9 @@ def update_output(tab, user_search_value, user_value, object_search_value, objec
                             "is nothing to plot. Use the All button above to bring them back."
                         ),
                     ])),
+                    [],
+                    [],
+                    creator_style,
                 )
             if tab == 'home_tab':
                 tab_content = html.Div(html.Div(homepagecontent))
@@ -392,6 +544,33 @@ def update_output(tab, user_search_value, user_value, object_search_value, objec
                         #sort_by=[{'column_id': 'timestamp', 'direction': 'asc'}],
                     )
                 ])
+            elif tab == 'create_tab':
+                # The charts the creator holds, drawn from the same filtered statements
+                # every other tab reads, so they follow the activity buttons, the player
+                # and object selectors, and the live updates without being asked again.
+                content=[]
+                for index, spec in enumerate(created_charts or []):
+                    content.append(html.Div([
+                        html.Button('Remove', id={'type': 'chart-remove', 'index': index},
+                                    n_clicks=0, style={'backgroundColor': 'lightgray',
+                                                       'marginBottom': '5px'}),
+                        dcc.Graph(figure=build_chart(filtered_df, spec)),
+                    ]))
+                tab_content=html.Div(html.Div([
+                    html.H3('Your visualisations'),
+                    html.P(
+                        "Every chart you create is listed here and drawn from the statements the "
+                        "filters leave in the view. Add one with the row above: pick a chart type, "
+                        "the column for each axis and how to count or measure, then press Add chart."
+                    ),
+                ] + content) if content else [
+                    html.H3('No visualisation created yet'),
+                    html.P(
+                        "Pick a chart type, the column to put on each axis and how to count or "
+                        "measure the statements, then press Add chart. The chart is drawn here "
+                        "straight away."
+                    ),
+                ])
             else:
                 tab_content = html.Div()
             new_query_params = { 'tab': tab }
@@ -403,14 +582,21 @@ def update_output(tab, user_search_value, user_value, object_search_value, objec
                 # Only written when something is hidden, so a link to a whole session
                 # stays the short one it is without the parameter.
                 new_query_params[HIDDEN_ACTIVITIES_PARAM]=",".join(hidden_activities)
+            if created_charts and len(created_charts)>0:
+                # The charts a link carries, in the order they are drawn.
+                encoded = [encode_spec(spec) for spec in created_charts]
+                described = [value for value in encoded if value]
+                if described:
+                    new_query_params[CREATED_CHARTS_PARAM]=",".join(described)
             print(f"Query param url:{new_query_params}")
             # Construct a new query string with unique parameters
             new_query_string = urlencode(new_query_params, safe=" ")
             print(f"new_query_string: {new_query_string}")
-            return f"{new_query_string}", user_unique_options,object_unique_options, tab_content
+            return (f"{new_query_string}", user_unique_options, object_unique_options,
+                    tab_content, x_options, y_options, creator_style)
         else:
             url=f"tab=home_tab"
-            return url,[], [], html.Div(homepagecontent)
+            return url, [], [], html.Div(homepagecontent), [], [], creator_controls_style(tab)
     else:
         raise PreventUpdate
     
@@ -439,6 +625,38 @@ TMonBody=html.Div([
             html.Span(id='activity-filter-info', children='', style={'color': '#555'}),
         ]),
         html.Div(id='activity-filter-div', children=[], style={'margin': '5px 0'}),
+        # The creator: the description of a chart to draw, kept in the store so several
+        # can be held at once and carried in the URL. The charts themselves are drawn in
+        # the Create tab below, where the other visualisations are, and these controls
+        # are left in the layout rather than drawn by a callback so that a redraw never
+        # takes the choices already made in them back.
+        dcc.Store(id='created-charts', data=[]),
+        html.Div(id='chart-creator-controls', children=[
+            html.Span('Create a visualisation: ', style={'marginRight': '10px'}),
+            dcc.Dropdown(
+                id='chart-type',
+                options=[{'label': chart_type, 'value': chart_type} for chart_type in CHART_TYPES],
+                value='bar', clearable=False,
+                style={'display': 'inline-block', 'width': '110px', 'marginRight': '10px'}
+            ),
+            dcc.Dropdown(
+                id='chart-x', options=[], placeholder='on the x axis',
+                style={'display': 'inline-block', 'width': '230px', 'marginRight': '10px'}
+            ),
+            dcc.Dropdown(
+                id='chart-y', options=[], value=COUNT_LABEL, clearable=False,
+                style={'display': 'inline-block', 'width': '230px', 'marginRight': '10px'}
+            ),
+            dcc.Dropdown(
+                id='chart-aggregation',
+                options=[{'label': label, 'value': name}
+                         for name, label in AGGREGATION_LABELS.items()],
+                value='count', clearable=False,
+                style={'display': 'inline-block', 'width': '170px', 'marginRight': '10px'}
+            ),
+            html.Button('Add chart', id='chart-add', n_clicks=0),
+            html.Span(id='chart-creator-status', children='', style={'marginLeft': '10px', 'color': '#555'}),
+        ], style={'margin': '10px 0'}),
         html.Div(
             dcc.Tabs(id="t-mon-tabs", value="home_tab", children=[
                 dcc.Tab(label='HomePage', value='home_tab'),
@@ -449,7 +667,8 @@ TMonBody=html.Div([
                 dcc.Tab(label='Interactions', value='interaction_tab'),
                 dcc.Tab(label='Accessible', value='accessible_tab'),
                 dcc.Tab(label='Menu', value='menu_tab'),
-                dcc.Tab(label='xAPI Data', value='data_tab')
+                dcc.Tab(label='xAPI Data', value='data_tab'),
+                dcc.Tab(label='Create', value='create_tab')
             ])
         ),
         html.Div(id="tabs-content"),
