@@ -11,6 +11,7 @@ A description is kept as plain data, so the dashboard can hold several of them, 
 them whenever the data or the filters change, and carry them in a link.
 """
 import math
+import numbers
 
 import pandas as pd
 import plotly.express as px
@@ -65,11 +66,15 @@ def is_scalar(value):
     """
     if value is None:
         return False
-    if isinstance(value, float):
+    if isinstance(value, numbers.Number):
         # NaN is a cell a statement left out rather than a value, and it is the one
-        # float shape that cannot be plotted.
-        return not math.isnan(value)
-    return isinstance(value, (str, int, float, bool))
+        # number shape that cannot be plotted. A number read out of a DataFrame cell
+        # is a numpy scalar (np.int64, np.float64), which also carries no chart value.
+        try:
+            return not math.isnan(float(value))
+        except (TypeError, ValueError):
+            return True
+    return isinstance(value, (str, bool))
 
 
 def numeric_columns(df):

@@ -239,11 +239,11 @@ def flatten_for_display(df, max_items=25):
                         if isinstance(value, list) else None
                         for value in series
                     ]
+                out = out.drop(columns=[column])
             else:
                 out[column] = [
                     ", ".join(str(item) for item in value) if isinstance(value, list) and value else None
                     for value in series
                 ]
-            out = out.drop(columns=[column])
 
     return out
