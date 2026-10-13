@@ -15,6 +15,7 @@
   * **[SIMVA](#simva)**
   * **[xAPI-SG](#xapi-sg)**
   * **[Default visualizations](#default-visualizations)**
+  * **[Development](#development)**
 
 ## Introduction
 
@@ -286,3 +287,43 @@ Also, a bubble chart displaying access to each accessible as a function of time.
 For each selection-menu, a bar-chart displaying, for that menu, the number of times that each player selected each option.
 
 ![menu](docs/images/response_selected_for_each_person_in_menu_Inicio.png)
+
+## Development
+
+### Tests
+
+The test suite in `tests/` covers the pure logic both applications rely on: statement
+loading, actor resolution, activity filtering, chart specifications, the LRS URL
+helpers and the visualisations. The smoke tests import every module the applications
+load, so a module that breaks at import time fails here rather than on the server.
+
+Run them in a virtual environment that carries the dependencies:
+
+```
+python -m venv .venv
+source .venv/bin/activate
+pip install -r requirements-dev.txt
+python -m pytest
+```
+
+`requirements-dev.txt` adds `pytest` on top of the runtime requirements. Tests are
+plain pytest — no fixtures, servers or databases, just small DataFrames and dicts.
+
+CI runs the same two gates on every push: a compile check on every module
+(`python -m compileall -q .`) and the full test suite, plus a Docker build that fails
+the pipeline when the Dockerfile is broken.
+
+### Releases
+
+`__init__.py` at the repository root is the single source of the version. A release is
+a git tag of the form `v<version>`:
+
+```
+git tag v0.1.0
+git push origin v0.1.0
+```
+
+The Docker workflow builds and pushes `ghcr.io/e-ucm/t-mon` tagged with the version
+(and `latest`) only when the tag matches `__version__`, so a container whose tag
+disagrees with the code inside it is never published. The pipeline re-runs the lint and
+the tests before publishing.
