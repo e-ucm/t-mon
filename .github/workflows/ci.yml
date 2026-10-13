@@ -25,6 +25,11 @@ jobs:
       - name: Install dependencies
         run: pip install -r requirements-dev.txt
 
+      # The dashboard reads client_secrets.json at import time and the real file is
+      # gitignored, so the example stands in for it while the tests run.
+      - name: Provide client secrets for tests
+        run: cp client_secrets_example.json client_secrets.json
+
       # The lint script is `compileall`: the app ships as plain Python, and a module
       # with a syntax error is a broken release the same way a type error is for the API.
       - name: Lint (compile check)
