@@ -313,14 +313,29 @@ class SimvaBrowser:
             auth (dict): Authentication payload, expected to contain an
                 'oidc_auth_token' mapping with an 'access_token' entry.
             accept (str): Accepted content type for trace files.
-            ca_file (str, optional): Path to a CA bundle used for MinIO requests.
+            ca_file (str, optional): Path to a CA bundle (PEM carrying the root
+                CA) trusted for every outgoing HTTPS request: SimVA API, LRS and
+                MinIO. Defaults to web.ssl_cert_file from the secrets file, so a
+                deployment behind a private CA needs no code change.
             delimiter (str): Path delimiter used to build the virtual paths.
             client_secret_file (str): Name of the secrets file, resolved relative to
                 the parent directory of this module.
         """
         #GENERAL
-        basedir = os.path.abspath(f"{os.path.dirname(__file__)}/../")
+        basedir = os.path.abspath(f"{os.path.dirname(__file__)}/../../")
         self.secret_file=self._load_secret_file(os.path.join(basedir, client_secret_file))
+        # Every service this browser talks to (SimVA API, LRS, MinIO) is usually
+        # signed by the same private CA, so the trust anchor is resolved before the
+        # first request happens: an explicit constructor argument wins, the secrets
+        # file comes next, and None means the default verification (environment
+        # bundle included) applies unchanged. A file that is not there is reported and
+        # dropped rather than crashing every later request with an OSError.
+        if ca_file is None:
+            ca_file=(self.secret_file.get("web") or {}).get("ssl_cert_file")
+        if ca_file is not None and not os.path.isfile(ca_file):
+            print(f"SSL : CA bundle {ca_file} not found, using the default CA verification")
+            ca_file=None
+        self.ca_file=ca_file
 
         #SIMVA
         self.auth = auth
@@ -392,7 +407,6 @@ class SimvaBrowser:
 
         #MINIO
         self.accept = accept
-        self.ca_file = ca_file
         self.traces_folder = "output"
         self.delimiter = delimiter
         self.base_path = self.traces_folder + self.delimiter
@@ -491,7 +505,7 @@ class SimvaBrowser:
         headers = {'Content-Type': 'application/json'}
         print("HEALTH : Checking health endpoint...")
         try:
-            response = requests.get(health_url, headers=headers, timeout=5)
+            response = requests.get(health_url, headers=headers, timeout=5, verify=self.ca_file)
             self.health_ok = (response.status_code == 200)
             if self.health_ok:
                 print("HEALTH : current SimVA API detected, statements will be read from the LRS")
@@ -567,7 +581,7 @@ class SimvaBrowser:
         if self.jwt:
             headers['Authorization'] = f'Bearer {self.jwt}'
         url = f"{self.simva_api_url}{self.simlet_endpoint}"
-        response = requests.get(url, headers=headers)
+        response = requests.get(url, headers=headers, verify=self.ca_file)
         if response.status_code == 200:
             data = response.json()
             # Print the result
@@ -598,7 +612,7 @@ class SimvaBrowser:
             return []
         url = f"{self.simva_api_url}{self.simlet_endpoint}/{actual_simlet_id}/{self.session_endpoint}"
         print(f"URL for tests: {url}")
-        response = requests.get(url, headers=headers)
+        response = requests.get(url, headers=headers, verify=self.ca_file)
         if response.status_code == 200:
             data = response.json()
             return data
@@ -641,7 +655,7 @@ class SimvaBrowser:
             headers['Authorization'] = f'Bearer {self.jwt}'
         actual_simlet_id=self._get_id_from_object(self.actual_study, 'simlet', 'id')
         url = f"{self.simva_api_url}{self.simlet_endpoint}/{actual_simlet_id}/{self.session_endpoint}/{testId}"
-        response = requests.get(url, headers=headers)
+        response = requests.get(url, headers=headers, verify=self.ca_file)
         if response.status_code == 200:
             data = response.json()
             # Print the result
@@ -669,7 +683,7 @@ class SimvaBrowser:
             url = f"{self.simva_api_url}{self.simlet_endpoint}/{actual_simlet_id}/{self.session_endpoint}/{testId}/activities"
         else:
             url = f"{self.simva_api_url}/activities"
-        response = requests.get(url, headers=headers)
+        response = requests.get(url, headers=headers, verify=self.ca_file)
         if response.status_code == 200:
             data = response.json()
             # Print the result
@@ -693,7 +707,7 @@ class SimvaBrowser:
         if self.jwt:
             headers['Authorization'] = f'Bearer {self.jwt}'
         url = f"{self.simva_api_url}{self.activity_endpoint}/{activityId}/presignedurl"
-        response = requests.get(url, headers=headers)
+        response = requests.get(url, headers=headers, verify=self.ca_file)
         if response.status_code == 200:
             data = response.json()
             # Print the result
@@ -792,7 +806,7 @@ class SimvaBrowser:
                 params["since"] = format_lrs_instant(previous - lag)
         print(f"LRS request {url} params={params} (lag={self.lrs_lag_seconds}s)")
         try:
-            response = requests.get(url, headers=headers, params=params, auth=auth, timeout=LRS_REQUEST_TIMEOUT)
+            response = requests.get(url, headers=headers, params=params, auth=auth, timeout=LRS_REQUEST_TIMEOUT, verify=self.ca_file)
         except Exception as e:
             print(f"LRS request failed for {url}: {e}")
             self.lrs_error = f"the LRS could not be reached ({e})"
@@ -859,7 +873,7 @@ class SimvaBrowser:
             an LRS that took longer than LRS_REQUEST_TIMEOUT to answer.
         """
         try:
-            return requests.get(url, headers=headers, auth=auth, timeout=LRS_REQUEST_TIMEOUT)
+            return requests.get(url, headers=headers, auth=auth, timeout=LRS_REQUEST_TIMEOUT, verify=self.ca_file)
         except Exception as e:
             print(f"LRS page request failed for {url}: {e}")
             return None
@@ -934,7 +948,7 @@ class SimvaBrowser:
         if self.actual_file_url is not None:
             try:
                 # Send an HTTP GET request to the provided URL
-                response = requests.get(self.actual_file_url)
+                response = requests.get(self.actual_file_url, verify=self.ca_file)
                 
                 # Raise an exception if the request was unsuccessful (HTTP code other than 200)
                 response.raise_for_status()
@@ -989,7 +1003,7 @@ class SimvaBrowser:
             if not url:
                 continue
             try:
-                response=requests.get(url)
+                response=requests.get(url, verify=self.ca_file)
                 response.raise_for_status()
                 data=response.json()
             except Exception as e:

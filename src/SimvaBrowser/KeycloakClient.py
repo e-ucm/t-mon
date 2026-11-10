@@ -12,7 +12,7 @@ class KeycloakClient:
     def __init__(self, client_secret_file="client_secrets.json", homepage = True):
         self.flaskServer = Flask(__name__)
         self.flaskServer.wsgi_app = ProxyFix(self.flaskServer.wsgi_app, x_for=1, x_host=1, x_port=1, x_proto=1, x_prefix=1)
-        basedir = os.path.abspath(f"{os.path.dirname(__file__)}/../")
+        basedir = os.path.abspath(f"{os.path.dirname(__file__)}/../../")
         self.flaskServer.config.update({
             'SECRET_KEY': 'SomethingNotEntirelySecret',
             'TESTING': True,
@@ -25,6 +25,22 @@ class KeycloakClient:
             'OIDC_INTROSPECTION_AUTH_METHOD': 'client_secret_post'
         })
         self.oidc = OpenIDConnect(self.flaskServer)
+        # Trust the PKI that signed the Keycloak certificate before any OIDC traffic
+        # happens: a deployment behind a private CA (SIMVA's root CA) would otherwise
+        # fail every token, userinfo and introspection request with
+        # ssl.SSLCertVerificationError. requests and the standard library both honour
+        # these environment variables, and setdefault keeps an explicit deployment
+        # value in control.
+        ca_file = self.oidc.client_secrets.get('ssl_cert_file')
+        if ca_file:
+            if os.path.isfile(ca_file):
+                os.environ.setdefault('REQUESTS_CA_BUNDLE', ca_file)
+                os.environ.setdefault('SSL_CERT_FILE', ca_file)
+                logger.info(f'Trusting CA bundle from ssl_cert_file: {ca_file}')
+            else:
+                logger.warning(
+                    f'ssl_cert_file {ca_file} not found, using the default CA verification'
+                )
         issuer_url = self.oidc.client_secrets.get('issuer')
         client_id = self.oidc.client_secrets.get('client_id')
         host=self.oidc.client_secrets.get('host')

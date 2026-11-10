@@ -1,6 +1,6 @@
 name: Docker
 
-# A tag is the release. The tag must name the version in __init__.py: a container
+# A tag is the release. The tag must name the version in src/__init__.py: a container
 # whose tag disagrees with the code inside it is worse than no container at all.
 on:
   push:
@@ -53,7 +53,7 @@ jobs:
       - name: Check the tag names the version
         run: |
           set -euo pipefail
-          VERSION=$(awk -F'"' '/^__version__/{print $2; exit}' __init__.py)
+          VERSION=$(awk -F'"' '/^__version__/{print $2; exit}' src/__init__.py)
           TAG="${GITHUB_REF_NAME}"
           if [ "$TAG" != "v$VERSION" ]; then
             echo "::error::tag $TAG does not match __version__ v$VERSION"

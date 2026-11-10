@@ -12,6 +12,9 @@
     * **[1. Select your mode](#1-select-your-mode)**
     * **[2. Select xAPI-SG traces file](#2-select-xapi-sg-traces-file)**
     * **[3. Run the analysis](#3-run-the-analysis)**
+    * **[4. Live updates (SIMVA)](#4-live-updates-simva)**
+    * **[5. Where the statements come from (SIMVA)](#5-where-the-statements-come-from-simva)**
+    * **[6. Private certificate authorities (SIMVA)](#6-private-certificate-authorities-simva)**
   * **[SIMVA](#simva)**
   * **[xAPI-SG](#xapi-sg)**
   * **[Default visualizations](#default-visualizations)**
@@ -124,6 +127,36 @@ If that line is missing and you see a fallback message, but your server does spe
 set `simva.use_lrs` to `true` in `client_secrets.json` to force it. Only do that on a current-API
 server, since it also changes the field names T-Mon reads from every response. When statements still
 cannot be found, the page reports the reason, for example the status the LRS answered.
+
+### 6. Private certificate authorities (SIMVA)
+
+A SIMVA deployment signs its TLS certificates with its own root CA, so T-Mon would fail
+every login, API, LRS and trace download with
+`ssl.SSLCertVerificationError: ... self-signed certificate in certificate chain` unless
+it is told to trust that CA. No verification is ever disabled; a trust anchor is added.
+
+Point `web.ssl_cert_file` in `client_secrets.json` at a PEM file holding the root CA
+(the fullchain works too, since it carries the root at the end):
+
+```json
+"web": {
+    "ssl_cert_file": "/root/.tmon/certs/ca/rootCA.pem"
+}
+```
+
+The simva-infra stack already fills this key with the certificate it mounts into the
+t-mon container, so a deployment there needs nothing else. The value is used for:
+
+* the OIDC requests to Keycloak, through the `REQUESTS_CA_BUNDLE` and `SSL_CERT_FILE`
+  environment variables, which `requests` and the standard library honour;
+* every SimVA API, LRS and MinIO request the dashboard makes.
+
+Deployments can also set those two environment variables themselves, which then take
+precedence over the secrets file. The startup log names the bundle being trusted:
+
+```
+Trusting CA bundle from ssl_cert_file: /root/.tmon/certs/ca/rootCA.pem
+```
 
 ## SIMVA
 
@@ -315,7 +348,7 @@ the pipeline when the Dockerfile is broken.
 
 ### Releases
 
-`__init__.py` at the repository root is the single source of the version. A release is
+`src/__init__.py` is the single source of the version. A release is
 a git tag of the form `v<version>`:
 
 ```
