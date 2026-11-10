@@ -330,7 +330,8 @@ loading, actor resolution, activity filtering, chart specifications, the LRS URL
 helpers and the visualisations. The smoke tests import every module the applications
 load, so a module that breaks at import time fails here rather than on the server.
 
-Run them in a virtual environment that carries the dependencies:
+Run them in a virtual environment that carries the dependencies, on Python 3.12 —
+the version CI runs and the Docker image ships:
 
 ```
 python -m venv .venv
