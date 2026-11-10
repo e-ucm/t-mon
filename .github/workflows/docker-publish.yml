@@ -25,6 +25,10 @@ jobs:
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v4
 
+      # Build the image so a broken Dockerfile fails the pipeline, without pushing
+      # anywhere. Publishing happens on tags (see docker-publish.yml).
+      - name: Build image
+
       - name: Build image and check health
         run: bash .github/scripts/ci-services.sh .
 
