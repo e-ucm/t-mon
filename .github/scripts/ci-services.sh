@@ -9,6 +9,9 @@
 set -euo pipefail
 
 MON_DIR="${1:-.}"
+# Bind mounts below need an absolute path: docker resolves a relative -v source
+# as a named volume, which would silently mount nothing.
+MON_DIR="$(cd "${MON_DIR}" && pwd)"
 
 MON_IMAGE="t-mon:ci"
 MON_CONTAINER="ci-t-mon"
@@ -46,7 +49,13 @@ cleanup() {
 trap cleanup EXIT
 
 docker rm -f "${MON_CONTAINER}" >/dev/null 2>&1 || true
-docker run -d --name "${MON_CONTAINER}" "${MON_IMAGE}" >/dev/null
+# The image ships without client_secrets.json on purpose: a deployment mounts the
+# real one into /app (see the simva-infra 21-tmon compose file). The health check
+# mounts the same file the same way, so the container starts exactly as it does
+# in a deployment instead of dying at import time on the missing file.
+docker run -d --name "${MON_CONTAINER}" \
+  -v "${MON_DIR}/client_secrets.json:/app/client_secrets.json:ro" \
+  "${MON_IMAGE}" >/dev/null
 
 url="http://localhost:8050/"
 probe="import urllib.request,sys; sys.exit(0 if urllib.request.urlopen('${url}', timeout=5).status == 200 else 1)"
