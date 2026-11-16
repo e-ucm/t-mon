@@ -22,19 +22,17 @@ flask=KeycloakClient(homepage=False)
 )
 def login_logout_button_displayed(main):
     if flask.oidc.user_loggedin:
-        return "Logout", {'display': 'None'}
-    else:
-        return "Login", {'display': 'block',
+        return "Logout", {'display': 'block',
                          'width': '100%',
-                'height': '60px',
-                'lineHeight': '60px',
-                'borderWidth': '1px',
-                'borderStyle': 'dashed',
-                'borderRadius': '5px',
-                'textAlign': 'center',
-                'margin': '10px'}  
-
-# Dash callback to handle login button click
+                 'height': '60px',
+                 'lineHeight': '60px',
+                 'borderWidth': '1px',
+                 'borderStyle': 'dashed',
+                 'borderRadius': '5px',
+                 'textAlign': 'center',
+                 'margin': '10px'}
+    else:
+        return "Login", {"display": "None"}
 @callback(
     Output('login-logout', 'children'),
     [Input('login-logout-button', 'n_clicks')]
@@ -60,7 +58,6 @@ def account_button(main):
     else:
         return None, {'display': 'none'}
 
-# Dash callback to handle login button click
 @callback(
     Output('account', 'children'),
     [Input('account-button', 'n_clicks')]
@@ -274,7 +271,6 @@ def poll_lrs_data(n_intervals):
         str(total)
     )
 
-# Dash callback to handle login button click
 @callback(
     Output('browser_div', 'children'),
     Input('main-login', 'children'), 
@@ -306,6 +302,70 @@ def init_storage(main, pathname):
         if not browser._isdir(browser.current_path):
             run_analyse_style = {'display': 'block'}
         print(f'Study : {browser.actual_study} -Activity : {browser.actual_activity} - File : {browser.actual_selected_file}')
+        # Store studies in TMonWidgets for access by the dashboard
+        TMonWidgets.accepted_studies = browser.accepted_studies
+        
+        # Build simlet tiles for the browser panel root level if studies are available
+        # and we are at the base path (studies list level)
+        if (TMonWidgets.accepted_studies and 
+            browser.current_path == browser.base_path and
+            len(TMonWidgets.accepted_studies) > 0):
+            first_study = TMonWidgets.accepted_studies[0]
+            simlet_id = browser._get_id_from_object(first_study, 'simlet', 'id')
+            simlet_name = browser._get_id_from_object(first_study, 'simlet', 'name') or simlet_id
+            tiles_content = html.A(
+                html.Div([
+                    html.Div(
+                        simlet_name[:30] + ("..." if len(simlet_name) > 30 else ""),
+                        style={
+                            'fontFamily': 'Inter',
+                            'fontSize': 14,
+                            'fontWeight': '500',
+                            'color': '#078493',
+                            'padding': '12px',
+                            'height': '60px',
+                            'display': 'flex',
+                            'alignItems': 'center',
+                            'textOverflow': 'ellipsis',
+                            'whiteSpace': 'nowrap',
+                        }
+                    ),
+                    html.Div(
+                        f"ID: {simlet_id}" if simlet_id else "",
+                        style={
+                            'fontFamily': 'Inter',
+                            'fontSize': 11,
+                            'color': '#8ec8c7',
+                            'padding': '0 12px 12px',
+                            'borderTop': '1px solid rgba(255,255,255,0.1)',
+                            'width': '100%',
+                        }
+                    ),
+                ],
+                    style={
+                        'backgroundColor': '#fcfcfc',
+                        'border': '1px solid rgba(255,255,255,0.1)',
+                        'borderRadius': 8,
+                        'width': '250px',
+                        'height': '180px',
+                        'margin': '16px',
+                        'display': 'inline-block',
+                        'verticalAlign': 'top',
+                        'transition': 'transform 0.2s',
+                    }
+                ),
+                href=f"/dashboard/study/{simlet_id}/",
+                style={
+                    'textDecoration': 'none',
+                    'color': 'inherit',
+                }
+            )
+            # Show simlet tiles instead of folder buttons at root level
+            folder_buttons = [tiles_content]
+        else:
+            # Normal folder buttons for navigation
+            folder_buttons = [html.Button(f"{f.get('name')} ({f.get('id')})", id={'type': 'folder-button', 'index': f.get('id')}, n_clicks=0) for f in browser.dirs]
+        
         actual_study=browser._get_id_from_object(browser.actual_study, 'simlet', 'name') if browser.actual_study is not None else "Select a study"
         actual_test=browser._get_id_from_object(browser.actual_test, 'session', 'name') if browser.actual_test is not None else "Select an test"
         actual_activity=browser._get_id_from_object(browser.actual_activity, 'activity', 'name') if browser.actual_activity is not None else "Select an activity"
@@ -322,7 +382,7 @@ def init_storage(main, pathname):
         return appLayout
     else:
         return html.Div([
-                html.H4("Connect to your SIMVA account to access to your data or Drag and Drop / Select file to visualize your data."),
+                html.H4("Connect to your SIMVA account to access to your data."),
                 html.H3(id='current-path', style={'display': 'none'}),
                 html.H4(id='current-study', style={'display': 'none'}),
                 html.H4(id='current-test', style={'display': 'none'}),
@@ -483,7 +543,8 @@ simvaBrowserBody = html.Div(
                 'borderStyle': 'dashed',
                 'borderRadius': '5px',
                 'textAlign': 'center',
-                'margin': '10px'
+                'margin': '10px',
+                'display': 'None'
             },
             # Allow multiple files to be uploaded
             multiple=True

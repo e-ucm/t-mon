@@ -49,6 +49,90 @@ homepagecontent=[
    html.H3('Please select another tab to see default visualisations with this data.')
 ]
 
+
+def render_simlet_tiles(studies):
+    """
+    Render a grid of simlet (study) tiles using TMON.figcraft design tokens.
+    
+    Args:
+        studies (list): List of study objects from the SimVA API.
+        
+    Returns:
+        html.Div: A grid of simlet tiles.
+    """
+    if not studies:
+        return html.Div("No studies available. Please log in and load a study.")
+    
+    tiles = []
+    for i, study in enumerate(studies):
+        simlet_id = study.get("id") or study.get("name", f"Study {i+1}")
+        simlet_name = study.get("name") or str(simlet_id)
+        
+        tile = html.A(
+            html.Div([
+                html.Div(
+                    simlet_name[:50] + ("..." if len(simlet_name) > 50 else ""),
+                    style={
+                        'fontFamily': INTER_FONT,
+                        'fontSize': 14,
+                        'fontWeight': '500',
+                        'color': TEXT_PRIMARY,
+                        'padding': '12px',
+                        'height': '60px',
+                        'display': 'flex',
+                        'alignItems': 'center',
+                        'textOverflow': 'ellipsis',
+                        'whiteSpace': 'nowrap',
+                    }
+                ),
+                html.Div(
+                    f"ID: {simlet_id}",
+                    style={
+                        'fontFamily': INTER_FONT,
+                        'fontSize': 11,
+                        'color': BRAND_SOFT,
+                        'padding': '0 12px 12px',
+                        'borderTop': f'1px solid rgba(255,255,255,0.1)',
+                        'width': '100%',
+                    }
+                ),
+            ],
+                style={
+                    'backgroundColor': LIGHT_CARD,
+                    'border': '1px solid rgba(255,255,255,0.1)',
+                    'borderRadius': 8,
+                    'width': f'{SIMLET_TILE_WIDTH}px',
+                    'height': f'{SIMLET_TILE_HEIGHT}px',
+                    'margin': f'{SIMLET_TILE_MARGIN}px',
+                    'display': 'inline-block',
+                    'verticalAlign': 'top',
+                    'transition': 'transform 0.2s',
+                }
+            ),
+            href=f"/dashboard/study/{simlet_id}/",
+            style={
+                'textDecoration': 'none',
+                'color': 'inherit',
+            }
+        )
+        tiles.append(tile)
+        
+        # Add row break after every 4 tiles
+        if (i + 1) % 4 == 0 and i < len(studies) - 1:
+            tiles.append(html.Div(style={'clear': 'both'}))
+    
+    # Fill remaining space if less than 4 in last row
+    remaining = len(studies) % 4
+    if remaining > 0:
+        for _ in range(4 - remaining):
+            tiles.append(html.Div(style={
+                'width': f'{SIMLET_TILE_WIDTH}px',
+                'height': f'{SIMLET_TILE_HEIGHT}px',
+                'backgroundColor': 'transparent',
+            }))
+    
+    return html.Div(tiles, style={'padding': '20px'})
+
 @callback(
     [
         Output('t-mon-tabs', 'value'),
@@ -84,6 +168,10 @@ def update_tab(style, stateUrl):
         return tab, user_value, object_value
     else:
         raise PreventUpdate
+
+
+# Make studies available to the dashboard
+TMonWidgets.accepted_studies = getattr(TMonWidgets, "accepted_studies", [])
 
 
 def activity_name_of(activity_id):
@@ -425,7 +513,14 @@ def update_output(tab, user_search_value, user_value, object_search_value, objec
                     creator_style,
                 )
             if tab == 'home_tab':
-                tab_content = html.Div(html.Div(homepagecontent))
+                # Display simlet tiles if studies are available, otherwise show default content
+                if TMonWidgets.accepted_studies:
+                    tab_content = html.Div(
+                        render_simlet_tiles(TMonWidgets.accepted_studies),
+                        style={'padding': '20px'}
+                    )
+                else:
+                    tab_content = html.Div(html.Div(homepagecontent))
             elif tab == 'progress_tab':
                 content=[]
                 content.append(html.H3('Player Progress Throw Serious game'))
@@ -600,11 +695,72 @@ def update_output(tab, user_search_value, user_value, object_search_value, objec
     else:
         raise PreventUpdate
     
+# Design tokens from TMON.figcraft
+# Brand colors
+BRAND_PRIMARY = "#078493"
+BRAND_SOFT = "#8ec8c7"
+TEXT_PRIMARY = "#fff"
+TEXT_SECONDARY = "#3c6d7a"
+SURFACE_SUNKEN = "#e8e5e2"
+
+# Original design tokens
+# Figma design tokens from TMON.figcraft
+DARK_BACKGROUND = "#1e1e1e"
+LIGHT_CARD = "#fcfcfc"
+INTER_FONT = "Inter"
+SIDEBAR_HEIGHT = 108
+TOP_BAR_HEIGHT = 38
+
+# Simlet tiles design
+SIMLET_TILE_WIDTH = 250
+SIMLET_TILE_HEIGHT = 180
+SIMLET_TILE_MARGIN = 16
+SIMLET_TITLE_MAX_LINES = 2
+
 TMonHeader=html.Div([
-    html.H1(children='T-Mon'),
-    html.Hr(),
-    html.H2(children='Select JSON xAPI-SG file to process and see visualizations'),
-])
+    html.Div([
+        # Logo section - TMON with Mountain glyph
+        html.Div([
+            html.Div("TMON", style={
+                'fontFamily': INTER_FONT,
+                'fontWeight': 'Semi Bold',
+                'fontSize': 17,
+                'color': '#078493',
+                'margin': '0',
+                'letterSpacing': '0',
+            }),
+        ], style={'display': 'flex', 'alignItems': 'center', 'gap': '8'}),
+
+        # Sidebar toggle button (mobile)
+        html.Button('☰', id='sidebar-toggle', n_clicks=0, style={
+            'display': 'none',
+            'background': 'none',
+            'border': 'none',
+            'color': '#fff',
+            'fontSize': 20,
+            'padding': '4px 8px',
+            'cursor': 'pointer',
+        }),
+    ], style={
+        'height': f'{TOP_BAR_HEIGHT}px',
+        'alignItems': 'center',
+        'padding': '0 20px',
+        'backgroundColor': DARK_BACKGROUND,
+        'color': '#fff',
+    }),
+    html.Hr(style={'borderColor': 'rgba(255,255,255,0.1)', 'margin': '8px 0'}),
+    html.H2(children='Select JSON xAPI-SG file to process and see visualizations', style={
+        'margin': '0',
+        'color': '#fff',
+        'fontFamily': INTER_FONT,
+    }),
+], style={
+    'backgroundColor': DARK_BACKGROUND,
+    'color': '#fff',
+    'margin': '0',
+})
+
+TMonSidebar=html.Div(id='sidebar', children=[])  # Will be populated by callbacks
 
 TMonBody=html.Div([
     dcc.Location(id='url-t-mon', refresh=False), # Location component for URL handling

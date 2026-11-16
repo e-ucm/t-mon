@@ -1,15 +1,16 @@
 from dash import Dash, html
-from TMonWidgets import SimvaBrowserWidget, TMonWidget
+from TMonWidgets.SimvaBrowserWidget import flask, simvaBrowserBody, LoginLogoutBody
+from TMonWidgets import TMonWidget
 
 # Initialize Dash app with Flask server
-app = Dash(__name__, server=SimvaBrowserWidget.flask.flaskServer, serve_locally=True)
+app = Dash(__name__, server=flask.flaskServer, serve_locally=True)
 
 # Layout of the dashboard
 app.layout=html.Div(
     [
-        SimvaBrowserWidget.LoginLogoutBody,
         TMonWidget.TMonHeader,
-        SimvaBrowserWidget.simvaBrowserBody,
+        LoginLogoutBody,
+        simvaBrowserBody,
         TMonWidget.TMonBody,
         TMonWidget.TMonFooter,
     ]
