@@ -24,7 +24,7 @@ def render_simlet_tiles(studies) -> dash.html.Div
 **Tile HTML Structure**:
 ```html
 <div style="...">  <!-- Tile container -->
-  <a href="/dashboard/study/{id}/">  <!-- Clickable link -->
+  <a href="/simlet/{id}">  <!-- Clickable link -->
     <div style="...">  <!-- Study name -->
       {name[:30] + ("..." if len(name) > 30 else "")}
     </div>
@@ -56,7 +56,7 @@ if (TMonWidgets.accepted_studies and
 - Uses first study from `TMonWidgets.accepted_studies[0]`
 - Shows study name (truncated at 30 chars with ellipsis)
 - Shows study ID below the name
-- Tile links to `/dashboard/study/{id}/`
+- Tile links to `/simlet/{id}`
 
 ### Design Tokens Used
 

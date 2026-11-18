@@ -5,7 +5,7 @@ from dash.dependencies import Input, Output, State
 from dash.exceptions import PreventUpdate
 import json
 import TMonWidgets
-from TMonWidgets.TMonWidget import HEADER_BUTTON_STYLE
+from TMonWidgets.TMonWidget import HEADER_BUTTON_STYLE, render_simlet_tiles
 #Import LoadProcessStatements.py
 from LoadProcessStatements import load_from_string, load_players_info_from_uploaded_content
 # Import SimvaBrowser class from SimvaBrowser.py
@@ -15,25 +15,40 @@ from SimvaBrowser.KeycloakClient import KeycloakClient
 from datetime import datetime
 flask=KeycloakClient(homepage=False)
 
+# Base style of the local-file drop zone. Visibility is decided by the active
+# tab and by whether the user is logged in.
+UPLOAD_STYLE = {
+    'width': '100%',
+    'height': '60px',
+    'lineHeight': '60px',
+    'borderWidth': '1px',
+    'borderStyle': 'dashed',
+    'borderRadius': '5px',
+    'textAlign': 'center',
+    'margin': '10px',
+}
+
+
+def upload_allowed(active_tab):
+    """Whether local files may be uploaded in the current state."""
+    return active_tab == 'upload' and bool(flask.oidc.user_loggedin)
+
+
 # Dash callback to handle login button click
 @callback(
     [Output('login-logout-button', 'children'),
-     Output('upload-data','style')],
-    [Input('main-login', 'children')]
+     Output('upload-data','style'),
+     Output('upload-login-notice','children')],
+    [Input('main-login', 'children'),
+     Input('app-tabs', 'value')]
 )
-def login_logout_button_displayed(main):
-    if flask.oidc.user_loggedin:
-        return "Logout", {'display': 'block',
-                         'width': '100%',
-                 'height': '60px',
-                 'lineHeight': '60px',
-                 'borderWidth': '1px',
-                 'borderStyle': 'dashed',
-                 'borderRadius': '5px',
-                 'textAlign': 'center',
-                 'margin': '10px'}
-    else:
-        return "Login", {"display": "None"}
+def login_logout_button_displayed(main, active_tab):
+    # The drop zone lives in the Upload tab, and uploading needs a SIMVA login.
+    # The tab stays visible when logged out so the notice explains why it is empty.
+    style = dict(UPLOAD_STYLE)
+    style['display'] = 'block' if upload_allowed(active_tab) else 'none'
+    notice = '' if flask.oidc.user_loggedin else 'Please log in to upload files.'
+    return ("Logout" if flask.oidc.user_loggedin else "Login"), style, notice
 @callback(
     Output('login-logout', 'children'),
     [Input('login-logout-button', 'n_clicks')]
@@ -158,11 +173,11 @@ def get_analysis_outputs(pathname, dashboardpath):
             html.Hr(),
         ])]
     print(f"Pathname : {pathname} - dashboardpath : {dashboardpath}")
-    actual_study=browser._get_id_from_object(browser.actual_study, 'simlet', 'name') if browser.actual_study is not None else "Select a study"
+    actual_simlet=browser._get_id_from_object(browser.actual_simlet, 'simlet', 'name') if browser.actual_simlet is not None else "Select a simlet"
     actual_test=browser._get_id_from_object(browser.actual_test, 'session', 'name') if browser.actual_test is not None else "Select an test"
     actual_activity=browser._get_id_from_object(browser.actual_activity, 'activity', 'name') if browser.actual_activity is not None else "Select an activity"
     tmon_style = {'display': 'none'} if len(err) > 0 else {'display': 'block'}
-    return browser.current_path, actual_study, actual_test, actual_activity, [], [], run_analyse_style, html.Div(div_list), tmon_style, f"{pathname}{dashboardpath}"
+    return browser.current_path, actual_simlet, actual_test, actual_activity, [], [], run_analyse_style, html.Div(div_list), tmon_style, f"{pathname}{dashboardpath}"
 
 
 def reload_xapi_data_from_selection():
@@ -274,6 +289,98 @@ def poll_lrs_data(n_intervals):
         str(total)
     )
 
+def browser_path_from_dashboard_url(pathname, base_path):
+    """
+    Translate a dashboard simlet URL into the browser's directory-style path.
+
+    A simlet tile links to ``/simlet/<id>``. The browser
+    navigates a flat ``output/<id>/`` tree, so the simlet id has to be lifted out
+    of the dashboard URL rather than copied verbatim.
+
+    Args:
+        pathname (str): The URL the app was opened at.
+        base_path (str): The browser's root directory.
+
+    Returns:
+        str: The browser path for that URL, or the root when it names no simlet.
+    """
+    if not pathname or pathname == '/' or '/dashboard' not in pathname:
+        return base_path
+    tail = pathname.split('/dashboard', 1)[1].lstrip('/')
+    parts = [part for part in tail.split('/')
+             if part and '=' not in part]  # drop `tab=home_tab` and query values
+    if parts and parts[0] == 'simlet':
+        parts = parts[1:]
+    if not parts:
+        return base_path
+    return base_path + '/'.join(parts) + '/'
+
+
+def is_root_path(path):
+    """Whether a browser path is the studies-list root of the current account."""
+    if not isinstance(path, str):
+        # A cleared path (e.g. the empty Div a logged-out callback writes back)
+        # is not a navigable browser path, so treat it as the root.
+        return True
+    global browser
+    try:
+        base = browser.base_path
+    except (NameError, AttributeError):
+        base = 'output/'
+    current = path.rstrip('/')
+    return current in ('', str(base or '').rstrip('/'))
+
+
+def render_simlet_section(studies, id_getter):
+    """
+    Build the grid of simlet tiles shown by the SIMVA tab at the root level.
+
+    The SimVA API names its fields ``simlet_id``/``simlet_name``, while the
+    dashboard grid reads plain ``id``/``name`` keys, so the studies are
+    normalised here before they are handed to it.
+
+    Args:
+        studies: Raw simlet objects from the SimVA API.
+        id_getter: Callable ``(simlet, type, name) -> value`` of the browser.
+
+    Returns:
+        html.Div: A "Simlets" heading followed by one tile per simlet.
+    """
+    normalized = []
+    for simlet in studies or []:
+        simlet_id = id_getter(simlet, 'simlet', 'id')
+        if simlet_id is None:
+            continue
+        normalized.append({
+            'id': simlet_id,
+            'name': id_getter(simlet, 'simlet', 'name') or str(simlet_id),
+        })
+    return html.Div([
+        html.H3('Simlets', style={'margin': '0 0 4px 20px', 'fontFamily': 'Inter'}),
+        render_simlet_tiles(normalized),
+    ])
+
+
+@callback(
+    [Output('current-simlet', 'style'),
+     Output('current-test', 'style'),
+     Output('current-activity', 'style'),
+     Output('parent-directory', 'style')],
+    Input('current-path', 'children'),
+)
+def toggle_browser_chrome(path):
+    """Hide the selection headings and parent button on the studies list.
+
+    At the root there is nothing selected and nowhere to go back to: the SIMVA
+    tab shows only the Simlets grid. Deeper in the tree the browser navigation
+    is shown as before. A logged-out visitor never sees it, including the `..`
+    button, whatever path the URL happens to carry.
+    """
+    visible = bool(flask.oidc.user_loggedin) and not is_root_path(path)
+    style = {'display': 'block'} if visible else {'display': 'none'}
+    return style, style, style, style
+
+
 @callback(
     Output('browser_div', 'children'),
     Input('main-login', 'children'), 
@@ -285,15 +392,14 @@ def init_storage(main, pathname):
         global browser
         browser = SimvaBrowser(session)
         if pathname is None or pathname == '/':
-            browser.current_path= browser.base_path
+            browser.current_path = browser.base_path
+        elif '/dashboard' in pathname:
+            # A tile links to /dashboard/tab=home_tab: restore the
+            # matching browser selection instead of falling back to the root.
+            browser.current_path = browser_path_from_dashboard_url(
+                pathname, browser.base_path)
         else:
-            # Find the position of "/dashboard/"
-            index = pathname.find("/dashboard")
-            # Slice the string up to the index if "/dashboard/" is found
-            if index != -1:
-                newpathname = pathname[:index]
-            else:
-                newpathname = pathname
+            newpathname = pathname
             if newpathname.endswith(".json/"):
                 newpathname=newpathname[:((len(newpathname)-1))]
             browser.current_path=browser.base_path + newpathname[1:]
@@ -304,80 +410,29 @@ def init_storage(main, pathname):
         run_analyse_style = {'display': 'none'}
         if not browser._isdir(browser.current_path):
             run_analyse_style = {'display': 'block'}
-        print(f'Study : {browser.actual_study} -Activity : {browser.actual_activity} - File : {browser.actual_selected_file}')
+        print(f'simlet : {browser.actual_simlet} -Activity : {browser.actual_activity} - File : {browser.actual_selected_file}')
         # Store studies in TMonWidgets for access by the dashboard
         TMonWidgets.accepted_studies = browser.accepted_studies
         
-        # Build simlet tiles for the browser panel root level if studies are available
-        # and we are at the base path (studies list level)
-        if (TMonWidgets.accepted_studies and 
-            browser.current_path == browser.base_path and
-            len(TMonWidgets.accepted_studies) > 0):
-            first_study = TMonWidgets.accepted_studies[0]
-            simlet_id = browser._get_id_from_object(first_study, 'simlet', 'id')
-            simlet_name = browser._get_id_from_object(first_study, 'simlet', 'name') or simlet_id
-            tiles_content = html.A(
-                html.Div([
-                    html.Div(
-                        simlet_name[:30] + ("..." if len(simlet_name) > 30 else ""),
-                        style={
-                            'fontFamily': 'Inter',
-                            'fontSize': 14,
-                            'fontWeight': '500',
-                            'color': '#078493',
-                            'padding': '12px',
-                            'height': '60px',
-                            'display': 'flex',
-                            'alignItems': 'center',
-                            'textOverflow': 'ellipsis',
-                            'whiteSpace': 'nowrap',
-                        }
-                    ),
-                    html.Div(
-                        f"ID: {simlet_id}" if simlet_id else "",
-                        style={
-                            'fontFamily': 'Inter',
-                            'fontSize': 11,
-                            'color': '#8ec8c7',
-                            'padding': '0 12px 12px',
-                            'borderTop': '1px solid rgba(255,255,255,0.1)',
-                            'width': '100%',
-                        }
-                    ),
-                ],
-                    style={
-                        'backgroundColor': '#fcfcfc',
-                        'border': '1px solid rgba(255,255,255,0.1)',
-                        'borderRadius': 8,
-                        'width': '250px',
-                        'height': '180px',
-                        'margin': '16px',
-                        'display': 'inline-block',
-                        'verticalAlign': 'top',
-                        'transition': 'transform 0.2s',
-                    }
-                ),
-                href=f"/dashboard/study/{simlet_id}/",
-                style={
-                    'textDecoration': 'none',
-                    'color': 'inherit',
-                }
-            )
-            # Show simlet tiles instead of folder buttons at root level
-            folder_buttons = [tiles_content]
+        # At the studies-list root show the whole Simlets grid instead of the
+        # folder buttons and the one-tile preview the browser used to show.
+        if browser.current_path == browser.base_path:
+            folder_buttons = [render_simlet_section(
+                TMonWidgets.accepted_studies, browser._get_id_from_object)]
         else:
-            # Normal folder buttons for navigation
             folder_buttons = [html.Button(f"{f.get('name')} ({f.get('id')})", id={'type': 'folder-button', 'index': f.get('id')}, n_clicks=0) for f in browser.dirs]
         
-        actual_study=browser._get_id_from_object(browser.actual_study, 'simlet', 'name') if browser.actual_study is not None else "Select a study"
+        actual_simlet=browser._get_id_from_object(browser.actual_simlet, 'simlet', 'name') if browser.actual_simlet is not None else "Select a simlet"
         actual_test=browser._get_id_from_object(browser.actual_test, 'session', 'name') if browser.actual_test is not None else "Select an test"
         actual_activity=browser._get_id_from_object(browser.actual_activity, 'activity', 'name') if browser.actual_activity is not None else "Select an activity"
+        chrome_style = ({'display': 'none'} if browser.current_path == browser.base_path
+                        else {'display': 'block'})
         appLayout = html.Div([
             html.H3(id='current-path', children=browser.current_path, style={'display': 'none'}),
-            html.H4(id='current-study', children=actual_study),
-            html.H4(id='current-test', children=actual_test),
-            html.H4(id='current-activity', children=actual_activity),
-            html.Button('..', id='parent-directory', n_clicks=0, style={'display': 'block'}),
+            html.H4(id='current-simlet', children=actual_simlet, style=chrome_style),
+            html.H4(id='current-test', children=actual_test, style=chrome_style),
+            html.H4(id='current-activity', children=actual_activity, style=chrome_style),
+            html.Button('..', id='parent-directory', n_clicks=0, style=chrome_style),
             html.Div(id='folders-div', children=folder_buttons),
             html.Div(id='files-div', children=file_buttons),
             html.Button('Run Analyse', id='run-analyse', n_clicks=0, style=run_analyse_style),
@@ -387,7 +442,7 @@ def init_storage(main, pathname):
         return html.Div([
                 html.H4("Connect to your SIMVA account to access to your data."),
                 html.H3(id='current-path', style={'display': 'none'}),
-                html.H4(id='current-study', style={'display': 'none'}),
+                html.H4(id='current-simlet', style={'display': 'none'}),
                 html.H4(id='current-test', style={'display': 'none'}),
                 html.H4(id='current-activity', style={'display': 'none'}),
                 html.Button('..', id='parent-directory', n_clicks=0, style={'display': 'none'}),
@@ -396,9 +451,45 @@ def init_storage(main, pathname):
                 html.Button('Run Analyse', id='run-analyse', n_clicks=0, style={'display': 'none'}),
             ])
 
+def load_uploaded_files(list_of_contents, list_of_names, list_of_dates):
+    """
+    Load local xAPI-SG files into the shared statement list.
+
+    Used by the Upload tab and by the legacy path where no SIMVA browser is
+    open, so a dropped file is handled the same way in both modes.
+    """
+    div_list = []
+    TMonWidgets.xapiData = []
+    # An uploaded file belongs to no SimVA session, so the activity buttons of
+    # a previous selection do not apply to it.
+    TMonWidgets.sessionActivities = []
+    nbError = 0
+    style = {'display': 'block'}
+    for c, n, d in zip(list_of_contents or [], list_of_names or [], list_of_dates or []):
+        out, err = [], []
+        div_list.append(html.H5(n))
+        div_list.append(html.H6(datetime.fromtimestamp(d)))
+        load_players_info_from_uploaded_content(c, n, TMonWidgets.xapiData, out, err)
+        div_list.append(html.Div(out))
+        div_list.append(html.Div(err))
+        if len(err) > 0:
+            nbError += 1
+        div_list.append(html.Hr())
+    if nbError == len(list_of_names or []):
+        style = {'display': 'none'}
+    return div_list, style
+
+
+def uploaded_outputs(div_list, style):
+    """The ten callback outputs for a local upload: clear the browser, show the log."""
+    empty = html.Div()
+    return (empty, empty, empty, empty, empty, empty,
+            {'display': 'none'}, div_list, style, "/dashboard/tab=home_tab")
+
+
 @callback(
     [Output('current-path', 'children'),
-     Output('current-study', 'children'),
+     Output('current-simlet', 'children'),
      Output('current-test', 'children'),
      Output('current-activity', 'children'),
      Output('folders-div', 'children'),
@@ -416,37 +507,27 @@ def init_storage(main, pathname):
     [State('current-path', 'children'),
      State('url', 'pathname'),
      State('upload-data', 'filename'),
-    State('upload-data', 'last_modified')]
+     State('upload-data', 'last_modified'),
+     State('app-tabs', 'value')]
 )
-def update_browser(n_clicks_parent, folder_n_clicks, file_n_clicks, n_clicks_run_analyse, list_of_contents, current_path, statepathname, list_of_names, list_of_dates):
+def update_browser(n_clicks_parent, folder_n_clicks, file_n_clicks, n_clicks_run_analyse,
+                   list_of_contents, current_path, statepathname, list_of_names,
+                   list_of_dates, active_tab):
+    # In the Upload tab a dropped file is local even if a SIMVA session is open
+    # in the other tab, so it must not be read as a SimVA selection.
+    if upload_allowed(active_tab) and list_of_names:
+        div_list, style = load_uploaded_files(list_of_contents, list_of_names, list_of_dates)
+        return uploaded_outputs(div_list, style)
     try: 
         browser
         if browser == None:
             raise NameError("Browser is null.")
     except NameError:
         print("Well, it WASN'T defined after all!")
-        if list_of_names:
+        if list_of_names and flask.oidc.user_loggedin:
             print(f"List_of_names : {list_of_names} - list_of_dates : {list_of_dates}")
-            div_list = []
-            TMonWidgets.xapiData = []
-            # An uploaded file belongs to no SimVA session, so the activity buttons of
-            # the previous selection do not apply to it.
-            TMonWidgets.sessionActivities = []
-            nbError=0
-            style={'display': 'block'}
-            for c, n, d in zip(list_of_contents, list_of_names, list_of_dates):
-                out, err = [], []
-                div_list.append(html.H5(n))
-                div_list.append(html.H6(datetime.fromtimestamp(d)))
-                load_players_info_from_uploaded_content(c, n, TMonWidgets.xapiData, out, err)
-                div_list.append(html.Div(out))
-                div_list.append(html.Div(err))
-                if len(err) > 0 : 
-                    nbError+=1
-                div_list.append(html.Hr())
-            if nbError == len(list_of_names):
-                style={'display': 'none'}
-            return html.Div(),html.Div(),html.Div(),html.Div(),html.Div(),html.Div(),{'display': 'none'}, div_list, style, f"/dashboard/tab=home_tab"
+            div_list, style = load_uploaded_files(list_of_contents, list_of_names, list_of_dates)
+            return uploaded_outputs(div_list, style)
         else:
             return html.Div(),html.Div(),html.Div(),html.Div(),html.Div(),html.Div(),{'display': 'none'}, html.Div(), {'display': 'none'}, "/"
     else:
@@ -497,6 +578,13 @@ def update_browser(n_clicks_parent, folder_n_clicks, file_n_clicks, n_clicks_run
             elif button_id['type'] == 'file-button':
                 browser.current_path = browser.current_path + button_id["index"]
             pathname=browser.current_path.replace(browser.base_path, "/")
+            # Entering a simlet from the browser should carry the same dashboard
+            # URL a Simlets tile uses, with its home tab selected.
+            if (button_id['type'] == 'folder-button' and browser.actual_simlet is not None
+                    and browser.actual_test is None):
+                simlet_id = browser._get_id_from_object(browser.actual_simlet, 'simlet', 'id')
+                if simlet_id is not None:
+                    pathname = f"/simlet/{simlet_id}"
         else:
             print("Nothing to do ! Prevent update")
             raise PreventUpdate
@@ -509,21 +597,27 @@ def update_browser(n_clicks_parent, folder_n_clicks, file_n_clicks, n_clicks_run
             analysis_path=pathname.rstrip('/')
             print(f"Auto analysis for {analysis_path} (is_activity={browser.analysis_is_activity})")
             return get_analysis_outputs(analysis_path, dashboardpath)
-        folder_buttons = [html.Button(f"{f.get('name')} ({f.get('id')})", id={'type': 'folder-button', 'index': f.get("id")}, n_clicks=0) for f in browser.dirs]
+        if browser.current_path == browser.base_path:
+            # Coming back up with ".." lands on the studies list again, so show
+            # the same Simlets grid as on a fresh load of "/".
+            folder_buttons = [render_simlet_section(
+                TMonWidgets.accepted_studies, browser._get_id_from_object)]
+        else:
+            folder_buttons = [html.Button(f"{f.get('name')} ({f.get('id')})", id={'type': 'folder-button', 'index': f.get("id")}, n_clicks=0) for f in browser.dirs]
         file_buttons = [html.Button(f, id={'type': 'file-button', 'index': f}, n_clicks=0, style={'backgroundColor': 'green'}) for f in browser.files if f.endswith(browser.accept)]
         run_analyse_style = {'display': 'none'} if browser._isdir(browser.current_path) else {'display': 'block'}
         print("Pathname:", pathname)
-        actual_study=browser._get_id_from_object(browser.actual_study, 'simlet', 'name') if browser.actual_study is not None else "Select a study"
+        actual_simlet=browser._get_id_from_object(browser.actual_simlet, 'simlet', 'name') if browser.actual_simlet is not None else "Select a simlet"
         actual_test=browser._get_id_from_object(browser.actual_test, 'session', 'name') if browser.actual_test is not None else "Select an test"
         actual_activity=browser._get_id_from_object(browser.actual_activity, 'activity', 'name') if browser.actual_activity is not None else "Select an activity"
-        return browser.current_path, actual_study,actual_test, actual_activity, folder_buttons, file_buttons, run_analyse_style, html.H1(""), {'display': 'none'}, pathname
+        return browser.current_path, actual_simlet,actual_test, actual_activity, folder_buttons, file_buttons, run_analyse_style, html.H1(""), {'display': 'none'}, pathname
 
 simvaBrowserBody = html.Div(
     [
         dcc.Location(id='url', refresh=False), # Location component for URL handling
         html.Div(id='browser_div', children=[
                 html.H3(id='current-path', style={'display': 'none'}),
-                html.H4(id='current-study'),
+                html.H4(id='current-simlet'),
                 html.H4(id='current-test'),
                 html.H4(id='current-activity'),
                 html.Button('..', id='parent-directory', n_clicks=0, style={'display': 'none'}),
@@ -532,28 +626,7 @@ simvaBrowserBody = html.Div(
                 html.Button('Run Analyse', id='run-analyse', n_clicks=0, style={'display': 'none'}),
             ]
         ),
-        dcc.Upload(
-            id='upload-data',
-            children=html.Div([
-                'Drag and Drop or ',
-                html.A('Select Files')
-            ]),
-            style={
-                'width': '100%',
-                'height': '60px',
-                'lineHeight': '60px',
-                'borderWidth': '1px',
-                'borderStyle': 'dashed',
-                'borderRadius': '5px',
-                'textAlign': 'center',
-                'margin': '10px',
-                'display': 'None'
-            },
-            # Allow multiple files to be uploaded
-            multiple=True
-        ),
         html.Div(id='debug-browser', children=[]),
-        html.Div(id='content',children=[]),
         # Live update plumbing: the timer is disabled until a session/activity is
         # analysed and the user enables it, and the store only changes when the
         # poller actually found new statements, which is what redraws the dashboard.
@@ -561,4 +634,27 @@ simvaBrowserBody = html.Div(
         dcc.Store(id='lrs-data-version', data=0),
     ]
 )
+
+# Local-file drop zone, revealed by the Upload tab. It is one component shared
+# with the browser callbacks, so there is never a second `upload-data` id.
+TMonUploadPanel = html.Div(
+    id='upload-panel',
+    style={'display': 'none', 'padding': '20px'},
+    children=[
+        html.H3('Upload xAPI-SG files'),
+        html.P('Select one or more JSON files to analyse after logging in to SIMVA.'),
+        html.Div(id='upload-login-notice', children='',
+                 style={'color': '#b34700', 'margin': '10px 0'}),
+        dcc.Upload(
+            id='upload-data',
+            children=html.Div(['Drag and Drop or ', html.A('Select Files')]),
+            style=dict(UPLOAD_STYLE, display='none'),
+            multiple=True,
+        ),
+    ],
+)
+
+# Both a local upload and a SIMVA analysis log their result here, so the log is
+# outside the two tab panels and stays visible whichever mode is active.
+TMonContent = html.Div(id='content', children=[])
 

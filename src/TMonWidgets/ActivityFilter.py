@@ -3,7 +3,7 @@ Grouping of xAPI statements by the activity they belong to.
 
 SimVA records the activity a statement belongs to twice in its context, both times as
 an IRI ending in `/activities/<id>`: the full one, which nests the activity in its
-session and study, and the standalone one under `parent`. Reading the id off either is
+session and simlet, and the standalone one under `parent`. Reading the id off either is
 what lets the dashboard offer one button per activity of a session, and what lets it
 leave an activity out of the charts without touching the data it holds.
 
@@ -55,7 +55,7 @@ def activity_id_of_iri(iri):
     Return the activity id an IRI names, or None when it names something else.
 
     Args:
-        iri (str): An activity IRI, either the one nested in a session and study or
+        iri (str): An activity IRI, either the one nested in a session and simlet or
             the standalone one.
 
     Returns:

@@ -42,7 +42,7 @@ The T-Mon API has been assessed for AI agent readiness. Key gaps and decisions:
   - `BRAND_SOFT = "#8ec8c7"` - secondary text color
   - `LIGHT_CARD = "#fcfcfc"` - card background
   - `INTER_FONT = "Inter"` - font family
-- **Tile Structure**: Each tile shows study name + ID, clickable to `/dashboard/study/{id}/`
+- **Tile Structure**: Each tile shows study name + ID, clickable to `/simlet{id}/`
 - **Layout**: Responsive grid (4 tiles per row) with 16px margins
 - **Fallback**: If no studies loaded, shows default "Please select another tab" message
 

@@ -293,7 +293,7 @@ class SimvaBrowser:
 
         browser = SimvaBrowser(auth)
         studies = browser.accepted_studies
-        browser.select_study(study_id)
+        browser.select_simlet(simlet_id)
         tests = browser.accepted_tests
         browser.select_test(test_id)
         activities = browser.accepted_activities
@@ -339,11 +339,11 @@ class SimvaBrowser:
 
         #SIMVA
         self.auth = auth
-        self.study_directories=[]
+        self.simlet_directories=[]
         self.accepted_studies=[]
         self.accepted_tests=[]
         self.accepted_activities=[]
-        self.actual_study=None
+        self.actual_simlet=None
         self.actual_test=None
         self.actual_activity=None
         self.actual_selected_file=None
@@ -474,10 +474,10 @@ class SimvaBrowser:
             is_activity (bool): True for a single activity, False for a session.
 
         Returns:
-            str or None: The IRI, or None when the study, test or external URL is
+            str or None: The IRI, or None when the simlet, test or external URL is
                 missing, in which case no query can address this selection.
         """
-        simlet_id=self._get_id_from_object(self.actual_study, 'simlet', 'id')
+        simlet_id=self._get_id_from_object(self.actual_simlet, 'simlet', 'id')
         if is_activity:
             session_id=self._get_id_from_object(self.actual_test, 'session', 'id')
             return simva_statement_iri(
@@ -571,11 +571,11 @@ class SimvaBrowser:
         Load accepted studies from the SimVA API.
 
         Sends a GET request to the simlets endpoint with JWT authorization.
-        Populates accepted_studies and study_directories from the response.
+        Populates accepted_studies and simlet_directories from the response.
 
         Sets:
-            self.accepted_studies (list): List of study objects from the API.
-            self.study_directories (list): List of directories with study id/name.
+            self.accepted_studies (list): List of simlet objects from the API.
+            self.simlet_directories (list): List of directories with simlet id/name.
         """
         headers = {'Content-Type': 'application/json'}
         if self.jwt:
@@ -585,9 +585,9 @@ class SimvaBrowser:
         if response.status_code == 200:
             data = response.json()
             # Print the result
-            print("STUDY : Data received:", data)
+            print("simlet : Data received:", data)
             self.accepted_studies=data
-            self.study_directories=[{"id":f"{self._get_id_from_object(dir, 'simlet', 'id')}/","name": self._get_id_from_object(dir, 'simlet', 'name')} for dir in self.accepted_studies]
+            self.simlet_directories=[{"id":f"{self._get_id_from_object(dir, 'simlet', 'id')}/","name": self._get_id_from_object(dir, 'simlet', 'name')} for dir in self.accepted_studies]
         else:
             print(f"Error: {response.text}")
 
@@ -595,10 +595,10 @@ class SimvaBrowser:
         """
         Load selected simlet tests list from the SimVA API.
 
-        Retrieves tests for the currently selected study/simlet.
+        Retrieves tests for the currently selected simlet/simlet.
 
         Args:
-            None (uses self.actual_study to get the simlet id)
+            None (uses self.actual_simlet to get the simlet id)
 
         Returns:
             list or None: List of test objects, or None if simlet id is not available.
@@ -606,7 +606,7 @@ class SimvaBrowser:
         headers = {'Content-Type': 'application/json'}
         if self.jwt:
             headers['Authorization'] = f'Bearer {self.jwt}'
-        actual_simlet_id=self._get_id_from_object(self.actual_study, 'simlet', 'id')
+        actual_simlet_id=self._get_id_from_object(self.actual_simlet, 'simlet', 'id')
         print(f"actual_simlet_id: {actual_simlet_id}")
         if actual_simlet_id is None:
             return []
@@ -620,20 +620,20 @@ class SimvaBrowser:
             print(f"Error: {response.text}")
             return None
     
-    def _list_test_from_study(self, study):
+    def _list_test_from_simlet(self, simlet):
         """
-        List tests from a study object.
+        List tests from a simlet object.
 
         Args:
-            study (dict): A study object containing a 'tests' list.
+            simlet (dict): A simlet object containing a 'tests' list.
 
         Returns:
             list: List of test objects loaded from the API.
         """
         tests=[]
-        if study is not None:
-            print(study)
-            for testid in study.get("tests"):
+        if simlet is not None:
+            print(simlet)
+            for testid in simlet.get("tests"):
                 print("Test :"+ testid)
                 test=self._load_selected_test_from_simva_api(testid)
                 if test is not None:
@@ -653,7 +653,7 @@ class SimvaBrowser:
         headers = {'Content-Type': 'application/json'}
         if self.jwt:
             headers['Authorization'] = f'Bearer {self.jwt}'
-        actual_simlet_id=self._get_id_from_object(self.actual_study, 'simlet', 'id')
+        actual_simlet_id=self._get_id_from_object(self.actual_simlet, 'simlet', 'id')
         url = f"{self.simva_api_url}{self.simlet_endpoint}/{actual_simlet_id}/{self.session_endpoint}/{testId}"
         response = requests.get(url, headers=headers, verify=self.ca_file)
         if response.status_code == 200:
@@ -678,7 +678,7 @@ class SimvaBrowser:
         headers = {'Content-Type': 'application/json'}
         if self.jwt:
             headers['Authorization'] = f'Bearer {self.jwt}'
-        actual_simlet_id=self._get_id_from_object(self.actual_study, 'simlet', 'id')
+        actual_simlet_id=self._get_id_from_object(self.actual_simlet, 'simlet', 'id')
         if self.health_ok:
             url = f"{self.simva_api_url}{self.simlet_endpoint}/{actual_simlet_id}/{self.session_endpoint}/{testId}/activities"
         else:
@@ -739,7 +739,7 @@ class SimvaBrowser:
             objectId (str): The ID of the object to query. An activity id when
                 `is_activity` is True, a test/session id otherwise.
             is_activity (bool): True to query a single activity, False to query the
-                whole session (test) the currently selected study owns.
+                whole session (test) the currently selected simlet owns.
 
         Returns:
             list or None: All statements read across every page, or None if any request
@@ -751,9 +751,9 @@ class SimvaBrowser:
             if iri is None:
                 print(
                     f"LRS : no statement IRI for {'activity' if is_activity else 'session'} {objectId}, "
-                    "the study, test or simva.external_url is missing"
+                    "the simlet, test or simva.external_url is missing"
                 )
-                self.lrs_error = "the study or test of this selection is not known, so the LRS cannot be queried for it"
+                self.lrs_error = "the simlet or test of this selection is not known, so the LRS cannot be queried for it"
                 return None
             url=self.lrs_statements_url
             page_base=self.lrs_origin
@@ -773,7 +773,7 @@ class SimvaBrowser:
             if is_activity:
                 url = f"{self.simva_api_url}{self.activity_endpoint}/{objectId}/lrs/statements"
             else:
-                actual_simlet_id = self._get_id_from_object(self.actual_study, 'simlet', 'id')
+                actual_simlet_id = self._get_id_from_object(self.actual_simlet, 'simlet', 'id')
                 url = f"{self.simva_api_url}{self.simlet_endpoint}/{actual_simlet_id}/{self.session_endpoint}/{objectId}/lrs/statements"
         # Build the window without touching the stored watermark, so a failed request
         # leaves the previous window to be retried instead of being skipped.
@@ -911,29 +911,29 @@ class SimvaBrowser:
         """
         return path.endswith(self.delimiter)
 
-    def _getStudyIdTestIdAndUpdatedPathFromPath(self, path):
+    def _getsimletIdTestIdAndUpdatedPathFromPath(self, path):
         """
-        Extract study ID, test ID, and updated path from a full path.
+        Extract simlet ID, test ID, and updated path from a full path.
 
-        Splits the path relative to base_path into study ID, test ID, and remaining path.
+        Splits the path relative to base_path into simlet ID, test ID, and remaining path.
 
         Args:
             path (str): The full path to parse.
 
         Returns:
-            tuple: (studyId, testId, path) where studyId and testId are strings or None,
-                   and path is the remaining path after removing study and test IDs.
+            tuple: (simletId, testId, path) where simletId and testId are strings or None,
+                   and path is the remaining path after removing simlet and test IDs.
         """
         added_path=path.replace(self.base_path, "").split("/")
-        studyId=None
+        simletId=None
         testId=None
         if len(added_path) >= 1:
-            studyId=added_path[0]
-            path=path.replace(studyId + "/", "")
+            simletId=added_path[0]
+            path=path.replace(simletId + "/", "")
         if len(added_path) >= 2:
             testId=added_path[1]
             path=path.replace(testId + "/", "")
-        return studyId, testId, path
+        return simletId, testId, path
 
     def get_file_content_from_url(self):
         """
@@ -1052,10 +1052,10 @@ class SimvaBrowser:
         Update the browser's file and directory listing based on the current path.
 
         Navigates the directory structure based on the added_path relative to base_path.
-        Updates self.files, self.dirs, self.actual_study, and self.actual_file_url accordingly.
+        Updates self.files, self.dirs, self.actual_simlet, and self.actual_file_url accordingly.
 
-        If added_path has more than 1 element, navigates into study directory.
-        Otherwise resets to root level with study directories displayed.
+        If added_path has more than 1 element, navigates into simlet directory.
+        Otherwise resets to root level with simlet directories displayed.
         """
         self.files = []
         self.dirs = []
@@ -1063,12 +1063,12 @@ class SimvaBrowser:
         self.current_level=len(self.current_path.replace(self.base_path, "").split("/"))
         print("AddedPath : " + str(self.added_path))
         print("CurrentLevel : " + str(self.current_level))
-        studyDirs=[{"id": f"{self._get_id_from_object(dir, 'simlet', 'id')}/","name": self._get_id_from_object(dir, 'simlet', 'name')} for dir in self.accepted_studies]
+        simletDirs=[{"id": f"{self._get_id_from_object(dir, 'simlet', 'id')}/","name": self._get_id_from_object(dir, 'simlet', 'name')} for dir in self.accepted_studies]
         if len(self.added_path) > 1:
-            self._update_study()
+            self._update_simlet()
         else:
-            self.actual_study=None
-            self.dirs=studyDirs
+            self.actual_simlet=None
+            self.dirs=simletDirs
             self.files=[]
             self.actual_file_url=None
 
@@ -1076,13 +1076,13 @@ class SimvaBrowser:
         """
         Reset the browser to the initial state.
 
-        Resets the current path to base_path, clears all selected study/test/activity
+        Resets the current path to base_path, clears all selected simlet/test/activity
         and file state, and clears accepted tests and activities lists.
         """
         self.current_path=self.base_path
         self.current_level=0
         
-        self.actual_study=None
+        self.actual_simlet=None
         self.actual_activity=None
         self.actual_test=None
         self.actual_selected_file=None
@@ -1096,38 +1096,38 @@ class SimvaBrowser:
         self.accepted_tests=[]
         self.accepted_activities=[]
 
-    def _update_study(self):
+    def _update_simlet(self):
         """
-        Update the browser state for a study/simlet selection.
+        Update the browser state for a simlet/simlet selection.
 
-        Navigates to the study specified by added_path[0], loads its tests,
+        Navigates to the simlet specified by added_path[0], loads its tests,
         and prepares test directories for browsing.
 
         Sets:
-            self.actual_study: The selected study object.
-            self.accepted_tests: List of test objects for the study.
+            self.actual_simlet: The selected simlet object.
+            self.accepted_tests: List of test objects for the simlet.
             self.dirs: Test directories with id/name.
         """
-        print(f"self.current_level: {self.current_level} - Study/Simlet")
-        actual_study_id=self.added_path[0]
-        print(f"actual_study_id: {actual_study_id}")
+        print(f"self.current_level: {self.current_level} - simlet/Simlet")
+        actual_simlet_id=self.added_path[0]
+        print(f"actual_simlet_id: {actual_simlet_id}")
         print(f"self.accepted_studies: {self.accepted_studies}")
-        actual_studies=[study for study in self.accepted_studies if f"{self._get_id_from_object(study, 'simlet', 'id')}" == f"{actual_study_id}"]
+        actual_studies=[simlet for simlet in self.accepted_studies if f"{self._get_id_from_object(simlet, 'simlet', 'id')}" == f"{actual_simlet_id}"]
         if actual_studies is not None and len(actual_studies) > 0:
-            self.actual_study=actual_studies[0]
-            print(f"self.actual_study: {self.actual_study}")
+            self.actual_simlet=actual_studies[0]
+            print(f"self.actual_simlet: {self.actual_simlet}")
             if self.health_ok:
                 self.accepted_tests=self._load_selected_simlet_tests_list_from_simva_api()
             else:
-                self.accepted_tests=self._list_test_from_study(self.actual_study)
+                self.accepted_tests=self._list_test_from_simlet(self.actual_simlet)
             print(f"self.accepted_tests: {self.accepted_tests}")
             testDirs=[{"id":f"{self._get_id_from_object(dir, 'session', 'id')}/", "name": self._get_id_from_object(dir, 'session', 'name')} for dir in self.accepted_tests]
             print(f"testDirs: {testDirs}")
             print(f"self.added_path: {self.added_path}")
             self.dirs=testDirs
             self.files=[]
-            if actual_study_id is not None:
-                print(f"self.current_level: {self.current_level} - Study/Test")
+            if actual_simlet_id is not None:
+                print(f"self.current_level: {self.current_level} - simlet/Test")
                 self._update_tests()
         else:
             self._reset_browser()

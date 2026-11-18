@@ -51,6 +51,43 @@ t-mon/
 - Dashboard layout configuration
 - Callback definitions for interactivity
 
+### Shared Header
+
+`src/TMonWidgets/TMonWidget.py` exposes `build_header(with_login=False)`, which builds the
+sticky top bar used by both apps. The bar has the orange T-Mon background and shows the
+T-Mon glyph (`logo-tmon.png`) and wordmark (`logo-name-tmon.png`) on a white chip. Both
+images live in `src/assets/` but are embedded in the page as data URIs, so they still
+appear when the app is served under a path prefix where `/assets/...` would not resolve.
+The bar stays pinned to the top of the viewport while the page scrolls.
+
+The SIMVA app uses `TMonSimvaHeader = build_header(with_login=True)`, which adds the
+login/logout, account and connection-status controls to the bar. The local file-upload
+app uses `TMonHeader` without them, since it has no authentication callbacks. The login
+callbacks in `SimvaBrowserWidget.py` keep targeting the same component ids
+(`main-login`, `login-logout-button`, `account-button`, `connection-status`), so moving
+the controls into the header did not change their behaviour.
+
+`TMonFooter` is pinned to the bottom: both app layouts are flex columns with
+`minHeight: 100vh`, and the footer uses `marginTop: auto` plus `position: sticky; bottom: 0`.
+That keeps it at the bottom of a short page and in view while a long page scrolls.
+
+### Application Modes
+
+Below the header, `TMonSimvaApp` has two top tabs: **SIMVA** (the default) shows the
+simlet browser, and **Upload file** shows the local `dcc.Upload` drop zone used for
+xAPI-SG JSON files. The `switch_mode` callback shows only the selected panel; the
+dashboard, the shared result log (`content`) and the footer stay in place. Files dropped
+in the Upload tab are always treated as local files, even when a SIMVA session is open
+in the other tab. Uploading requires a SIMVA login: when logged out the drop zone is
+hidden and the tab shows a "Please log in to upload files" notice.
+
+At the browser root the SIMVA tab shows a **Simlets** grid with one tile per study;
+`toggle_browser_chrome` hides the study/test/activity headings and the `..` button there
+because nothing is selected yet, and hides all of them for logged-out visitors too.
+For logged-in users they reappear when a study is opened, and the Simlets grid comes
+back when you navigate up to the root again. Tile links point at
+`/simlet{id}`.
+
 ### Core Concepts
 
 #### Studies (Simlets)

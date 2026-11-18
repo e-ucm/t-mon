@@ -53,21 +53,21 @@ homepagecontent=[
 
 def render_simlet_tiles(studies):
     """
-    Render a grid of simlet (study) tiles using TMON.figcraft design tokens.
+    Render a grid of simlet (simlet) tiles using TMON.figcraft design tokens.
     
     Args:
-        studies (list): List of study objects from the SimVA API.
+        studies (list): List of simlet objects from the SimVA API.
         
     Returns:
         html.Div: A grid of simlet tiles.
     """
     if not studies:
-        return html.Div("No studies available. Please log in and load a study.")
+        return html.Div("No studies available. Please log in and load a simlet.")
     
     tiles = []
-    for i, study in enumerate(studies):
-        simlet_id = study.get("id") or study.get("name", f"Study {i+1}")
-        simlet_name = study.get("name") or str(simlet_id)
+    for i, simlet in enumerate(studies):
+        simlet_id = simlet.get("id") or simlet.get("name", f"simlet {i+1}")
+        simlet_name = simlet.get("name") or str(simlet_id)
         
         tile = html.A(
             html.Div([
@@ -110,7 +110,7 @@ def render_simlet_tiles(studies):
                     'transition': 'transform 0.2s',
                 }
             ),
-            href=f"/dashboard/study/{simlet_id}/",
+            href=f"/simlet/{simlet_id}",
             style={
                 'textDecoration': 'none',
                 'color': 'inherit',
@@ -312,7 +312,7 @@ def update_activity_filter(button_n_clicks, all_n_clicks, none_n_clicks, lrs_dat
         return []
     # An id that names no activity of the data left behind is dropped: those are what a
     # link to another session carries, they hide nothing, and keeping them would only put
-    # ids of another study in the next link written out.
+    # ids of another simlet in the next link written out.
     return [known_id for known_id in known if known_id in hidden]
 
 

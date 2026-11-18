@@ -54,7 +54,7 @@ making discovery of studies difficult.
 - Display ALL available studies as a grid
 - Provide quick visual overview without browser navigation
 - Each tile shows study name (truncated at 30 chars with ellipsis) and ID
-- Clicking navigates to `/dashboard/study/{id}/`
+- Clicking navigates to `/simlet{id}`
 
 #### Browser Panel Tiles
 - Appear at root level (`/`) after SIMVA login when `len(TMonWidgets.accepted_studies) > 0`
