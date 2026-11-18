@@ -29,13 +29,13 @@ def test_translations_follow_the_request_language():
     server = TMonSimvaApp.app.server
     with server.test_request_context('/?lng=es'):
         assert I18n.current_language() == 'es'
-        assert I18n.t('header.contact') == 'Contacto'
+        assert I18n.t('header.contact.title') == 'Contáctanos'
         assert I18n.t('simlets.next') == 'Siguiente'
     with server.test_request_context('/?lng=fr'):
-        assert I18n.t('header.contact') == 'Nous contacter'
+        assert I18n.t('header.contact.title') == 'Contactez-nous'
     with server.test_request_context('/'):
         assert I18n.current_language() == 'en'
-        assert I18n.t('header.contact') == 'Contact us'
+        assert I18n.t('header.contact.title') == 'Contact us'
         # Missing keys fall back to English rather than showing the key.
         assert I18n.t('not.a.key') == 'not.a.key'
 
@@ -76,10 +76,10 @@ def test_language_choice_is_remembered_across_loads():
         href, value, contact, simva, upload = TMonSimvaApp.change_language(None, None)
         assert href is no_update
         assert value == 'es'
-        assert contact == 'Contacto'
+        assert contact == 'Contáctanos'
         assert simva == 'SIMVA'
         # A genuine user change reloads with the new language in the URL.
         href, value, contact, _, _ = TMonSimvaApp.change_language('fr', None)
         assert href == '?lng=fr'
         assert value == 'fr'
-        assert contact == 'Nous contacter'
+        assert contact == 'Contactez-nous'

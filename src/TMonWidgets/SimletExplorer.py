@@ -21,20 +21,20 @@ DEFAULT_LIMIT = 9
 MAX_LIMIT = 50
 
 STATUS_OPTIONS = [
-    ('simlets.active', 'active'),
-    ('simlets.archived', 'archived'),
+    ('sessions.status.active.title', 'active'),
+    ('simlets.status.archived', 'archived'),
 ]
 
 # The same seven choices the SimVA front end offers, with the sort direction
 # carried alongside the column so one control covers `orderBy` and `order`.
 SORT_OPTIONS = [
-    ('id', 'asc', 'sort.default'),
-    ('name', 'asc', 'sort.name_asc'),
-    ('name', 'desc', 'sort.name_desc'),
-    ('createdAt', 'desc', 'sort.created_desc'),
-    ('createdAt', 'asc', 'sort.created_asc'),
-    ('updatedAt', 'desc', 'sort.updated_desc'),
-    ('updatedAt', 'asc', 'sort.updated_asc'),
+    ('id', 'asc', 'filters.sort_by.id'),
+    ('name', 'asc', 'filters.sort_by.name.asc'),
+    ('name', 'desc', 'filters.sort_by.name.desc'),
+    ('createdAt', 'desc', 'filters.sort_by.created_at.desc'),
+    ('createdAt', 'asc', 'filters.sort_by.created_at.asc'),
+    ('updatedAt', 'desc', 'filters.sort_by.updated_at.desc'),
+    ('updatedAt', 'asc', 'filters.sort_by.updated_at.asc'),
 ]
 
 ORDER_COLUMNS = ('id', 'name', 'createdAt', 'updatedAt')
@@ -235,7 +235,7 @@ def render_simlet_controls(filters, studies):
         dcc.Input(
             id='simlet-explorer-search', type='text', debounce=True,
             value=filters['searchString'],
-            placeholder=I18n.t('simlets.search'),
+            placeholder=I18n.t('simlets.search_bar.placeholder'),
             style={'width': '260px', 'marginRight': '10px', 'padding': '6px'}),
         dcc.Dropdown(
             id='simlet-explorer-sort',
@@ -246,7 +246,7 @@ def render_simlet_controls(filters, studies):
         dcc.Dropdown(
             id='simlet-explorer-tags', multi=True,
             options=available_tag_options(studies), value=filters['searchTags'],
-            placeholder=I18n.t('simlets.tags'),
+            placeholder=I18n.t('info.tags'),
             style={'width': '220px', 'marginRight': '10px', 'flex': '1 1 220px'}),
         dcc.Input(
             id='simlet-explorer-limit', type='number', min=1, max=MAX_LIMIT,

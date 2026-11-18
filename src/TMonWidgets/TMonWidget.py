@@ -365,23 +365,23 @@ def render_simlet_tiles(studies):
                     }
                 ),
                 html.Div([
-                    html.Div(f"{I18n.t('simlets.created_at')}: {details['created']}",
+                    html.Div(f"{I18n.t('info.created_at')}: {details['created']}",
                              style=meta_style),
-                    html.Div(f"{I18n.t('simlets.updated_at')}: {details['updated']}",
+                    html.Div(f"{I18n.t('info.updated_at')}: {details['updated']}",
                              style=meta_style),
-                    html.Div(f"{I18n.t('simlets.sessions')}: {details['sessions']}",
+                    html.Div(f"{I18n.t('sessions.title')}: {details['sessions']}",
                              style=meta_style),
                     html.Div([
-                        html.Span(f"{I18n.t('simlets.groups')}: {details['groups']}",
+                        html.Span(f"{I18n.t('groups.title')}: {details['groups']}",
                                   style={'marginRight': '18px'}),
-                        html.Span(f"{I18n.t('simlets.participants')}: "
+                        html.Span(f"{I18n.t('participants.title')}: "
                                   f"{details['participants']}"),
                     ], style=meta_style),
-                    html.Div(f"{I18n.t('simlets.tags')}:",
+                    html.Div(f"{I18n.t('info.tags')}:",
                              style=dict(meta_style, marginTop='4px')),
                     html.Div(
                         tag_chips if tag_chips else html.Span(
-                            I18n.t('simlets.no_tags'), style={'color': TEXT_SECONDARY}),
+                            I18n.t('info.tags.no_tags'), style={'color': TEXT_SECONDARY}),
                         style=dict(meta_style, whiteSpace='normal'),
                     ),
                 ], style={'padding': '8px 12px 12px'}),
@@ -1104,7 +1104,7 @@ def build_header(with_login=False, lang=None):
             style=dict(item_style, borderLeft='none', paddingRight='0.5rem')),
         html.Li(html.A([
             html.Img(src=CONTACT_ICON_SRC, style=icon_style),
-            html.Span(I18n.t('header.contact'), id='header-contact-label'),
+            html.Span(I18n.t('header.contact.title'), id='header-contact-label'),
         ], href='https://www.e-ucm.es/es/people/', target='_blank',
             rel='noopener noreferrer', style=link_style),
             style=dict(item_style, paddingRight='0.5rem')),
@@ -1125,7 +1125,7 @@ def build_header(with_login=False, lang=None):
     items.append(html.Li([
         html.Img(src=POWER_ICON_SRC, style=dict(icon_style, filter='invert(100%)',
                                                 marginRight='0.35rem')),
-        html.Button(I18n.t('header.login') if not with_login else I18n.t('header.logout'),
+        html.Button(I18n.t('header.login.title') if not with_login else I18n.t('header.logout.title'),
                     id='login-logout-button', n_clicks=0,
                     className='header-login-button',
                     style=dict(HEADER_NAV_BUTTON_STYLE, color='#fff', fontSize=12)),

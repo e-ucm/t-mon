@@ -121,7 +121,7 @@ def change_language(language, search):
     if language not in I18n.SUPPORTED_LANGUAGES:
         raise PreventUpdate
     I18n.set_language(language)
-    labels = (I18n.translate('header.contact', language),
+    labels = (I18n.translate('header.contact.title', language),
               I18n.translate('app.tab.simva', language),
               I18n.translate('app.tab.upload', language))
     if current != language:

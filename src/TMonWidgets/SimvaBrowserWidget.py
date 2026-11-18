@@ -55,7 +55,7 @@ def login_logout_button_displayed(main, active_tab):
     style = dict(UPLOAD_STYLE)
     style['display'] = 'block' if upload_allowed(active_tab) else 'none'
     notice = '' if flask.oidc.user_loggedin else I18n.t('upload.login_notice')
-    label = I18n.t('header.logout') if flask.oidc.user_loggedin else I18n.t('header.login')
+    label = I18n.t('header.logout.title') if flask.oidc.user_loggedin else I18n.t('header.login.title')
     return label, style, notice
 @callback(
     Output('login-logout', 'children'),
