@@ -244,6 +244,43 @@ def test_dashboard_tabs_are_vertical_with_svg_icons():
         assert name.className == 'tab-name'
 
 
+def test_graph_layout_controls_are_in_the_dashboard():
+    ids = [getattr(child, 'id', None) for child in _walk(TMonWidget.TMonBody)]
+    for expected in ('graph-layout', 'graph-rows', 'graph-columns', 'graph-page'):
+        assert expected in ids
+
+
+def _graph_content(count):
+    return html.Div(html.Div(
+        [html.H3('Visualisations')]
+        + [dcc.Graph(id=f'graph-{i}') for i in range(count)]
+    ))
+
+
+def test_graph_layout_limits_twelve_graphs_per_page():
+    content = _graph_content(20)
+    grid = TMonWidget.arrange_graphs(content, 'grid', 2, 3, 1)
+    assert grid.style['gridTemplateColumns'] == 'repeat(3, minmax(0, 1fr))'
+    assert len([c for c in grid.children if isinstance(c, dcc.Graph)]) == 6
+    second = TMonWidget.arrange_graphs(_graph_content(20), 'grid', 2, 3, 2)
+    assert len([c for c in second.children if isinstance(c, dcc.Graph)]) == 6
+    third = TMonWidget.arrange_graphs(_graph_content(20), 'grid', 2, 3, 3)
+    assert len([c for c in third.children if isinstance(c, dcc.Graph)]) == 6
+    fourth = TMonWidget.arrange_graphs(_graph_content(20), 'grid', 2, 3, 4)
+    assert len([c for c in fourth.children if isinstance(c, dcc.Graph)]) == 2
+
+
+def test_graph_layout_modes():
+    one = TMonWidget.arrange_graphs(_graph_content(5), 'one', 3, 2, 1)
+    assert len([c for c in one.children if isinstance(c, dcc.Graph)]) == 1
+    vertical = TMonWidget.arrange_graphs(_graph_content(5), 'vertical', 3, 2, 1)
+    assert len([c for c in vertical.children if isinstance(c, dcc.Graph)]) == 3
+    assert vertical.style['gridTemplateColumns'] == 'repeat(1, minmax(0, 1fr))'
+    horizontal = TMonWidget.arrange_graphs(_graph_content(5), 'horizontal', 3, 2, 1)
+    assert len([c for c in horizontal.children if isinstance(c, dcc.Graph)]) == 2
+    assert horizontal.style['gridTemplateColumns'] == 'repeat(2, minmax(0, 1fr))'
+
+
 def test_live_updates_live_in_the_footer_and_only_for_simva():
     footer_ids = [getattr(child, 'id', None)
                   for child in _walk(TMonWidget.TMonFooter)]

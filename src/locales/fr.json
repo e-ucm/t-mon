@@ -46,5 +46,16 @@
   "header.account": "Compte",
   "sessions.view_dashboard": "Voir le tableau de bord",
   "dashboard.no_tab_selected": "aucun onglet sélectionné, sélectionnez un onglet.",
-  "navigation.return": "← Retour"
+  "navigation.return": "← Retour",
+  "graphs.layout": "Graphiques :",
+  "graphs.one": "Un",
+  "graphs.vertical": "Vertical",
+  "graphs.horizontal": "Horizontal",
+  "graphs.grid": "Grille (lignes x colonnes)",
+  "graphs.rows": "Lignes :",
+  "graphs.columns": "Colonnes :",
+  "graphs.page": "Page :",
+  "graphs.split": "Colonnes séparées",
+  "graphs.split_x": "Première :",
+  "graphs.split_y": "Autres :"
 }

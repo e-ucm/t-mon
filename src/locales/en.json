@@ -46,5 +46,16 @@
   "header.account": "Account",
   "sessions.view_dashboard": "View dashboard",
   "dashboard.no_tab_selected": "no tab selected, select one tab.",
-  "navigation.return": "← Return"
+  "navigation.return": "← Return",
+  "graphs.layout": "Graphs:",
+  "graphs.one": "One",
+  "graphs.vertical": "Vertical",
+  "graphs.horizontal": "Horizontal",
+  "graphs.grid": "Grid (rows x columns)",
+  "graphs.rows": "Rows:",
+  "graphs.columns": "Columns:",
+  "graphs.page": "Page:",
+  "graphs.split": "Split columns",
+  "graphs.split_x": "First:",
+  "graphs.split_y": "Other:"
 }

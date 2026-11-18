@@ -822,11 +822,18 @@ def filterObjectIdDependingTab(df, value, tab):
     State('current-simlet', 'children'),
     State('current-test', 'children'),
     State('url', 'pathname'),
+    Input('graph-layout', 'value'),
+    Input('graph-rows', 'value'),
+    Input('graph-columns', 'value'),
+    Input('graph-page', 'value'),
+    Input('graph-split-x', 'value'),
+    Input('graph-split-y', 'value'),
 )
 def update_output(tab, user_search_value, user_value, object_search_value, object_value,
                   lrs_data_version=None, hidden_activities=None, created_charts=None,
                   panel_style=None, simlet_name=None, session_name=None,
-                  app_path=None):
+                  app_path=None, graph_layout='one', graph_rows=3,
+                  graph_columns=2, graph_page=1, split_x=2, split_y=2):
     ctx = dash.callback_context
     triggered=ctx.triggered
     triggered_prop_id = ctx.triggered[0]['prop_id']
@@ -1060,6 +1067,9 @@ def update_output(tab, user_search_value, user_value, object_search_value, objec
             # Construct a new query string with unique parameters
             new_query_string = urlencode(new_query_params, safe=" ")
             print(f"new_query_string: {new_query_string}")
+            tab_content = arrange_graphs(
+                tab_content, graph_layout, graph_rows, graph_columns, graph_page,
+                split_x, split_y)
             return (publish_url(new_query_string), user_unique_options,
                     object_unique_options, tab_content, x_options, y_options, creator_style)
         else:
@@ -1324,6 +1334,91 @@ def live_updates_style(pathname):
     return {'display': 'flex', 'alignItems': 'center'}
 
 
+GRAPH_LAYOUT_OPTIONS = [
+    ('one', 'graphs.one'),
+    ('vertical', 'graphs.vertical'),
+    ('horizontal', 'graphs.horizontal'),
+    ('grid', 'graphs.grid'),
+    ('split', 'graphs.split'),
+]
+
+MAX_GRAPHS_PER_PAGE = 12
+
+
+def arrange_graphs(content, layout, rows, columns, page, split_x=2, split_y=2):
+    """
+    Lay out a tab's graphs and show at most twelve of them per page.
+
+    Non-graph elements (headings) stay above the graphs on the first page.
+    """
+    node = content
+    while isinstance(node, html.Div) and isinstance(node.children, html.Div):
+        node = node.children
+    items = node.children if isinstance(node.children, (list, tuple)) else [node]
+    headings = [item for item in items if not isinstance(item, dcc.Graph)]
+    graphs = [item for item in items if isinstance(item, dcc.Graph)]
+    if not graphs:
+        return content
+
+    try:
+        rows_n = min(MAX_GRAPHS_PER_PAGE, max(1, int(rows or 1)))
+        columns_n = min(MAX_GRAPHS_PER_PAGE, max(1, int(columns or 1)))
+        page_n = max(1, int(page or 1))
+    except (TypeError, ValueError):
+        rows_n, columns_n, page_n = 1, 1, 1
+
+    if layout == 'one':
+        page_size, columns_n = 1, 1
+    elif layout == 'vertical':
+        page_size, columns_n = rows_n, 1
+    elif layout == 'horizontal':
+        page_size, rows_n = columns_n, 1
+    elif layout == 'split':
+        try:
+            first = min(MAX_GRAPHS_PER_PAGE, max(0, int(split_x or 0)))
+            second = min(MAX_GRAPHS_PER_PAGE, max(0, int(split_y or 0)))
+        except (TypeError, ValueError):
+            first, second = 2, 2
+        if first + second == 0:
+            first = 1
+        page_size = min(MAX_GRAPHS_PER_PAGE, first + second)
+        columns_n = 2
+    else:
+        page_size = min(MAX_GRAPHS_PER_PAGE, rows_n * columns_n)
+
+    start = (page_n - 1) * page_size
+    shown = graphs[start:start + page_size]
+    if not shown:
+        shown = graphs[:page_size]
+        start = 0
+
+    grid = {
+        'display': 'grid',
+        'gridTemplateColumns': f'repeat({columns_n}, minmax(0, 1fr))',
+        'gap': '12px',
+    }
+    children = list(headings) if page_n == 1 else []
+    for item in children:
+        if hasattr(item, 'style'):
+            item.style = dict(item.style or {}, gridColumn='1 / -1')
+    if layout == 'split':
+        # One graph stack per column: x in the first, y in the others.
+        first_count = min(first, len(shown))
+        column_style = {'display': 'flex', 'flexDirection': 'column',
+                        'gap': '12px', 'minWidth': 0}
+        children.extend([
+            html.Div(shown[:first_count], style=column_style),
+            html.Div(shown[first_count:], style=column_style),
+        ])
+    else:
+        children.extend(shown)
+    info = html.Span(
+        f"{start + 1}-{start + len(shown)} of {len(graphs)}",
+        style={'gridColumn': '1 / -1', 'fontFamily': INTER_FONT,
+               'fontSize': 12, 'color': TEXT_SECONDARY})
+    return html.Div([info] + children, style=grid)
+
+
 def dashboard_tab_label(label, icon_path):
     """The label of a dashboard tab: an icon beside a hideable name."""
     return html.Span([
@@ -1420,6 +1515,41 @@ TMonBody=html.Div([
                     html.Span(id='chart-creator-status', children='',
                               style={'marginLeft': '10px', 'color': '#555'}),
                 ], style={'margin': '10px 0'}),
+                html.Div([
+                    html.Span(I18n.t('graphs.layout'),
+                              style={'marginRight': '6px', 'fontSize': 12}),
+                    dcc.Dropdown(
+                        id='graph-layout', clearable=False, value='one',
+                        options=[{'label': I18n.t(key), 'value': value}
+                                 for value, key in GRAPH_LAYOUT_OPTIONS],
+                        style={'width': '150px', 'marginRight': '10px'}),
+                    html.Span(I18n.t('graphs.rows'), style={'marginRight': '4px',
+                                                            'fontSize': 12}),
+                    dcc.Input(id='graph-rows', type='number', min=1,
+                              max=MAX_GRAPHS_PER_PAGE, value=3,
+                              style={'width': '60px', 'marginRight': '10px'}),
+                    html.Span(I18n.t('graphs.columns'),
+                              style={'marginRight': '4px', 'fontSize': 12}),
+                    dcc.Input(id='graph-columns', type='number', min=1,
+                              max=MAX_GRAPHS_PER_PAGE, value=2,
+                              style={'width': '60px', 'marginRight': '10px'}),
+                    html.Span(I18n.t('graphs.page'), style={'marginRight': '4px',
+                                                            'fontSize': 12}),
+                    dcc.Input(id='graph-page', type='number', min=1, value=1,
+                              style={'width': '60px'}),
+                    html.Span(I18n.t('graphs.split_x'),
+                              style={'marginLeft': '10px', 'marginRight': '4px',
+                                     'fontSize': 12}),
+                    dcc.Input(id='graph-split-x', type='number', min=0,
+                              max=MAX_GRAPHS_PER_PAGE, value=2,
+                              style={'width': '60px', 'marginRight': '10px'}),
+                    html.Span(I18n.t('graphs.split_y'),
+                              style={'marginRight': '4px', 'fontSize': 12}),
+                    dcc.Input(id='graph-split-y', type='number', min=0,
+                              max=MAX_GRAPHS_PER_PAGE, value=2,
+                              style={'width': '60px'}),
+                ], style={'display': 'flex', 'alignItems': 'center',
+                          'gap': '2px', 'margin': '6px 0'}),
                 html.Div(id="tabs-content"),
             ], style={'flex': '1 1 auto', 'minWidth': 0, 'padding': '10px 20px'}),
         ], style={'display': 'flex', 'alignItems': 'flex-start'}),

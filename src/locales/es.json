@@ -46,5 +46,16 @@
   "header.account": "Cuenta",
   "sessions.view_dashboard": "Ver panel",
   "dashboard.no_tab_selected": "ninguna pestaña seleccionada, selecciona una pestaña.",
-  "navigation.return": "← Volver"
+  "navigation.return": "← Volver",
+  "graphs.layout": "Gráficos:",
+  "graphs.one": "Uno",
+  "graphs.vertical": "Vertical",
+  "graphs.horizontal": "Horizontal",
+  "graphs.grid": "Rejilla (filas x columnas)",
+  "graphs.rows": "Filas:",
+  "graphs.columns": "Columnas:",
+  "graphs.page": "Página:",
+  "graphs.split": "Columnas divididas",
+  "graphs.split_x": "Primera:",
+  "graphs.split_y": "Otras:"
 }
