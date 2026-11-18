@@ -19,6 +19,17 @@ only when set. The same names are used by the SimVA API and the `simva-front`
 list pages. Implementation: `src/TMonWidgets/SimletExplorer.py`; the controls
 are rendered by `render_simlet_section()` in `SimvaBrowserWidget.py`.
 
+## Sessions list
+
+Opening a simlet (`/simlet/<id>`) replaces the folder buttons with a Sessions
+list styled after the SimVA front-end Sessions tab: cards show the session
+name, description, status badge (Active / Paused / Finished), creation date,
+activity and participant counts, and coloured tags. The same filter row as the
+simlets page is available, with four sessions per page by default.
+
+Activities are **not** shown on arrival: they appear only after a session card
+is clicked. Implementation: `src/TMonWidgets/SessionExplorer.py`.
+
 ## API Reference
 
 ### `render_simlet_tiles(studies)` Function

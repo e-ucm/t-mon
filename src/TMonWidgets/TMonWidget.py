@@ -453,6 +453,9 @@ def update_tab(style, stateUrl):
 
 # Make studies available to the dashboard
 TMonWidgets.accepted_studies = getattr(TMonWidgets, "accepted_studies", [])
+# Sessions of the currently open simlet, published by the SIMVA browser so the
+# sessions list can draw them without making its own API calls.
+TMonWidgets.accepted_sessions = getattr(TMonWidgets, "accepted_sessions", [])
 
 
 def activity_name_of(activity_id):

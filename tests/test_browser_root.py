@@ -1,4 +1,7 @@
 from dash import html
+from dash.exceptions import PreventUpdate
+
+import dash
 
 from TMonWidgets import SimvaBrowserWidget as BrowserWidget
 from TMonWidgets import SimletExplorer
@@ -119,6 +122,34 @@ def test_root_section_keeps_simlet_metadata():
     for expected in ("Created at: 2026/11/18", "Updated at: 2026/11/18",
                      "Sessions: 1", "Groups: 0", "Participants: 0", "Tags:", "test"):
         assert expected in texts
+
+
+class _Triggered:
+    def __init__(self, prop_id):
+        self.triggered = [{'prop_id': prop_id}]
+
+
+class _FakeBrowser:
+    def __init__(self):
+        self.current_path = 'output/1/'
+        self.base_path = 'output/'
+
+
+def test_redrawing_session_buttons_does_not_navigate(monkeypatch):
+    # Changing the Sessions filter re-creates its folder buttons with n_clicks
+    # still at zero. That must not be treated as a click into a session.
+    fake = _FakeBrowser()
+    monkeypatch.setattr(BrowserWidget, 'browser', fake, raising=False)
+    monkeypatch.setattr(dash, 'callback_context',
+                        _Triggered('{"type":"folder-button","index":"11/"}.n_clicks'))
+    try:
+        BrowserWidget.update_browser(
+            0, [0], [], 0, None, 'output/1/', '/simlet/1', '', None, None, 'simva')
+    except PreventUpdate:
+        pass
+    else:
+        raise AssertionError('a button redraw must not navigate')
+    assert fake.current_path == 'output/1/'
 
 
 def test_upload_requires_login(monkeypatch):

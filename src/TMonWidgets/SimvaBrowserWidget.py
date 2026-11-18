@@ -7,6 +7,9 @@ import json
 import TMonWidgets
 from TMonWidgets.TMonWidget import HEADER_BUTTON_STYLE, render_simlet_tiles
 from TMonWidgets.SimletExplorer import parse_simlet_query, render_simlet_controls
+from TMonWidgets.SessionExplorer import (
+    is_simlet_path, render_session_explorer_panel,
+)
 #Import LoadProcessStatements.py
 from LoadProcessStatements import load_from_string, load_players_info_from_uploaded_content
 # Import SimvaBrowser class from SimvaBrowser.py
@@ -443,13 +446,19 @@ def init_storage(main, pathname, search=''):
         # Store studies in TMonWidgets for access by the dashboard
         TMonWidgets.accepted_studies = browser.accepted_studies
         
-        # At the studies-list root show the whole Simlets grid instead of the
-        # folder buttons and the one-tile preview the browser used to show.
-        if browser.current_path == browser.base_path:
+        # Sessions are drawn as cards by their own panel, so at the simlet
+        # level the plain folder buttons would duplicate them - and naming the
+        # activities here would show them before a session is opened.
+        at_root = browser.current_path == browser.base_path
+        at_simlet = is_simlet_path(browser.current_path, browser.base_path)
+        if at_root:
             folder_buttons = [render_simlet_section(
                 TMonWidgets.accepted_studies, browser._get_id_from_object, search)]
+        elif at_simlet:
+            folder_buttons = []
         else:
             folder_buttons = [html.Button(f"{f.get('name')} ({f.get('id')})", id={'type': 'folder-button', 'index': f.get('id')}, n_clicks=0) for f in browser.dirs]
+        TMonWidgets.accepted_sessions = browser.accepted_tests if at_simlet else []
         
         actual_simlet=browser._get_id_from_object(browser.actual_simlet, 'simlet', 'name') if browser.actual_simlet is not None else "Select a simlet"
         actual_test=browser._get_id_from_object(browser.actual_test, 'session', 'name') if browser.actual_test is not None else "Select an test"
@@ -468,6 +477,7 @@ def init_storage(main, pathname, search=''):
             # One persistent explorer panel in every state; its style decides
             # whether it is shown, so its ids never disappear from the layout.
             render_simlet_explorer_panel(TMonWidgets.accepted_studies, search),
+            render_session_explorer_panel(TMonWidgets.accepted_sessions, search),
         ])
         return appLayout
     else:
@@ -482,6 +492,7 @@ def init_storage(main, pathname, search=''):
                 html.Div(id='files-div', children=[], style={'display': 'none'}),
                 html.Button('Run Analyse', id='run-analyse', n_clicks=0, style={'display': 'none'}),
                 render_simlet_explorer_panel(),
+                render_session_explorer_panel(),
             ])
 
 def load_uploaded_files(list_of_contents, list_of_names, list_of_dates):
@@ -607,6 +618,13 @@ def update_browser(n_clicks_parent, folder_n_clicks, file_n_clicks, n_clicks_run
         elif "-button"in triggered_prop_id:
             cleaned_prop_id = triggered_prop_id.replace(".n_clicks", "")
             button_id = json.loads(cleaned_prop_id)
+            # Redrawing a list (for example after changing the Sessions filter)
+            # re-creates its buttons with n_clicks=0. That is a render, not a
+            # click, so it must not navigate into a session or activity.
+            clicks = (folder_n_clicks if button_id['type'] == 'folder-button'
+                      else file_n_clicks) or []
+            if not any(int(click or 0) > 0 for click in clicks):
+                raise PreventUpdate
             if button_id['type'] == 'folder-button':
                 browser.current_path = browser.current_path + button_id['index']
             elif button_id['type'] == 'file-button':
@@ -631,13 +649,20 @@ def update_browser(n_clicks_parent, folder_n_clicks, file_n_clicks, n_clicks_run
             analysis_path=pathname.rstrip('/')
             print(f"Auto analysis for {analysis_path} (is_activity={browser.analysis_is_activity})")
             return get_analysis_outputs(analysis_path, dashboardpath)
-        if browser.current_path == browser.base_path:
+        at_root = browser.current_path == browser.base_path
+        at_simlet = is_simlet_path(browser.current_path, browser.base_path)
+        if at_root:
             # Coming back up with ".." lands on the studies list again, so show
             # the same Simlets explorer as on a fresh load of "/".
             folder_buttons = [render_simlet_section(
                 TMonWidgets.accepted_studies, browser._get_id_from_object, state_search)]
+        elif at_simlet:
+            # Sessions are drawn by their own panel; no activities here until
+            # one of them is opened.
+            folder_buttons = []
         else:
             folder_buttons = [html.Button(f"{f.get('name')} ({f.get('id')})", id={'type': 'folder-button', 'index': f.get("id")}, n_clicks=0) for f in browser.dirs]
+        TMonWidgets.accepted_sessions = browser.accepted_tests if at_simlet else []
         file_buttons = [html.Button(f, id={'type': 'file-button', 'index': f}, n_clicks=0, style={'backgroundColor': 'green'}) for f in browser.files if f.endswith(browser.accept)]
         run_analyse_style = {'display': 'none'} if browser._isdir(browser.current_path) else {'display': 'block'}
         print("Pathname:", pathname)
@@ -658,9 +683,10 @@ simvaBrowserBody = html.Div(
                 html.Div(id='folders-div', children=[]),
                 html.Div(id='files-div', children=[]),
                 html.Button('Run Analyse', id='run-analyse', n_clicks=0, style={'display': 'none'}),
-                # The panel stays in the layout in every browser state; only
-                # its visibility changes, so the callback ids always resolve.
+                # The panels stay in the layout in every browser state; only
+                # their visibility changes, so the callback ids always resolve.
                 render_simlet_explorer_panel(),
+                render_session_explorer_panel(),
             ]
         ),
         html.Div(id='debug-browser', children=[]),
