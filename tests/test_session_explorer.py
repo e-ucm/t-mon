@@ -94,7 +94,9 @@ def test_session_cards_look_like_the_simva_sessions_tab():
                      'Activities: 2', 'Participants: 0', 'maths'):
         assert expected in texts
 
-    buttons = [child for child in _walk(cards) if isinstance(child, html.Button)]
+    buttons = [child for child in _walk(cards)
+               if isinstance(child, html.Button)
+               and (getattr(child, 'id', None) or {}).get('type') == 'folder-button']
     assert [button.id for button in buttons] == [
         {'type': 'folder-button', 'index': '11/'},
         {'type': 'folder-button', 'index': '12/'},
@@ -102,6 +104,17 @@ def test_session_cards_look_like_the_simva_sessions_tab():
     ]
     # Activities stay collapsed: only the count is on the card.
     assert not any(isinstance(child, html.Table) for child in _walk(cards))
+
+
+def test_each_session_card_has_a_dashboard_shortcut():
+    page, _ = Explorer.apply_session_filters(SESSIONS, Explorer.parse_session_query(''))
+    cards = Explorer.render_session_cards(page)
+    shortcuts = [child for child in _walk(cards)
+                 if isinstance(child, html.Button)
+                 and (getattr(child, 'id', None) or {}).get('type')
+                 == 'session-dashboard-button']
+    assert [button.id['index'] for button in shortcuts] == ['11', '12', '13']
+    assert 'View dashboard' in [text for text in _texts(cards)]
 
 
 def test_status_badges_use_the_simva_colours():

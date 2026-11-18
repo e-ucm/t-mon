@@ -43,5 +43,6 @@
   "filters.status.all": "Todos",
   "sessions.status.paused.title": "Pausada",
   "sessions.status.finished.title": "Finalizada",
-  "header.account": "Cuenta"
+  "header.account": "Cuenta",
+  "sessions.view_dashboard": "Ver panel"
 }

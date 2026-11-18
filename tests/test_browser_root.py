@@ -148,6 +148,8 @@ def test_dashboard_simlet_url_maps_to_browser_path():
     path = BrowserWidget.browser_path_from_dashboard_url(
         '/simlet/1', 'output/')
     assert path == 'output/1/'
+    assert BrowserWidget.browser_path_from_dashboard_url(
+        '/simlet/1/session/11/dashboard/default', 'output/') == 'output/1/11/Analysis/'
     assert BrowserWidget.browser_path_from_dashboard_url('/', 'output/') == 'output/'
     assert BrowserWidget.browser_path_from_dashboard_url('/dashboard/', 'output/') == 'output/'
 
@@ -205,12 +207,38 @@ def test_redrawing_session_buttons_does_not_navigate(monkeypatch):
                         _Triggered('{"type":"folder-button","index":"11/"}.n_clicks'))
     try:
         BrowserWidget.update_browser(
-            0, [0], [], 0, None, 'output/1/', '/simlet/1', '', None, None, 'simva')
+            0, [0], [], 0, [0], None, 'output/1/', '/simlet/1', '', None, None, 'simva')
     except PreventUpdate:
         pass
     else:
         raise AssertionError('a button redraw must not navigate')
     assert fake.current_path == 'output/1/'
+
+
+def test_session_dashboard_button_opens_the_analysis_entry(monkeypatch):
+    class _DashboardBrowser:
+        base_path = 'output/'
+        current_path = 'output/1/'
+        actual_simlet = {'simlet_id': 1}
+
+        def _get_id_from_object(self, obj, type, name):
+            return obj.get(f'{type}_{name}')
+
+        def _update_files(self):
+            pass
+
+    fake = _DashboardBrowser()
+    monkeypatch.setattr(BrowserWidget, 'browser', fake, raising=False)
+    monkeypatch.setattr(dash, 'callback_context',
+                        _Triggered('{"type":"session-dashboard-button","index":"11"}.n_clicks'))
+    captured = {}
+    monkeypatch.setattr(
+        BrowserWidget, 'get_analysis_outputs',
+        lambda pathname, dashboardpath: (pathname, dashboardpath))
+    result = BrowserWidget.update_browser(
+        0, [], [], 0, [1], None, 'output/1/', '/simlet/1', '', None, None, 'simva')
+    assert result == ('/simlet/1/session/11', '/dashboard/default')
+    assert fake.current_path == 'output/1/11/Analysis/'
 
 
 def test_upload_requires_login(monkeypatch):

@@ -43,5 +43,6 @@
   "filters.status.all": "Tous",
   "sessions.status.paused.title": "En pause",
   "sessions.status.finished.title": "Terminée",
-  "header.account": "Compte"
+  "header.account": "Compte",
+  "sessions.view_dashboard": "Voir le tableau de bord"
 }

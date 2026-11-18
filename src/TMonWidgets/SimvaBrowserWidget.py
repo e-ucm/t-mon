@@ -317,8 +317,8 @@ def browser_path_from_dashboard_url(pathname, base_path):
     if not pathname or pathname == '/':
         return base_path
     if pathname.startswith('/simlet/'):
-        # Tile links are `/simlet/<id>` with no trailing slash, so the id is the
-        # remainder after the prefix rather than a segment of a dashboard path.
+        # Tile links are `/simlet/<id>`; a session dashboard is
+        # `/simlet/<id>/session/<id>/dashboard`. Both name a simlet id first.
         tail = pathname[len('/simlet/'):]
     elif '/dashboard' in pathname:
         tail = pathname.split('/dashboard', 1)[1].lstrip('/')
@@ -326,6 +326,11 @@ def browser_path_from_dashboard_url(pathname, base_path):
         return base_path
     parts = [part for part in tail.split('/')
              if part and '=' not in part]  # drop `tab=home_tab` and query values
+    if len(parts) >= 3 and parts[1] == 'session':
+        # The dashboard shortcut opens the same whole-session analysis entry as
+        # the "Complete session" folder button.
+        return base_path + f"{parts[0]}/{parts[2]}/Analysis/"
+    parts = [part for part in parts if part != 'dashboard']
     if not parts:
         return base_path
     return base_path + '/'.join(parts) + '/'
@@ -617,6 +622,7 @@ def uploaded_outputs(div_list, style):
      Input({'type': 'folder-button', 'index': dash.dependencies.ALL}, 'n_clicks'),
      Input({'type': 'file-button', 'index': dash.dependencies.ALL}, 'n_clicks'),
      Input('run-analyse', 'n_clicks'),
+     Input({'type': 'session-dashboard-button', 'index': dash.dependencies.ALL}, 'n_clicks'),
      Input('upload-data', 'contents')],
     [State('current-path', 'children'),
      State('url', 'pathname'),
@@ -626,8 +632,8 @@ def uploaded_outputs(div_list, style):
      State('app-tabs', 'value')]
 )
 def update_browser(n_clicks_parent, folder_n_clicks, file_n_clicks, n_clicks_run_analyse,
-                   list_of_contents, current_path, statepathname, state_search,
-                   list_of_names, list_of_dates, active_tab):
+                   dashboard_n_clicks, list_of_contents, current_path, statepathname,
+                   state_search, list_of_names, list_of_dates, active_tab):
     # In the Upload tab a dropped file is local even if a SIMVA session is open
     # in the other tab, so it must not be read as a SimVA selection.
     if upload_allowed(active_tab) and list_of_names:
@@ -685,6 +691,20 @@ def update_browser(n_clicks_parent, folder_n_clicks, file_n_clicks, n_clicks_run
                 dashboardpath=f"/dashboard/tab=home_tab"
             print(f"State : {newstatepathname} - dashboardurl : {dashboard_url}")
             return get_analysis_outputs(pathname, dashboardpath)
+        elif 'session-dashboard-button' in triggered_prop_id:
+            # Shortcut from a session card: select the same "Complete session"
+            # (Analysis) entry the folder navigation would have opened.
+            if not any(int(click or 0) > 0 for click in (dashboard_n_clicks or [])):
+                raise PreventUpdate
+            button_id = json.loads(triggered_prop_id.rsplit('.n_clicks', 1)[0])
+            simlet_id = browser._get_id_from_object(browser.actual_simlet, 'simlet', 'id')
+            if simlet_id is None:
+                raise PreventUpdate
+            browser.current_path = (
+                f"{browser.base_path}{simlet_id}/{button_id['index']}/Analysis/")
+            browser._update_files()
+            analysis_path = f"/simlet/{simlet_id}/session/{button_id['index']}"
+            return get_analysis_outputs(analysis_path, "/dashboard/default")
         elif "-button"in triggered_prop_id:
             cleaned_prop_id = triggered_prop_id.replace(".n_clicks", "")
             button_id = json.loads(cleaned_prop_id)
