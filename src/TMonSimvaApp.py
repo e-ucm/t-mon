@@ -46,15 +46,50 @@ app.layout=html.Div(
 )
 
 
+def simlet_selected(pathname):
+    """
+    Whether the URL points at a simlet rather than at the studies list.
+
+    A tile opens ``/simlet/<id>`` and browsing deeper keeps the id in the path.
+    The ``/dashboard/...`` suffix and the upload flow's URL carry no simlet of
+    their own, so neither counts as a selection.
+
+    Args:
+        pathname (str): The current browser path.
+
+    Returns:
+        bool: True when a simlet is selected.
+    """
+    if not pathname or pathname == '/':
+        return False
+    path = str(pathname).split('/dashboard', 1)[0].rstrip('/')
+    return bool(path) and path not in ('/simlet', '/')
+
+
 @app.callback(
-    [Output('simva-panel', 'style'), Output('upload-panel', 'style')],
-    Input('app-tabs', 'value'),
+    [Output('app-tabs', 'style'),
+     Output('simva-panel', 'style'),
+     Output('upload-panel', 'style')],
+    [Input('app-tabs', 'value'),
+     Input('url', 'pathname')],
 )
-def switch_mode(tab):
-    """Show only the panel belonging to the selected top tab."""
+def switch_mode(tab, pathname):
+    """Show only the panel belonging to the selected mode.
+
+    Once a simlet is selected the mode tabs are in the way: the page is about
+    that one simlet, so the SIMVA browser stays and both tabs disappear. Going
+    back up to the studies list (``/``) brings them back.
+    """
+    # The Tabs component draws its tab bar as a flex row. Setting `display:
+    # block` here would override that and stack "SIMVA" over "Upload file", so
+    # the visible state has to keep it a flex row.
+    visible_tabs = {'display': 'flex', 'flexDirection': 'row'}
+    if simlet_selected(pathname):
+        return {'display': 'none'}, {'display': 'block'}, {'display': 'none'}
     if tab == 'upload':
-        return {'display': 'none'}, {'display': 'block', 'padding': '20px'}
-    return {'display': 'block'}, {'display': 'none'}
+        return (visible_tabs, {'display': 'none'},
+                {'display': 'block', 'padding': '20px'})
+    return visible_tabs, {'display': 'block'}, {'display': 'none'}
 
 
 if __name__ == '__main__':
