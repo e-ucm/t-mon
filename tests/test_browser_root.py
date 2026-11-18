@@ -66,6 +66,37 @@ def test_dashboard_simlet_url_maps_to_browser_path():
     assert BrowserWidget.browser_path_from_dashboard_url('/dashboard/', 'output/') == 'output/'
 
 
+def _tile_texts(component):
+    if isinstance(component, str):
+        yield component
+        return
+    children = getattr(component, "children", None)
+    if isinstance(children, (list, tuple)):
+        for child in children:
+            yield from _tile_texts(child)
+    elif children is not None:
+        yield from _tile_texts(children)
+
+
+def test_root_section_keeps_simlet_metadata():
+    # The normaliser used to keep only id/name, which left the tiles unable to
+    # show the dates, counts and tags the API returned.
+    studies = [{
+        'simlet_id': 1,
+        'simlet_name': 'test',
+        'sessions': [1],
+        'groups': [],
+        'tags': [{'tag_name': 'test'}],
+        'createdAt': '2026-11-18T10:24:54.201Z',
+        'updatedAt': '2026-11-18T10:24:54.201Z',
+    }]
+    section = BrowserWidget.render_simlet_section(studies, _get_id)
+    texts = list(_tile_texts(section))
+    for expected in ("Created at: 2026/11/18", "Updated at: 2026/11/18",
+                     "Sessions: 1", "Groups: 0", "Participants: 0", "Tags:", "test"):
+        assert expected in texts
+
+
 def test_upload_requires_login(monkeypatch):
     monkeypatch.setattr(BrowserWidget, 'flask', _FakeFlask(False))
     assert BrowserWidget.upload_allowed('upload') is False

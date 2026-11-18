@@ -587,9 +587,91 @@ class SimvaBrowser:
             # Print the result
             print("simlet : Data received:", data)
             self.accepted_studies=data
+            # The studies list does not carry a participant count. Fetch it for
+            # each simlet so the dashboard tiles can show the same figure as the
+            # SimVA UI. A failed count leaves the simlet at zero rather than
+            # stopping the studies list from loading.
+            if self.health_ok:
+                for simlet in self.accepted_studies:
+                    simlet_id=self._get_id_from_object(simlet, 'simlet', 'id')
+                    simlet['participants_count']=self._load_simlet_participants_count(simlet_id)
             self.simlet_directories=[{"id":f"{self._get_id_from_object(dir, 'simlet', 'id')}/","name": self._get_id_from_object(dir, 'simlet', 'name')} for dir in self.accepted_studies]
         else:
             print(f"Error: {response.text}")
+
+    def _load_simlet_participants_count(self, simlet_id):
+        """
+        Read how many participants a simlet has from the SimVA API.
+
+        The count lives at ``/simlets/<id>/groups/participants/count`` rather
+        than on the simlet object itself, so it needs its own authenticated
+        request. The response is a map of group id to participant count, such
+        as ``{"1": 1, "2": 5}``; those values are added up. A bare number or an
+        envelope with a ``count``/``participants`` field is accepted too.
+
+        Args:
+            simlet_id: The id of the simlet to count.
+
+        Returns:
+            int: The participant count, or 0 when it cannot be read.
+        """
+        if simlet_id is None:
+            return 0
+        headers = {'Content-Type': 'application/json'}
+        if self.jwt:
+            headers['Authorization'] = f'Bearer {self.jwt}'
+        url = f"{self.simva_api_url}{self.simlet_endpoint}/{simlet_id}/groups/participants/count"
+        try:
+            response = requests.get(url, headers=headers, timeout=5, verify=self.ca_file)
+        except requests.RequestException as exc:
+            print(f"PARTICIPANTS : {url} could not be reached ({exc})")
+            return 0
+        if response.status_code != 200:
+            print(f"PARTICIPANTS : {url} answered {response.status_code}: {response.text}")
+            return 0
+        try:
+            data = response.json()
+        except ValueError:
+            print(f"PARTICIPANTS : {url} returned no JSON")
+            return 0
+        return self._participants_count_from_api(data)
+
+    def _participants_count_from_api(self, data):
+        """
+        Normalise a participant-count response into an integer.
+
+        By group the endpoint answers with a map such as ``{"1": 1, "2": 5}``,
+        which means six participants in total. Envelopes naming a count are
+        read as they are.
+
+        Args:
+            data: The decoded JSON body of the count endpoint.
+
+        Returns:
+            int: The total number of participants, or 0 when it cannot be read.
+        """
+        if isinstance(data, bool):
+            return 0
+        if isinstance(data, (int, float)):
+            return int(data)
+        if isinstance(data, str):
+            try:
+                return int(data.strip())
+            except ValueError:
+                return 0
+        if isinstance(data, list):
+            return len(data)
+        if isinstance(data, dict):
+            for key in ("count", "participants", "participant_count", "total", "value"):
+                if key in data:
+                    return self._participants_count_from_api(data[key])
+            for key in ("data", "result"):
+                if isinstance(data.get(key), (dict, list)):
+                    return self._participants_count_from_api(data[key])
+            # Grouped response: {"<group id>": <participants>, ...}.
+            return sum(self._participants_count_from_api(value)
+                       for value in data.values())
+        return 0
 
     def _load_selected_simlet_tests_list_from_simva_api(self):
         """

@@ -1,6 +1,7 @@
 from datetime import datetime, timezone
 
 from SimvaBrowser.SimvaBrowser import (
+    SimvaBrowser,
     _join_url,
     extract_statements,
     format_lrs_instant,
@@ -132,3 +133,88 @@ def test_parse_lrs_instant_unreadable():
     assert parse_lrs_instant("") is None
     assert parse_lrs_instant(None) is None
     assert parse_lrs_instant("not a date") is None
+
+
+class _FakeResponse:
+    def __init__(self, status_code=200, payload=None, text=""):
+        self.status_code = status_code
+        self.payload = payload
+        self.text = text
+
+    def json(self):
+        return self.payload
+
+
+def _bare_browser():
+    """A browser with only the fields the participant-count call needs."""
+    browser = SimvaBrowser.__new__(SimvaBrowser)
+    browser.simva_api_url = "https://simva.example/"
+    browser.simlet_endpoint = "simlets"
+    browser.jwt = "a-token"
+    browser.ca_file = None
+    browser.health_ok = True
+    browser.accepted_studies = []
+    browser.simlet_directories = []
+    return browser
+
+
+def test_participants_count_uses_the_groups_endpoint(monkeypatch):
+    browser = _bare_browser()
+    calls = []
+
+    def fake_get(url, **kwargs):
+        calls.append((url, kwargs))
+        return _FakeResponse(payload={"count": 3})
+
+    monkeypatch.setattr("SimvaBrowser.SimvaBrowser.requests.get", fake_get)
+    assert browser._load_simlet_participants_count(1) == 3
+    url, kwargs = calls[0]
+    assert url == "https://simva.example/simlets/1/groups/participants/count"
+    assert kwargs["headers"]["Authorization"] == "Bearer a-token"
+    assert kwargs["verify"] is None
+
+
+def test_participants_count_accepts_bare_grouped_and_enveloped_numbers(monkeypatch):
+    browser = _bare_browser()
+    for payload, expected in (
+        (4, 4),
+        ("7", 7),
+        ({"participants": 2}, 2),
+        ({"data": {"count": 5}}, 5),
+        # The endpoint reports a count per group; the tile shows their total.
+        ({"1": 1, "2": 5}, 6),
+        ({}, 0),
+    ):
+        monkeypatch.setattr(
+            "SimvaBrowser.SimvaBrowser.requests.get",
+            lambda url, **kwargs: _FakeResponse(payload=payload))
+        assert browser._load_simlet_participants_count(1) == expected
+
+
+def test_studies_list_gets_grouped_participant_total(monkeypatch):
+    browser = _bare_browser()
+    studies = [{"simlet_id": 1, "simlet_name": "test", "groups": [1, 2]}]
+
+    def fake_get(url, **kwargs):
+        if url.endswith("/groups/participants/count"):
+            return _FakeResponse(payload={"1": 1, "2": 5})
+        return _FakeResponse(payload=studies)
+
+    monkeypatch.setattr("SimvaBrowser.SimvaBrowser.requests.get", fake_get)
+    browser._load_selected_studies_from_simva_api()
+    assert browser.accepted_studies[0]["participants_count"] == 6
+
+
+def test_participants_count_failure_does_not_break_the_studies_list(monkeypatch):
+    browser = _bare_browser()
+    studies = [{"simlet_id": 1, "simlet_name": "test"}]
+
+    def fake_get(url, **kwargs):
+        if url.endswith("/groups/participants/count"):
+            return _FakeResponse(status_code=500, text="boom")
+        return _FakeResponse(payload=studies)
+
+    monkeypatch.setattr("SimvaBrowser.SimvaBrowser.requests.get", fake_get)
+    browser._load_selected_studies_from_simva_api()
+    assert browser.accepted_studies[0]["participants_count"] == 0
+    assert browser.simlet_directories[0]["id"] == "1/"

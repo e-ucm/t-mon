@@ -1,5 +1,5 @@
 import pandas as pd
-from dash import html
+from dash import html, no_update
 
 import TMonWidgets
 from TMonWidgets import MultiSelector, TMonWidget
@@ -75,6 +75,14 @@ def test_header_is_sticky_and_shows_both_logos():
     assert sources[0] != sources[1]
 
 
+def test_header_brand_shows_full_name_and_links_home():
+    for header in (TMonWidget.build_header(), TMonWidget.build_header(with_login=True)):
+        links = [component for component in _walk(header) if isinstance(component, html.A)]
+        assert len(links) == 1
+        assert links[0].href == "https://tmon.external.test/"
+        assert "Txmon - The xAPI Trace Monitor" in list(_texts(header))
+
+
 def test_header_login_controls_only_when_requested():
     plain_ids = [getattr(child, "id", None)
                  for child in _walk(TMonWidget.build_header())]
@@ -94,3 +102,104 @@ def test_footer_stays_at_the_bottom():
     assert footer.style["bottom"] == 0
     # Pushes the footer down when the page content is shorter than the viewport.
     assert footer.style["marginTop"] == "auto"
+
+
+def test_hidden_dashboard_does_not_rewrite_the_url():
+    # A tile navigates to /simlet/<id>. The dashboard is hidden then, so writing
+    # its relative `tab=...` query would resolve against that path and replace
+    # the id with `tab=home_tab` instead of appending to it.
+    assert TMonWidget.url_output({'display': 'none'}, 'tab=home_tab') is no_update
+    assert TMonWidget.url_output(None, 'tab=home_tab') is no_update
+    # Once the dashboard is open, the URL is its business again.
+    assert TMonWidget.url_output({'display': 'block'}, 'tab=home_tab') == 'tab=home_tab'
+
+
+def _texts(component):
+    """Yield every string written anywhere under a Dash component."""
+    if isinstance(component, str):
+        yield component
+        return
+    if component is None:
+        return
+    children = getattr(component, "children", None)
+    if isinstance(children, (list, tuple)):
+        for child in children:
+            yield from _texts(child)
+    elif children is not None:
+        yield from _texts(children)
+
+
+# A real response from the SimVA `/simlets` endpoint, kept verbatim so the tile
+# stays tied to the field names and shapes the API actually sends.
+SIMLET_FROM_API = {
+    "simlet_id": 1,
+    "simlet_name": "test",
+    "simlet_archived": False,
+    "simlet_description": "",
+    "sessions": [1],
+    "groups": [1, 2],
+    "tags": [{
+        "tag_id": 1, "tag_name": "test", "tag_color": "#3b82f6",
+        "tag_right": "READ",
+        "createdAt": "2026-11-18T11:30:40.207Z",
+        "updatedAt": "2026-11-18T11:30:40.207Z",
+    }],
+    "createdAt": "2026-11-18T10:24:54.201Z",
+    "updatedAt": "2026-11-18T10:24:54.201Z",
+    "current_user_id": 3,
+    "current_user_username": "teacher",
+    "current_user_permission": "FULL",
+}
+
+
+def test_simlet_tile_details_read_the_api_shape():
+    assert TMonWidget.simlet_tile_details(SIMLET_FROM_API) == {
+        "created": "2026/11/18",
+        "updated": "2026/11/18",
+        "sessions": 1,
+        "groups": 2,
+        "participants": 0,
+        "tags": [{"name": "test", "color": "#3b82f6"}],
+    }
+    # The browser annotates each simlet with the count returned by
+    # /simlets/<id>/groups/participants/count.
+    counted = dict(SIMLET_FROM_API, participants_count=6)
+    assert TMonWidget.simlet_tile_details(counted)["participants"] == 6
+    # A simlet with no tags says so rather than showing an empty line.
+    untagged = dict(SIMLET_FROM_API, tags=[])
+    assert TMonWidget.simlet_tile_details(untagged)["tags"] == []
+
+
+def test_simlet_tile_shows_the_metadata():
+    grid = TMonWidget.render_simlet_tiles([SIMLET_FROM_API])
+    texts = list(_texts(grid))
+    for expected in ("test", "Created at: 2026/11/18", "Updated at: 2026/11/18",
+                     "Sessions: 1", "Groups: 2", "Participants: 0", "Tags:"):
+        assert expected in texts
+    links = [component for component in _walk(grid) if isinstance(component, html.A)]
+    assert [link.href for link in links] == ["/simlet/1"]
+
+
+def test_simlet_tile_uses_legible_text_on_the_light_card():
+    grid = TMonWidget.render_simlet_tiles([SIMLET_FROM_API])
+    card = next(component for component in _walk(grid)
+                if isinstance(component, html.Div)
+                and (component.style or {}).get('backgroundColor') == TMonWidget.LIGHT_CARD)
+    assert card.children[0].style['color'] == TMonWidget.DARK_BACKGROUND
+    assert card.children[1].children[0].style['color'] == TMonWidget.TEXT_SECONDARY
+
+
+def test_simlet_tile_tags_use_their_own_colours():
+    grid = TMonWidget.render_simlet_tiles([SIMLET_FROM_API])
+    chips = [component for component in _walk(grid)
+             if isinstance(component, html.Span)
+             and 'backgroundColor' in (getattr(component, 'style', None) or {})]
+    assert [(chip.children, chip.style['backgroundColor']) for chip in chips] == [
+        ('test', '#3b82f6')]
+    assert chips[0].style['color'] == TMonWidget.TEXT_PRIMARY
+
+
+def test_tag_text_color_switches_for_light_backgrounds():
+    assert TMonWidget.tag_text_color('#3b82f6') == TMonWidget.TEXT_PRIMARY
+    assert TMonWidget.tag_text_color('#ffff99') == TMonWidget.DARK_BACKGROUND
+    assert TMonWidget.tag_text_color(None) == TMonWidget.TEXT_PRIMARY

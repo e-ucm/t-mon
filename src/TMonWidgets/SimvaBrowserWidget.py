@@ -291,11 +291,12 @@ def poll_lrs_data(n_intervals):
 
 def browser_path_from_dashboard_url(pathname, base_path):
     """
-    Translate a dashboard simlet URL into the browser's directory-style path.
+    Translate a simlet URL into the browser's directory-style path.
 
-    A simlet tile links to ``/simlet/<id>``. The browser
-    navigates a flat ``output/<id>/`` tree, so the simlet id has to be lifted out
-    of the dashboard URL rather than copied verbatim.
+    A simlet tile links to ``/simlet/<id>``; an analysed selection can also carry
+    a ``/dashboard/tab=...`` suffix. The browser navigates a flat ``output/<id>/``
+    tree, so the simlet id has to be lifted out of either form rather than copied
+    verbatim.
 
     Args:
         pathname (str): The URL the app was opened at.
@@ -304,13 +305,18 @@ def browser_path_from_dashboard_url(pathname, base_path):
     Returns:
         str: The browser path for that URL, or the root when it names no simlet.
     """
-    if not pathname or pathname == '/' or '/dashboard' not in pathname:
+    if not pathname or pathname == '/':
         return base_path
-    tail = pathname.split('/dashboard', 1)[1].lstrip('/')
+    if pathname.startswith('/simlet/'):
+        # Tile links are `/simlet/<id>` with no trailing slash, so the id is the
+        # remainder after the prefix rather than a segment of a dashboard path.
+        tail = pathname[len('/simlet/'):]
+    elif '/dashboard' in pathname:
+        tail = pathname.split('/dashboard', 1)[1].lstrip('/')
+    else:
+        return base_path
     parts = [part for part in tail.split('/')
              if part and '=' not in part]  # drop `tab=home_tab` and query values
-    if parts and parts[0] == 'simlet':
-        parts = parts[1:]
     if not parts:
         return base_path
     return base_path + '/'.join(parts) + '/'
@@ -335,9 +341,11 @@ def render_simlet_section(studies, id_getter):
     """
     Build the grid of simlet tiles shown by the SIMVA tab at the root level.
 
-    The SimVA API names its fields ``simlet_id``/``simlet_name``, while the
-    dashboard grid reads plain ``id``/``name`` keys, so the studies are
-    normalised here before they are handed to it.
+    The SimVA API names its fields ``simlet_id``/``simlet_name``, so plain
+    ``id``/``name`` keys are added for the dashboard grid. The rest of the
+    object is kept: dates, sessions, groups and tags are what the tiles show
+    alongside the name, and dropping them here would leave the grid with
+    nothing but identifiers.
 
     Args:
         studies: Raw simlet objects from the SimVA API.
@@ -351,10 +359,10 @@ def render_simlet_section(studies, id_getter):
         simlet_id = id_getter(simlet, 'simlet', 'id')
         if simlet_id is None:
             continue
-        normalized.append({
-            'id': simlet_id,
-            'name': id_getter(simlet, 'simlet', 'name') or str(simlet_id),
-        })
+        item = dict(simlet)
+        item['id'] = simlet_id
+        item['name'] = id_getter(simlet, 'simlet', 'name') or str(simlet_id)
+        normalized.append(item)
     return html.Div([
         html.H3('Simlets', style={'margin': '0 0 4px 20px', 'fontFamily': 'Inter'}),
         render_simlet_tiles(normalized),
@@ -393,9 +401,10 @@ def init_storage(main, pathname):
         browser = SimvaBrowser(session)
         if pathname is None or pathname == '/':
             browser.current_path = browser.base_path
-        elif '/dashboard' in pathname:
-            # A tile links to /dashboard/tab=home_tab: restore the
-            # matching browser selection instead of falling back to the root.
+        elif pathname.startswith('/simlet/') or '/dashboard' in pathname:
+            # Tile links keep the URL at /simlet/<id>, and analysed selections
+            # add a /dashboard/tab=... suffix. Restore the matching browser
+            # selection instead of falling back to the studies-list root.
             browser.current_path = browser_path_from_dashboard_url(
                 pathname, browser.base_path)
         else:

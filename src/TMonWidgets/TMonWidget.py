@@ -1,5 +1,5 @@
 import dash
-from dash import html, dash_table, dcc, callback, Output, Input, State
+from dash import html, dash_table, dcc, callback, Output, Input, State, no_update
 from dash.exceptions import PreventUpdate
 import pandas as pd
 import json
@@ -24,6 +24,7 @@ from TMonWidgets.ChartBuilder import (
 from TMonWidgets.MultiSelector import searchValueFromMultiSelector
 from vis import xAPISGPlayersProgress, xAPISGVideosSeenSkipped
 from urllib.parse import unquote, urlencode
+from datetime import datetime
 
 # Query parameter carrying the activities left out of the view. The name is deliberately
 # not `activity`: get_value_from_url matches substrings, so `activity=` would also be
@@ -51,24 +52,294 @@ homepagecontent=[
 ]
 
 
+def url_output(panel_style, query_string):
+    """
+    The URL to publish from the dashboard, or ``no_update`` while it is hidden.
+
+    The query string written to ``url-t-mon.pathname`` is relative on purpose:
+    once the dashboard is open, a new ``tab=...`` value replaces the previous
+    one in place. Doing that while the dashboard is still hidden would instead
+    resolve against the current path and overwrite its last segment, turning a
+    simlet tile link's ``/simlet/1`` into ``/simlet/tab=home_tab``. Until a
+    selection has been analysed the URL therefore belongs to the app, not the
+    dashboard, and is left untouched.
+    """
+    if panel_style == {'display': 'block'}:
+        return query_string
+    return no_update
+
+
+def simlet_field(simlet, *keys):
+    """
+    Read the first of ``keys`` a simlet object carries.
+
+    The dashboard is fed both the raw SimVA objects (``simlet_id``/``simlet_name``
+    and, on legacy servers, ``_id``/``_name``) and the normalised ones used by the
+    browser grid (``id``/``name``). Metadata may also be nested under ``metadata``
+    or ``info``. Looking in all of those places keeps one renderer for every
+    source and tolerates the API adding a prefix later.
+
+    Args:
+        simlet (dict): A simlet object from the SimVA API.
+        *keys: Field names to try, in order of preference.
+
+    Returns:
+        The first non-None value found, or None.
+    """
+    if not isinstance(simlet, dict):
+        return None
+    for source in (simlet, simlet.get("metadata"), simlet.get("info")):
+        if not isinstance(source, dict):
+            continue
+        for key in keys:
+            if source.get(key) is not None:
+                return source[key]
+    return None
+
+
+def simlet_date(value):
+    """
+    Render a simlet timestamp as ``YYYY/MM/DD``.
+
+    The SimVA API has shipped ISO strings, epoch numbers and nested date objects
+    for these fields; all three are accepted, and anything unparseable becomes a
+    dash rather than a traceback.
+
+    Args:
+        value: A timestamp in any of the supported representations.
+
+    Returns:
+        str: The date in ``YYYY/MM/DD`` form, or ``-`` when it is unknown.
+    """
+    if value in (None, ""):
+        return "-"
+    if isinstance(value, (int, float)) and not isinstance(value, bool):
+        stamp = float(value)
+        if abs(stamp) > 1e11:  # milliseconds, not seconds
+            stamp /= 1000
+        try:
+            return datetime.fromtimestamp(stamp).strftime("%Y/%m/%d")
+        except (ValueError, OSError, OverflowError):
+            return "-"
+    if isinstance(value, dict):
+        return simlet_date(simlet_field(value, "date", "value", "timestamp"))
+    if isinstance(value, str):
+        text = value.strip()
+        if not text:
+            return "-"
+        try:
+            return datetime.fromisoformat(text.replace("Z", "+00:00")).strftime("%Y/%m/%d")
+        except ValueError:
+            pass
+        for pattern in ("%Y-%m-%d %H:%M:%S", "%Y-%m-%d", "%Y/%m/%d", "%d/%m/%Y"):
+            try:
+                return datetime.strptime(text[:19], pattern).strftime("%Y/%m/%d")
+            except ValueError:
+                continue
+    return "-"
+
+
+def simlet_count(value):
+    """
+    Turn a count-like simlet field into an integer.
+
+    The API may send a number, a count string, or the collection itself, so the
+    length of a list/dict is used as the count in those cases.
+
+    Args:
+        value: The raw field value.
+
+    Returns:
+        int: The number of items, or 0 when there is nothing to count.
+    """
+    if value is None or isinstance(value, bool):
+        return 0
+    if isinstance(value, (int, float)):
+        return int(value)
+    if isinstance(value, (list, tuple, set, dict, str)):
+        return len(value)
+    return 0
+
+
+def tag_text_color(color):
+    """
+    Choose readable text for a tag chip of the given background colour.
+
+    The API supplies the tag's own ``tag_color``, which can be light enough
+    that white text disappears. A simple brightness check keeps the label
+    legible on both dark and light chips.
+
+    Args:
+        color: The tag's CSS colour.
+
+    Returns:
+        str: A light or dark text colour.
+    """
+    if not isinstance(color, str):
+        return TEXT_PRIMARY
+    value = color.strip().lstrip('#')
+    if len(value) == 3:
+        value = ''.join(character * 2 for character in value)
+    if len(value) not in (6, 8) or any(character not in '0123456789abcdefABCDEF'
+                                      for character in value):
+        return TEXT_PRIMARY
+    red, green, blue = (int(value[index:index + 2], 16) for index in (0, 2, 4))
+    brightness = (0.299 * red + 0.587 * green + 0.114 * blue) / 255
+    return DARK_BACKGROUND if brightness > 0.65 else TEXT_PRIMARY
+
+
+def simlet_tags(simlet):
+    """
+    Read the tags of a simlet, keeping the colour each one was given in SimVA.
+
+    A tag from the API looks like
+    ``{"tag_id": 1, "tag_name": "test", "tag_color": "#3b82f6"}``. Plain
+    strings and name-to-colour maps are accepted as well, so a tag still shows
+    up when the API leaves out its colour.
+
+    Args:
+        simlet (dict): A simlet object from the SimVA API.
+
+    Returns:
+        list: ``{"name": ..., "color": ...}`` pairs, empty when there are none.
+    """
+    value = simlet_field(simlet, "tags", "tag", "simlet_tags")
+    if value is None or value == "":
+        return []
+    if isinstance(value, str):
+        return [{"name": part.strip(), "color": BRAND_PRIMARY}
+                for part in value.split(",") if part.strip()]
+    if isinstance(value, dict):
+        return [{"name": str(name).strip(),
+                 "color": str(color).strip() if color else BRAND_PRIMARY}
+                for name, color in value.items() if str(name).strip()]
+    if isinstance(value, (list, tuple, set)):
+        tags = []
+        for tag in value:
+            if isinstance(tag, dict):
+                name = simlet_field(tag, "tag_name", "name", "tag", "label", "value")
+                color = simlet_field(tag, "tag_color", "color", "colour")
+            else:
+                name, color = tag, None
+            if name is None or not str(name).strip():
+                continue
+            tags.append({
+                "name": str(name).strip(),
+                "color": str(color).strip() if color else BRAND_PRIMARY,
+            })
+        return tags
+    return [{"name": str(value), "color": BRAND_PRIMARY}]
+
+
+def simlet_participants(simlet):
+    """
+    Count the participants of a simlet.
+
+    Some API versions publish a top-level participant count; others only list
+    the groups. In the latter case the participants named by each group are
+    added up. With neither, the count is zero.
+
+    Args:
+        simlet (dict): A simlet object from the SimVA API.
+
+    Returns:
+        int: The number of participants.
+    """
+    # SimvaBrowser calls /simlets/<id>/groups/participants/count while loading
+    # the studies and annotates each one with `participants_count`.
+    explicit = simlet_field(
+        simlet, "participants_count", "participants", "participant_count",
+        "nb_participants", "users")
+    if explicit is not None:
+        return simlet_count(explicit)
+    groups = simlet_field(simlet, "groups", "group_count", "nb_groups")
+    if isinstance(groups, (list, tuple, set)):
+        return sum(
+            simlet_count(simlet_field(group, "participants", "users", "members",
+                                      "participant_ids"))
+            for group in groups if isinstance(group, dict)
+        )
+    return 0
+
+
+def simlet_tile_details(simlet):
+    """
+    Collect the metadata a simlet tile shows, whatever the API called its fields.
+
+    Args:
+        simlet (dict): A simlet object, raw or normalised.
+
+    Returns:
+        dict: The values to put on the tile.
+    """
+    return {
+        "created": simlet_date(simlet_field(
+            simlet, "created_at", "created", "creation_date", "creationDate", "createdAt")),
+        "updated": simlet_date(simlet_field(
+            simlet, "updated_at", "updated", "last_updated", "modified_at", "updatedAt")),
+        "sessions": simlet_count(simlet_field(
+            simlet, "sessions", "session_count", "nb_sessions", "total_sessions")),
+        "groups": simlet_count(simlet_field(
+            simlet, "groups", "group_count", "nb_groups")),
+        "participants": simlet_participants(simlet),
+        "tags": simlet_tags(simlet),
+    }
+
+
 def render_simlet_tiles(studies):
     """
     Render a grid of simlet (simlet) tiles using TMON.figcraft design tokens.
-    
+
+    Each tile carries the simlet name together with its creation and update
+    dates, the number of sessions, groups and participants, and its tags.
+
     Args:
         studies (list): List of simlet objects from the SimVA API.
-        
+
     Returns:
         html.Div: A grid of simlet tiles.
     """
     if not studies:
         return html.Div("No studies available. Please log in and load a simlet.")
-    
+
     tiles = []
     for i, simlet in enumerate(studies):
-        simlet_id = simlet.get("id") or simlet.get("name", f"simlet {i+1}")
-        simlet_name = simlet.get("name") or str(simlet_id)
-        
+        simlet_id = (simlet_field(simlet, "id", "simlet_id", "_id")
+                     or simlet_field(simlet, "name", "simlet_name", "_name")
+                     or f"simlet {i+1}")
+        simlet_name = (simlet_field(simlet, "name", "simlet_name", "_name")
+                       or str(simlet_id))
+        details = simlet_tile_details(simlet)
+
+        # The card is a light surface, so its text has to be dark; the light
+        # tokens are only legible on the dark header.
+        meta_style = {
+            'fontFamily': INTER_FONT,
+            'fontSize': 11,
+            'lineHeight': '18px',
+            'color': TEXT_SECONDARY,
+            'whiteSpace': 'nowrap',
+            'overflow': 'hidden',
+            'textOverflow': 'ellipsis',
+        }
+        tag_chips = [
+            html.Span(
+                tag['name'],
+                style={
+                    'display': 'inline-block',
+                    'backgroundColor': tag['color'],
+                    'color': tag_text_color(tag['color']),
+                    'fontFamily': INTER_FONT,
+                    'fontSize': 10,
+                    'lineHeight': '16px',
+                    'padding': '0 8px',
+                    'margin': '2px 4px 0 0',
+                    'borderRadius': 10,
+                    'whiteSpace': 'nowrap',
+                },
+            )
+            for tag in details['tags']
+        ]
         tile = html.A(
             html.Div([
                 html.Div(
@@ -77,33 +348,42 @@ def render_simlet_tiles(studies):
                         'fontFamily': INTER_FONT,
                         'fontSize': 14,
                         'fontWeight': '500',
-                        'color': TEXT_PRIMARY,
-                        'padding': '12px',
-                        'height': '60px',
+                        'color': DARK_BACKGROUND,
+                        'padding': '12px 12px 8px',
+                        'height': '44px',
+                        'boxSizing': 'border-box',
                         'display': 'flex',
                         'alignItems': 'center',
                         'textOverflow': 'ellipsis',
                         'whiteSpace': 'nowrap',
+                        'overflow': 'hidden',
+                        'borderBottom': '1px solid rgba(0,0,0,0.1)',
                     }
                 ),
-                html.Div(
-                    f"ID: {simlet_id}",
-                    style={
-                        'fontFamily': INTER_FONT,
-                        'fontSize': 11,
-                        'color': BRAND_SOFT,
-                        'padding': '0 12px 12px',
-                        'borderTop': f'1px solid rgba(255,255,255,0.1)',
-                        'width': '100%',
-                    }
-                ),
+                html.Div([
+                    html.Div(f"Created at: {details['created']}", style=meta_style),
+                    html.Div(f"Updated at: {details['updated']}", style=meta_style),
+                    html.Div(f"Sessions: {details['sessions']}", style=meta_style),
+                    html.Div([
+                        html.Span(f"Groups: {details['groups']}",
+                                  style={'marginRight': '18px'}),
+                        html.Span(f"Participants: {details['participants']}"),
+                    ], style=meta_style),
+                    html.Div("Tags:", style=dict(meta_style, marginTop='4px')),
+                    html.Div(
+                        tag_chips if tag_chips else html.Span(
+                            "No tags", style={'color': TEXT_SECONDARY}),
+                        style=dict(meta_style, whiteSpace='normal'),
+                    ),
+                ], style={'padding': '8px 12px 12px'}),
             ],
                 style={
                     'backgroundColor': LIGHT_CARD,
-                    'border': '1px solid rgba(255,255,255,0.1)',
+                    'border': '1px solid rgba(0,0,0,0.1)',
                     'borderRadius': 8,
                     'width': f'{SIMLET_TILE_WIDTH}px',
                     'height': f'{SIMLET_TILE_HEIGHT}px',
+                    'boxSizing': 'border-box',
                     'margin': f'{SIMLET_TILE_MARGIN}px',
                     'display': 'inline-block',
                     'verticalAlign': 'top',
@@ -117,11 +397,11 @@ def render_simlet_tiles(studies):
             }
         )
         tiles.append(tile)
-        
+
         # Add row break after every 4 tiles
         if (i + 1) % 4 == 0 and i < len(studies) - 1:
             tiles.append(html.Div(style={'clear': 'both'}))
-    
+
     # Fill remaining space if less than 4 in last row
     remaining = len(studies) % 4
     if remaining > 0:
@@ -131,7 +411,7 @@ def render_simlet_tiles(studies):
                 'height': f'{SIMLET_TILE_HEIGHT}px',
                 'backgroundColor': 'transparent',
             }))
-    
+
     return html.Div(tiles, style={'padding': '20px'})
 
 @callback(
@@ -461,9 +741,14 @@ def filterObjectIdDependingTab(df, value, tab):
     Input("activity-filter-hidden", "data"),
     # The charts to draw, so adding or removing one shows it without another round trip.
     Input("created-charts", "data"),
+    # The dashboard is hidden until a selection is analysed. Until then it must not
+    # write a relative query string into the URL: that would resolve against the
+    # current path and overwrite the simlet id of a `/simlet/<id>` tile link.
+    State('output-t-mon', 'style'),
 )
 def update_output(tab, user_search_value, user_value, object_search_value, object_value,
-                  lrs_data_version=None, hidden_activities=None, created_charts=None):
+                  lrs_data_version=None, hidden_activities=None, created_charts=None,
+                  panel_style=None):
     ctx = dash.callback_context
     triggered=ctx.triggered
     triggered_prop_id = ctx.triggered[0]['prop_id']
@@ -499,7 +784,7 @@ def update_output(tab, user_search_value, user_value, object_search_value, objec
                 if hidden_activities:
                     new_query_params[HIDDEN_ACTIVITIES_PARAM] = ",".join(hidden_activities)
                 return (
-                    f"{urlencode(new_query_params)}",
+                    url_output(panel_style, urlencode(new_query_params)),
                     user_unique_options,
                     object_unique_options,
                     html.Div(html.Div([
@@ -688,11 +973,11 @@ def update_output(tab, user_search_value, user_value, object_search_value, objec
             # Construct a new query string with unique parameters
             new_query_string = urlencode(new_query_params, safe=" ")
             print(f"new_query_string: {new_query_string}")
-            return (f"{new_query_string}", user_unique_options, object_unique_options,
-                    tab_content, x_options, y_options, creator_style)
+            return (url_output(panel_style, new_query_string), user_unique_options,
+                    object_unique_options, tab_content, x_options, y_options, creator_style)
         else:
-            url=f"tab=home_tab"
-            return url, [], [], html.Div(homepagecontent), [], [], creator_controls_style(tab)
+            return (url_output(panel_style, "tab=home_tab"), [], [],
+                    html.Div(homepagecontent), [], [], creator_controls_style(tab))
     else:
         raise PreventUpdate
     
@@ -728,9 +1013,15 @@ HEADER_BUTTON_STYLE = {
 
 # Simlet tiles design
 SIMLET_TILE_WIDTH = 250
-SIMLET_TILE_HEIGHT = 180
+# The tile now carries the simlet metadata as well as its name, so it needs room
+# for the dates, counts and tags below the heading.
+SIMLET_TILE_HEIGHT = 240
 SIMLET_TILE_MARGIN = 16
 SIMLET_TITLE_MAX_LINES = 2
+
+# The brand in the header links back to the T-Mon landing page.
+TMON_HOME_URL = "https://tmon.external.test/"
+
 
 def build_header(with_login=False):
     """
@@ -739,9 +1030,10 @@ def build_header(with_login=False):
     The brand is always shown: the T-Mon glyph and wordmark are embedded in the
     component, so they render even when the app sits behind a proxy that breaks
     ``/assets/...`` URLs. They sit on a light chip because both marks are orange
-    and would disappear on the orange bar. The SIMVA app also asks for the login
-    controls; the local file-upload app leaves them out, since it has no
-    authentication callbacks to drive them.
+    and would disappear on the orange bar. The chip also carries the expanded
+    name, "Txmon - The xAPI Trace Monitor", and links back to the T-Mon home
+    page. The SIMVA app also asks for the login controls; the local file-upload
+    app leaves them out, since it has no authentication callbacks to drive them.
 
     Args:
         with_login (bool): Include the SIMVA login/account controls.
@@ -750,25 +1042,43 @@ def build_header(with_login=False):
         html.Div: The header, pinned to the top of the viewport.
     """
     brand = html.Div([
-        # The white chip keeps the orange marks legible on the orange bar.
-        html.Div([
-            html.Img(
-                src=LOGO_SRC,
-                alt='T-Mon logo',
-                style={'height': '30px', 'width': '30px', 'display': 'block'},
+        # The white chip keeps the orange marks legible on the orange bar, and
+        # takes the whole brand back to the T-Mon home page when clicked.
+        html.A([
+            html.Div([
+                html.Img(
+                    src=LOGO_SRC,
+                    alt='T-Mon logo',
+                    style={'height': '30px', 'width': '30px', 'display': 'block'},
+                ),
+                html.Img(
+                    src=WORDMARK_SRC,
+                    alt='T-Mon',
+                    style={'height': '26px', 'display': 'block'},
+                ),
+            ], style={
+                'display': 'flex',
+                'alignItems': 'center',
+                'gap': '10',
+            }),
+            html.Span(
+                'Txmon - The xAPI Trace Monitor',
+                style={
+                    'fontFamily': INTER_FONT,
+                    'fontSize': 13,
+                    'fontWeight': '600',
+                    'color': DARK_BACKGROUND,
+                    'whiteSpace': 'nowrap',
+                },
             ),
-            html.Img(
-                src=WORDMARK_SRC,
-                alt='T-Mon',
-                style={'height': '26px', 'display': 'block'},
-            ),
-        ], style={
+        ], href=TMON_HOME_URL, style={
             'display': 'flex',
             'alignItems': 'center',
-            'gap': '10',
+            'gap': '12',
             'backgroundColor': '#fff',
             'borderRadius': '6px',
             'padding': '4px 10px',
+            'textDecoration': 'none',
         }),
         # Sidebar toggle button (mobile)
         html.Button('☰', id='sidebar-toggle', n_clicks=0, style={

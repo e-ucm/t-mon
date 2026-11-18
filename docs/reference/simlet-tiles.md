@@ -25,11 +25,16 @@ def render_simlet_tiles(studies) -> dash.html.Div
 ```html
 <div style="...">  <!-- Tile container -->
   <a href="/simlet/{id}">  <!-- Clickable link -->
-    <div style="...">  <!-- Study name -->
-      {name[:30] + ("..." if len(name) > 30 else "")}
+    <div style="...">  <!-- Simlet name, truncated at 50 chars -->
+      {name[:50] + ("..." if len(name) > 50 else "")}
     </div>
-    <div style="...">  <!-- Study ID -->
-      ID: {id}
+    <div style="...">  <!-- Metadata -->
+      Created at: {YYYY/MM/DD}
+      Updated at: {YYYY/MM/DD}
+      Sessions: {n}
+      Groups: {n}   Participants: {n}
+      Tags:
+      {comma-separated tag_name values, or "No tags"}
     </div>
   </a>
 </div>
@@ -53,9 +58,12 @@ if (TMonWidgets.accepted_studies and
   3. At least one study is available (`len(TMonWidgets.accepted_studies) > 0`)
 
 **Tile Display**:
-- Uses first study from `TMonWidgets.accepted_studies[0]`
-- Shows study name (truncated at 30 chars with ellipsis)
-- Shows study ID below the name
+- Shows one tile per simlet in `TMonWidgets.accepted_studies`
+- Shows the simlet name (truncated at 50 chars with ellipsis)
+- Shows creation and update dates, session/group/participant counts and tags
+- Each tag is a chip coloured with its own `tag_color`; text switches between
+  light and dark so it stays readable on the chip
+- Tile text is dark on the light card, so it stays legible
 - Tile links to `/simlet/{id}`
 
 ### Design Tokens Used
@@ -71,9 +79,14 @@ if (TMonWidgets.accepted_studies and
 
 | Field | Source | Description |
 |-------|--------|-------------|
-| `id` | API response | Study/simlet identifier |
-| `name` | API response | Study display name |
-| `accepted_studies` | `TMonWidgets` | List of all available studies |
+| `id` / `simlet_id` | API response | Simlet identifier (used in the tile link) |
+| `name` / `simlet_name` | API response | Simlet display name |
+| `createdAt` / `updatedAt` | API response | ISO timestamps, rendered as `YYYY/MM/DD` |
+| `sessions` | API response | Number of sessions (list length when sent as a list) |
+| `groups` | API response | Number of groups (list length when sent as a list) |
+| `participants_count` | `GET /simlets/<id>/groups/participants/count` | Sum of the per-group counts returned by the endpoint (e.g. `{"1": 1, "2": 5}` → 6); falls back to 0 on error |
+| `tags` | API response | Tag objects; their `tag_name` values are shown, or `No tags` |
+| `accepted_studies` | `TMonWidgets` | List of all available simlets |
 
 ## Configuration
 
