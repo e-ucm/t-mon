@@ -4,7 +4,11 @@ from dash.exceptions import PreventUpdate
 import pandas as pd
 import json
 import TMonWidgets
-from TMonWidgets.BrandAssets import LOGO_SRC, WORDMARK_SRC
+from TMonWidgets.BrandAssets import (
+    LOGO_SRC, WORDMARK_SRC, USER_ICON_SRC, POWER_ICON_SRC, INFO_ICON_SRC,
+    CONTACT_ICON_SRC,
+)
+from TMonWidgets import I18n
 from LoadProcessStatements import resolve_actor_name_column, flatten_for_display
 from TMonWidgets.ActivityFilter import filter_df_by_activities, statements_activity_ids
 from TMonWidgets.ChartBuilder import (
@@ -300,7 +304,7 @@ def render_simlet_tiles(studies):
         html.Div: A grid of simlet tiles.
     """
     if not studies:
-        return html.Div("No studies available. Please log in and load a simlet.")
+        return html.Div(I18n.t('simlets.no_studies'))
 
     tiles = []
     for i, simlet in enumerate(studies):
@@ -361,18 +365,23 @@ def render_simlet_tiles(studies):
                     }
                 ),
                 html.Div([
-                    html.Div(f"Created at: {details['created']}", style=meta_style),
-                    html.Div(f"Updated at: {details['updated']}", style=meta_style),
-                    html.Div(f"Sessions: {details['sessions']}", style=meta_style),
+                    html.Div(f"{I18n.t('simlets.created_at')}: {details['created']}",
+                             style=meta_style),
+                    html.Div(f"{I18n.t('simlets.updated_at')}: {details['updated']}",
+                             style=meta_style),
+                    html.Div(f"{I18n.t('simlets.sessions')}: {details['sessions']}",
+                             style=meta_style),
                     html.Div([
-                        html.Span(f"Groups: {details['groups']}",
+                        html.Span(f"{I18n.t('simlets.groups')}: {details['groups']}",
                                   style={'marginRight': '18px'}),
-                        html.Span(f"Participants: {details['participants']}"),
+                        html.Span(f"{I18n.t('simlets.participants')}: "
+                                  f"{details['participants']}"),
                     ], style=meta_style),
-                    html.Div("Tags:", style=dict(meta_style, marginTop='4px')),
+                    html.Div(f"{I18n.t('simlets.tags')}:",
+                             style=dict(meta_style, marginTop='4px')),
                     html.Div(
                         tag_chips if tag_chips else html.Span(
-                            "No tags", style={'color': TEXT_SECONDARY}),
+                            I18n.t('simlets.no_tags'), style={'color': TEXT_SECONDARY}),
                         style=dict(meta_style, whiteSpace='normal'),
                     ),
                 ], style={'padding': '8px 12px 12px'}),
@@ -989,7 +998,7 @@ def update_output(tab, user_search_value, user_value, object_search_value, objec
 BRAND_PRIMARY = "#078493"
 BRAND_SOFT = "#8ec8c7"
 # The orange of the T-Mon logo, used for the top bar.
-BRAND_ORANGE = "#f26522"
+BRAND_ORANGE = "#ff8f22"
 TEXT_PRIMARY = "#fff"
 TEXT_SECONDARY = "#3c6d7a"
 SURFACE_SUNKEN = "#e8e5e2"
@@ -1001,7 +1010,7 @@ LIGHT_CARD = "#fcfcfc"
 INTER_FONT = "Inter"
 SIDEBAR_HEIGHT = 108
 # Enough room for the logo and wordmark alongside the login controls.
-TOP_BAR_HEIGHT = 56
+TOP_BAR_HEIGHT = 40  # compact version of the SIMVA front-end's 3rem bar
 # Dark text on a white button reads well on the orange bar.
 HEADER_BUTTON_STYLE = {
     'backgroundColor': '#fff',
@@ -1012,6 +1021,21 @@ HEADER_BUTTON_STYLE = {
     'fontSize': 13,
     'padding': '6px 14px',
     'cursor': 'pointer',
+}
+
+# The SIMVA-style header treats its controls as plain nav items, not raised
+# buttons. Kept here so the Account callback can restate the style when it
+# hides or shows the control.
+HEADER_NAV_BUTTON_STYLE = {
+    'background': 'none',
+    'border': 'none',
+    'color': '#000',
+    'fontFamily': 'sans-serif',
+    'fontSize': 14,
+    'fontWeight': 'bold',
+    'padding': '0',
+    'cursor': 'pointer',
+    'whiteSpace': 'nowrap',
 }
 
 # Simlet tiles design
@@ -1026,17 +1050,15 @@ SIMLET_TITLE_MAX_LINES = 2
 TMON_HOME_URL = "https://tmon.external.test/"
 
 
-def build_header(with_login=False):
+def build_header(with_login=False, lang=None):
     """
     Build the sticky top bar shared by the T-Mon apps.
 
-    The brand is always shown: the T-Mon glyph and wordmark are embedded in the
-    component, so they render even when the app sits behind a proxy that breaks
-    ``/assets/...`` URLs. They sit on a light chip because both marks are orange
-    and would disappear on the orange bar. The chip also carries the expanded
-    name, "Txmon - The xAPI Trace Monitor", and links back to the T-Mon home
-    page. The SIMVA app also asks for the login controls; the local file-upload
-    app leaves them out, since it has no authentication callbacks to drive them.
+    The bar follows the SIMVA front-end header: bold black sans-serif text on
+    an orange strip, logo and product name on the left, and a right-hand nav
+    with Contact us, the signed-in user, Account and a black Login/Logout pill.
+    The callback-owned ids are kept exactly as before, so the SIMVA login
+    callbacks work wherever those controls sit in the layout.
 
     Args:
         with_login (bool): Include the SIMVA login/account controls.
@@ -1044,86 +1066,111 @@ def build_header(with_login=False):
     Returns:
         html.Div: The header, pinned to the top of the viewport.
     """
+    link_style = {
+        'display': 'flex', 'alignItems': 'center', 'height': '100%',
+        'textDecoration': 'none', 'color': '#000', 'fontWeight': 'bold',
+        'fontFamily': 'sans-serif', 'fontSize': 12, 'whiteSpace': 'nowrap',
+    }
+    icon_style = {'height': '1.2rem', 'width': 'auto', 'marginRight': '0.35rem'}
+    item_style = {
+        'display': 'flex', 'alignItems': 'center', 'height': '100%',
+        'padding': '0 0.5rem', 'borderLeft': '1px solid #000',
+    }
+
     brand = html.Div([
-        # The white chip keeps the orange marks legible on the orange bar, and
-        # takes the whole brand back to the T-Mon home page when clicked.
         html.A([
-            html.Div([
-                html.Img(
-                    src=LOGO_SRC,
-                    alt='T-Mon logo',
-                    style={'height': '30px', 'width': '30px', 'display': 'block'},
-                ),
-                html.Img(
-                    src=WORDMARK_SRC,
-                    alt='T-Mon',
-                    style={'height': '26px', 'display': 'block'},
-                ),
-            ], style={
-                'display': 'flex',
-                'alignItems': 'center',
-                'gap': '10',
-            }),
-            html.Span(
-                'Txmon - The xAPI Trace Monitor',
-                style={
-                    'fontFamily': INTER_FONT,
-                    'fontSize': 13,
-                    'fontWeight': '600',
-                    'color': DARK_BACKGROUND,
-                    'whiteSpace': 'nowrap',
-                },
+            html.Img(
+                src=LOGO_SRC, alt='T-Mon logo',
+                style={'height': '1.6rem', 'width': 'auto', 'marginRight': '0.35rem'},
             ),
-        ], href=TMON_HOME_URL, style={
-            'display': 'flex',
-            'alignItems': 'center',
-            'gap': '12',
-            'backgroundColor': '#fff',
-            'borderRadius': '6px',
-            'padding': '4px 10px',
-            'textDecoration': 'none',
-        }),
-        # Sidebar toggle button (mobile)
-        html.Button('☰', id='sidebar-toggle', n_clicks=0, style={
-            'display': 'none',
-            'background': 'none',
-            'border': 'none',
-            'color': DARK_BACKGROUND,
-            'fontSize': 20,
-            'padding': '4px 8px',
-            'cursor': 'pointer',
-        }),
-    ], style={'display': 'flex', 'alignItems': 'center', 'gap': '12'})
+            html.Span('Txmon - The xAPI Trace Monitor', style={
+                'fontFamily': 'sans-serif', 'fontSize': 12,
+                'fontWeight': 'bold', 'color': '#000', 'whiteSpace': 'nowrap',
+            }),
+        ], href=TMON_HOME_URL, style=dict(link_style, border='none', padding='0')),
+    ], className='header-left',
+        style={'display': 'flex', 'alignItems': 'center', 'height': '100%'})
 
-    children = [brand]
+    # No value at build time: the language callback fills it from the session
+    # (or the `lng` URL) so a remembered choice is shown as selected.
+    language = lang
+    items = [
+        html.Li(dcc.Dropdown(
+            id='header-language', clearable=False,
+            options=[{'label': label, 'value': code}
+                     for code, label in I18n.SUPPORTED_LANGUAGES.items()],
+            value=language,
+            style={'width': '110px', 'fontSize': 12}),
+            style=dict(item_style, borderLeft='none', paddingRight='0.5rem')),
+        html.Li(html.A([
+            html.Img(src=CONTACT_ICON_SRC, style=icon_style),
+            html.Span(I18n.t('header.contact'), id='header-contact-label'),
+        ], href='https://www.e-ucm.es/es/people/', target='_blank',
+            rel='noopener noreferrer', style=link_style),
+            style=dict(item_style, paddingRight='0.5rem')),
+    ]
+
+    # Keep these ids exactly: the login/account callbacks in SimvaBrowserWidget
+    # target them, wherever the controls are placed in the layout. The account
+    # item shows only the username and is hidden while logged out.
     if with_login:
-        # Keep these ids exactly: the login/account callbacks in SimvaBrowserWidget
-        # target them, wherever the controls are placed in the layout.
-        children.append(html.Div(id='main-login', children=[
-            html.Button('Login', id='login-logout-button', n_clicks=0,
-                        className='header-login-button', style=HEADER_BUTTON_STYLE),
-            html.Button('Account', id='account-button', n_clicks=0,
-                        className='header-account-button', style=HEADER_BUTTON_STYLE),
-            html.Div(id='login-logout'),
+        items.append(html.Li([
+            html.Img(src=USER_ICON_SRC, style=icon_style),
+            html.Button('', id='account-button', n_clicks=0,
+                        className='header-account-button',
+                        style=dict(HEADER_NAV_BUTTON_STYLE, fontSize=12)),
             html.Div(id='account', children=[]),
-            html.Div(id='connection-status', children='', className='header-connection-status',
-                     style={'fontFamily': INTER_FONT, 'fontSize': 12,
-                            'color': DARK_BACKGROUND, 'whiteSpace': 'nowrap'}),
-        ], style={'display': 'flex', 'alignItems': 'center', 'gap': '10'}))
+        ], id='header-account-item', style=item_style))
 
-    return html.Div(children, style={
+    items.append(html.Li([
+        html.Img(src=POWER_ICON_SRC, style=dict(icon_style, filter='invert(100%)',
+                                                marginRight='0.35rem')),
+        html.Button(I18n.t('header.login') if not with_login else I18n.t('header.logout'),
+                    id='login-logout-button', n_clicks=0,
+                    className='header-login-button',
+                    style=dict(HEADER_NAV_BUTTON_STYLE, color='#fff', fontSize=12)),
+    ], className='login' if not with_login else 'logout', style={
+        'display': 'flex', 'alignItems': 'center', 'height': '100%',
+        'backgroundColor': '#000', 'color': '#fff', 'borderLeft': '1px solid #000',
+        'padding': '0 0.7rem 0 0.5rem',
+    }))
+
+    right_children = [html.Ul(items, style={
+        'display': 'flex', 'alignItems': 'center', 'height': '100%',
+        'listStyle': 'none', 'margin': 0, 'padding': 0,
+    })]
+    if with_login:
+        right_children.append(html.Div(
+            id='main-login', children=[
+                html.Div(id='login-logout'),
+                # Kept for the existing status callback, never shown: the
+                # username now lives in the account item above.
+                html.Div(id='connection-status', children='',
+                         style={'display': 'none'}),
+            ], style={'display': 'none'}))
+
+    children = [
+        brand,
+        html.Div(right_children, className='header-right', style={
+            'display': 'flex', 'alignItems': 'center', 'height': '100%',
+            'marginLeft': '1rem', 'textAlign': 'center',
+        }),
+    ]
+
+    return html.Div(children, className='header', style={
         'position': 'sticky',
         'top': 0,
-        'zIndex': 1000,
+        'zIndex': 100,
         'display': 'flex',
         'alignItems': 'center',
         'justifyContent': 'space-between',
+        'flexWrap': 'nowrap',
         'height': f'{TOP_BAR_HEIGHT}px',
-        'padding': '0 20px',
+        'padding': '0.5rem',
         'backgroundColor': BRAND_ORANGE,
-        'color': DARK_BACKGROUND,
+        'color': '#000',
         'margin': '0',
-        'borderBottom': '1px solid rgba(0,0,0,0.15)',
+        'boxShadow': '0px 0px 0.3rem 0.15rem rgba(0,0,0,0.3)',
     })
 
 
@@ -1136,6 +1183,8 @@ TMonSidebar=html.Div(id='sidebar', children=[])  # Will be populated by callback
 
 TMonBody=html.Div([
     dcc.Location(id='url-t-mon', refresh=False), # Location component for URL handling
+    # Written only when the header language changes; the reload picks up lng.
+    dcc.Location(id='i18n-location', refresh=True),
     html.Div(id='output-t-mon', style={'display': 'none'}, children=[
         dcc.Dropdown(id='users-multi-dynamic-dropdown', multi=True),
         dcc.Dropdown(id='object-multi-dynamic-dropdown', multi=True),

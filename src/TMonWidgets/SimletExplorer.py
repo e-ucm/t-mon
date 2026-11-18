@@ -14,26 +14,27 @@ from dash import html, dcc, callback, Input, Output, State
 from dash.exceptions import PreventUpdate
 
 import TMonWidgets
+from TMonWidgets import I18n
 from TMonWidgets.TMonWidget import render_simlet_tiles
 
 DEFAULT_LIMIT = 9
 MAX_LIMIT = 50
 
 STATUS_OPTIONS = [
-    {'label': 'Active', 'value': 'active'},
-    {'label': 'Archived', 'value': 'archived'},
+    ('simlets.active', 'active'),
+    ('simlets.archived', 'archived'),
 ]
 
 # The same seven choices the SimVA front end offers, with the sort direction
 # carried alongside the column so one control covers `orderBy` and `order`.
 SORT_OPTIONS = [
-    ('id', 'asc', 'Default'),
-    ('name', 'asc', 'Name (A-Z)'),
-    ('name', 'desc', 'Name (Z-A)'),
-    ('createdAt', 'desc', 'Creation date (Newest first)'),
-    ('createdAt', 'asc', 'Creation date (Oldest first)'),
-    ('updatedAt', 'desc', 'Update date (Newest first)'),
-    ('updatedAt', 'asc', 'Update date (Oldest first)'),
+    ('id', 'asc', 'sort.default'),
+    ('name', 'asc', 'sort.name_asc'),
+    ('name', 'desc', 'sort.name_desc'),
+    ('createdAt', 'desc', 'sort.created_desc'),
+    ('createdAt', 'asc', 'sort.created_asc'),
+    ('updatedAt', 'desc', 'sort.updated_desc'),
+    ('updatedAt', 'asc', 'sort.updated_asc'),
 ]
 
 ORDER_COLUMNS = ('id', 'name', 'createdAt', 'updatedAt')
@@ -226,32 +227,34 @@ def render_simlet_controls(filters, studies):
     info_start = filters['skip'] + 1 if filters['limit'] else 0
     return html.Div([
         dcc.Dropdown(
-            id='simlet-explorer-status', options=STATUS_OPTIONS,
+            id='simlet-explorer-status',
+            options=[{'label': I18n.t(key), 'value': value}
+                     for key, value in STATUS_OPTIONS],
             value=filters['status'], clearable=False,
             style={'width': '140px', 'marginRight': '10px'}),
         dcc.Input(
             id='simlet-explorer-search', type='text', debounce=True,
             value=filters['searchString'],
-            placeholder='Search a SIMLET by name or description',
+            placeholder=I18n.t('simlets.search'),
             style={'width': '260px', 'marginRight': '10px', 'padding': '6px'}),
         dcc.Dropdown(
             id='simlet-explorer-sort',
-            options=[{'label': label, 'value': f'{column}:{direction}'}
-                     for column, direction, label in SORT_OPTIONS],
+            options=[{'label': I18n.t(key), 'value': f'{column}:{direction}'}
+                     for column, direction, key in SORT_OPTIONS],
             value=sort_value, clearable=False,
             style={'width': '230px', 'marginRight': '10px'}),
         dcc.Dropdown(
             id='simlet-explorer-tags', multi=True,
             options=available_tag_options(studies), value=filters['searchTags'],
-            placeholder='Tags',
+            placeholder=I18n.t('simlets.tags'),
             style={'width': '220px', 'marginRight': '10px', 'flex': '1 1 220px'}),
         dcc.Input(
             id='simlet-explorer-limit', type='number', min=1, max=MAX_LIMIT,
             debounce=True, value=filters['limit'],
             style={'width': '70px', 'marginRight': '10px'}),
-        html.Button('Previous', id='simlet-explorer-prev', n_clicks=0,
+        html.Button(I18n.t('simlets.previous'), id='simlet-explorer-prev', n_clicks=0,
                     style={'marginRight': '5px'}),
-        html.Button('Next', id='simlet-explorer-next', n_clicks=0),
+        html.Button(I18n.t('simlets.next'), id='simlet-explorer-next', n_clicks=0),
         html.Span(id='simlet-explorer-info',
                   children=f"{info_start}-{filters['skip'] + filters['limit']}",
                   style={'marginLeft': '12px', 'fontFamily': 'Inter', 'fontSize': 12}),

@@ -1,9 +1,10 @@
 import os
-from dash import Dash, dcc, html, Input, Output
+from dash import Dash, dcc, html, Input, Output, State, no_update
+from dash.exceptions import PreventUpdate
 from TMonWidgets.SimvaBrowserWidget import (
     flask, simvaBrowserBody, TMonUploadPanel, TMonContent,
 )
-from TMonWidgets import TMonWidget
+from TMonWidgets import TMonWidget, I18n
 
 # Initialize Dash app with Flask server. The explicit assets folder keeps the
 # logo images resolvable no matter which directory the app is launched from.
@@ -27,8 +28,10 @@ app.layout=html.Div(
             id='app-tabs',
             value='simva',
             children=[
-                dcc.Tab(label='SIMVA', value='simva'),
-                dcc.Tab(label='Upload file', value='upload'),
+                dcc.Tab(label=I18n.t('app.tab.simva'), value='simva',
+                        id='app-tab-simva'),
+                dcc.Tab(label=I18n.t('app.tab.upload'), value='upload',
+                        id='app-tab-upload'),
             ],
             colors={
                 'border': '#ddd',
@@ -94,6 +97,36 @@ def switch_mode(tab, pathname):
         return (visible_tabs, {'display': 'none'},
                 {'display': 'block', 'padding': '20px'})
     return visible_tabs, {'display': 'block'}, {'display': 'none'}
+
+
+@app.callback(
+    [Output('i18n-location', 'href'),
+     Output('header-language', 'value'),
+     Output('header-contact-label', 'children'),
+     Output('app-tab-simva', 'label'),
+     Output('app-tab-upload', 'label')],
+    Input('header-language', 'value'),
+    State('url', 'search')
+)
+def change_language(language, search):
+    """Remember the chosen language and keep the selector showing it.
+
+    On a fresh load the dropdown has no value yet, so the remembered language
+    (session, or ``lng`` in the URL) is selected instead of the English default.
+    Only a real change from the user triggers a reload.
+    """
+    current = I18n.language_from_search(search) or I18n.current_language()
+    if not language:
+        language = current
+    if language not in I18n.SUPPORTED_LANGUAGES:
+        raise PreventUpdate
+    I18n.set_language(language)
+    labels = (I18n.translate('header.contact', language),
+              I18n.translate('app.tab.simva', language),
+              I18n.translate('app.tab.upload', language))
+    if current != language:
+        return f'?lng={language}', language, *labels
+    return no_update, language, *labels
 
 
 if __name__ == '__main__':

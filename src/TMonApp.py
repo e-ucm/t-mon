@@ -1,6 +1,7 @@
 import os
-from dash import Dash, html, Input, Output, State
-from TMonWidgets import UploadWidget, TMonWidget
+from dash import Dash, html, Input, Output, State, no_update
+from dash.exceptions import PreventUpdate
+from TMonWidgets import UploadWidget, TMonWidget, I18n
 
 # Initialize the app. The explicit assets folder keeps the logo images resolvable
 # no matter which directory the app is launched from.
@@ -44,6 +45,27 @@ def toggle_sidebar(n_clicks, style):
         else:
             return {'display': 'none'}
     return {'display': 'block'}  # Default: visible on mobile
+
+@TMonApp.callback(
+    [Output('i18n-location', 'href'),
+     Output('header-language', 'value'),
+     Output('header-contact-label', 'children')],
+    Input('header-language', 'value'),
+    State('url-t-mon', 'search')
+)
+def change_language(language, search):
+    """Remember the chosen language; restore it on the next page load."""
+    current = I18n.language_from_search(search) or I18n.current_language()
+    if not language:
+        language = current
+    if language not in I18n.SUPPORTED_LANGUAGES:
+        raise PreventUpdate
+    I18n.set_language(language)
+    label = I18n.translate('header.contact', language)
+    if current != language:
+        return f'?lng={language}', language, label
+    return no_update, language, label
+
 
 if __name__ == '__main__':
     TMonApp.run(debug=True, port="5001")

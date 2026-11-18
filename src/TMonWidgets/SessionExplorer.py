@@ -15,19 +15,20 @@ from dash.exceptions import PreventUpdate
 
 import TMonWidgets
 from TMonWidgets.SimletExplorer import MAX_LIMIT, ORDER_COLUMNS
+from TMonWidgets import I18n
 
 DEFAULT_LIMIT = 4  # SESSIONS_SHOW_AT_ONCE in simva-front
 
 # The seven choices from the SimVA Sessions tab. "Default" is `id:asc`, so the
 # initial value must be one of these or the dropdown renders empty.
 SESSION_SORT_OPTIONS = [
-    ('id', 'asc', 'Default'),
-    ('name', 'asc', 'Name (A-Z)'),
-    ('name', 'desc', 'Name (Z-A)'),
-    ('createdAt', 'desc', 'Creation date (Newest first)'),
-    ('createdAt', 'asc', 'Creation date (Oldest first)'),
-    ('updatedAt', 'desc', 'Update date (Newest first)'),
-    ('updatedAt', 'asc', 'Update date (Oldest first)'),
+    ('id', 'asc', 'sort.default'),
+    ('name', 'asc', 'sort.name_asc'),
+    ('name', 'desc', 'sort.name_desc'),
+    ('createdAt', 'desc', 'sort.created_desc'),
+    ('createdAt', 'asc', 'sort.created_asc'),
+    ('updatedAt', 'desc', 'sort.updated_desc'),
+    ('updatedAt', 'asc', 'sort.updated_asc'),
 ]
 SORT_VALUES = {f'{column}:{direction}' for column, direction, _ in SESSION_SORT_OPTIONS}
 
@@ -42,16 +43,16 @@ DEFAULT_FILTERS = {
 }
 
 STATUS_OPTIONS = [
-    {'label': 'All', 'value': ''},
-    {'label': 'Active', 'value': 'active'},
-    {'label': 'Paused', 'value': 'inactive'},
-    {'label': 'Finished', 'value': 'terminated'},
+    ('status.all', ''),
+    ('simlets.active', 'active'),
+    ('status.paused', 'inactive'),
+    ('status.finished', 'terminated'),
 ]
 
 STATUS_LABELS = {
-    'active': ('Active', '#8ec26d'),
-    'inactive': ('Paused', '#fbfd68'),
-    'terminated': ('Finished', '#f07667'),
+    'active': ('simlets.active', '#8ec26d'),
+    'inactive': ('status.paused', '#fbfd68'),
+    'terminated': ('status.finished', '#f07667'),
 }
 
 
@@ -209,7 +210,7 @@ def render_session_cards(page):
     session when it is clicked.
     """
     if not page:
-        return html.Div('No matches for your search',
+        return html.Div(I18n.t('sessions.no_matches'),
                         style={'fontFamily': 'Inter', 'padding': '20px'})
 
     cards = []
@@ -219,7 +220,8 @@ def render_session_cards(page):
         description = _session_value(session, 'session_description', 'description', default='')
         status = _session_status(_session_value(
             session, 'session_status', 'status', default=''))
-        label, color = STATUS_LABELS.get(status, ('', '#e8e5e2'))
+        label_key, color = STATUS_LABELS.get(status, ('', '#e8e5e2'))
+        label = I18n.t(label_key) if label_key else ''
 
         def style(size, color_value, weight='400', extra=None):
             value = {
@@ -256,14 +258,18 @@ def render_session_cards(page):
                 ], style={'display': 'flex', 'alignItems': 'center'}),
                 html.Div(description, style=style(12, '#3c6d7a', extra={
                     'whiteSpace': 'normal', 'margin': '4px 0'})),
-                html.Div(f"Created at: {_format_date(_session_value(session, 'createdAt'))}",
+                html.Div(f"{I18n.t('simlets.created_at')}: "
+                         f"{_format_date(_session_value(session, 'createdAt'))}",
                          style=style(11, '#3c6d7a')),
                 html.Div([
-                    html.Span(f"Activities: {len(activities) if hasattr(activities, '__len__') else 0}",
+                    html.Span(f"{I18n.t('sessions.activities')}: "
+                              f"{len(activities) if hasattr(activities, '__len__') else 0}",
                               style={'marginRight': '18px'}),
-                    html.Span(f"Participants: {len(participants) if hasattr(participants, '__len__') else 0}"),
+                    html.Span(f"{I18n.t('simlets.participants')}: "
+                              f"{len(participants) if hasattr(participants, '__len__') else 0}"),
                 ], style=style(11, '#3c6d7a')),
-                html.Div(tags or [html.Span('No tags', style=style(11, '#3c6d7a'))],
+                html.Div(tags or [html.Span(I18n.t('simlets.no_tags'),
+                                           style=style(11, '#3c6d7a'))],
                          style={'marginTop': '6px'}),
             ], style={'backgroundColor': '#fcfcfc', 'border': '1px solid rgba(0,0,0,0.1)',
                       'borderRadius': '8px', 'padding': '12px', 'margin': '0 0 10px',
@@ -283,34 +289,38 @@ def render_session_controls(filters, sessions):
         dcc.Input(
             id='session-explorer-search', type='text', debounce=True,
             value=filters['searchString'],
-            placeholder='Search a session by name or description',
+            placeholder=I18n.t('sessions.search'),
             style={'width': '260px', 'marginRight': '10px', 'padding': '6px'}),
-        html.Span('Sort by', style={'fontFamily': 'Inter', 'fontSize': 12,
-                                    'marginRight': '5px'}),
+        html.Span(I18n.t('simlets.sort_by'),
+                  style={'fontFamily': 'Inter', 'fontSize': 12,
+                         'marginRight': '5px'}),
         dcc.Dropdown(
             id='session-explorer-sort',
-            options=[{'label': label, 'value': f'{column}:{direction}'}
-                     for column, direction, label in SESSION_SORT_OPTIONS],
+            options=[{'label': I18n.t(key), 'value': f'{column}:{direction}'}
+                     for column, direction, key in SESSION_SORT_OPTIONS],
             value=sort_value, clearable=False,
             style={'width': '230px', 'marginRight': '10px'}),
-        html.Span('Status', style={'fontFamily': 'Inter', 'fontSize': 12,
-                                   'marginRight': '5px'}),
+        html.Span(I18n.t('simlets.status'),
+                  style={'fontFamily': 'Inter', 'fontSize': 12,
+                         'marginRight': '5px'}),
         dcc.Dropdown(
-            id='session-explorer-status', options=STATUS_OPTIONS,
+            id='session-explorer-status',
+            options=[{'label': I18n.t(key), 'value': value}
+                     for key, value in STATUS_OPTIONS],
             value=filters['status'], clearable=False,
             style={'width': '130px', 'marginRight': '10px'}),
         dcc.Dropdown(
             id='session-explorer-tags', multi=True,
             options=session_tag_options(sessions), value=filters['searchTags'],
-            placeholder='Tags',
+            placeholder=I18n.t('simlets.tags'),
             style={'width': '220px', 'marginRight': '10px', 'flex': '1 1 220px'}),
         dcc.Input(
             id='session-explorer-limit', type='number', min=1, max=MAX_LIMIT,
             debounce=True, value=filters['limit'],
             style={'width': '70px', 'marginRight': '10px'}),
-        html.Button('Previous', id='session-explorer-prev', n_clicks=0,
+        html.Button(I18n.t('simlets.previous'), id='session-explorer-prev', n_clicks=0,
                     style={'marginRight': '5px'}),
-        html.Button('Next', id='session-explorer-next', n_clicks=0),
+        html.Button(I18n.t('simlets.next'), id='session-explorer-next', n_clicks=0),
         html.Span(id='session-explorer-info',
                   style={'marginLeft': '12px', 'fontFamily': 'Inter', 'fontSize': 12}),
     ], style={'display': 'flex', 'alignItems': 'center', 'flexWrap': 'wrap',
@@ -320,7 +330,8 @@ def render_session_controls(filters, sessions):
 def render_session_explorer_panel(sessions=None, search='', style=None):
     """The persistent panel holding the session controls and their cards."""
     return html.Div([
-        html.H3('Sessions', style={'margin': '0 0 4px 20px', 'fontFamily': 'Inter'}),
+        html.H3(I18n.t('sessions.title'),
+                style={'margin': '0 0 4px 20px', 'fontFamily': 'Inter'}),
         dcc.Store(id='session-explorer-state', data={'skip': 0}),
         render_session_controls(parse_session_query(search), sessions or []),
         html.Div(id='session-browser-cards'),

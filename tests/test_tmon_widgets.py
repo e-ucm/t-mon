@@ -64,30 +64,36 @@ def _walk(component):
         yield from _walk(children)
 
 
-def test_header_is_sticky_and_shows_both_logos():
+def test_header_matches_the_simva_style():
     header = TMonWidget.build_header()
+    assert header.className == "header"
     assert header.style["position"] == "sticky"
     assert header.style["top"] == 0
     assert header.style["backgroundColor"] == TMonWidget.BRAND_ORANGE
+    assert "boxShadow" in header.style
     sources = [child.src for child in _walk(header) if isinstance(child, html.Img)]
-    assert len(sources) == 2
-    assert all(src.startswith("data:image/png;base64,") for src in sources)
-    assert sources[0] != sources[1]
+    assert sources[0].startswith("data:image/png;base64,")
+    # The Contact us icon is an .ico, like in SIMVA's header.
+    assert any(src.startswith("data:image/x-icon;base64,") for src in sources)
+    texts = list(_texts(header))
+    assert "Txmon - The xAPI Trace Monitor" in texts
+    assert "Contact us" in texts
 
 
 def test_header_brand_shows_full_name_and_links_home():
     for header in (TMonWidget.build_header(), TMonWidget.build_header(with_login=True)):
         links = [component for component in _walk(header) if isinstance(component, html.A)]
-        assert len(links) == 1
-        assert links[0].href == "https://tmon.external.test/"
-        assert "Txmon - The xAPI Trace Monitor" in list(_texts(header))
+        home = [link for link in links if link.href == "https://tmon.external.test/"]
+        assert len(home) == 1
+        assert "Txmon - The xAPI Trace Monitor" in list(_texts(home[0]))
 
 
-def test_header_login_controls_only_when_requested():
+def test_header_account_controls_only_when_requested():
     plain_ids = [getattr(child, "id", None)
                  for child in _walk(TMonWidget.build_header())]
     assert "main-login" not in plain_ids
-    assert "login-logout-button" not in plain_ids
+    assert "account-button" not in plain_ids
+    assert "connection-status" not in plain_ids
 
     simva_ids = [getattr(child, "id", None)
                  for child in _walk(TMonWidget.build_header(with_login=True))]

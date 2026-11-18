@@ -6,12 +6,13 @@ from dash.exceptions import PreventUpdate
 import json
 import TMonWidgets
 from TMonWidgets.TMonWidget import (
-    HEADER_BUTTON_STYLE, TEXT_SECONDARY, render_simlet_tiles,
+    HEADER_NAV_BUTTON_STYLE, TEXT_SECONDARY, render_simlet_tiles,
 )
 from TMonWidgets.SimletExplorer import parse_simlet_query, render_simlet_controls
 from TMonWidgets.SessionExplorer import (
     is_simlet_path, render_session_explorer_panel,
 )
+from TMonWidgets import I18n
 #Import LoadProcessStatements.py
 from LoadProcessStatements import load_from_string, load_players_info_from_uploaded_content
 # Import SimvaBrowser class from SimvaBrowser.py
@@ -53,8 +54,9 @@ def login_logout_button_displayed(main, active_tab):
     # The tab stays visible when logged out so the notice explains why it is empty.
     style = dict(UPLOAD_STYLE)
     style['display'] = 'block' if upload_allowed(active_tab) else 'none'
-    notice = '' if flask.oidc.user_loggedin else 'Please log in to upload files.'
-    return ("Logout" if flask.oidc.user_loggedin else "Login"), style, notice
+    notice = '' if flask.oidc.user_loggedin else I18n.t('upload.login_notice')
+    label = I18n.t('header.logout') if flask.oidc.user_loggedin else I18n.t('header.login')
+    return label, style, notice
 @callback(
     Output('login-logout', 'children'),
     [Input('login-logout-button', 'n_clicks')]
@@ -71,16 +73,18 @@ def login_logout_button_click(n_clicks):
 # Dash callback to handle account button style
 @callback(
     [Output('account-button', 'children'),
-    Output('account-button', 'style')],
+     Output('account-button', 'style'),
+     Output('header-account-item', 'style')],
     [Input('main-login', 'children')]
 )
 def account_button(main):
-    # The callback owns this component's style, so it has to keep the header's
-    # button appearance as well as changing its visibility.
+    # The account item carries only the username; it is hidden entirely while
+    # logged out, along with the "Logged in as" label that used to sit beside it.
     if flask.oidc.user_loggedin:
-        return "Account", dict(HEADER_BUTTON_STYLE, display='block')
-    else:
-        return None, dict(HEADER_BUTTON_STYLE, display='none')
+        username = (session.get('oidc_auth_profile', {}).get('preferred_username')
+                    or I18n.t('header.account'))
+        return username, dict(HEADER_NAV_BUTTON_STYLE, fontSize=12, display='block'), {'display': 'flex'}
+    return None, dict(HEADER_NAV_BUTTON_STYLE, display='none'), {'display': 'none'}
 
 @callback(
     Output('account', 'children'),
@@ -97,12 +101,11 @@ def account_button_click(n_clicks):
     [Input('main-login', 'children')]
 )
 def update_connection_status(input_value):
+    # The label is hidden; the visible username is written into the account
+    # item by account_button(), so keep this value minimal.
     if flask.oidc.user_loggedin:
-        user_info = session.get('oidc_auth_profile', {})
-        preferred_username = user_info.get('preferred_username')
-        return f'Logged in as {preferred_username}'
-    else:
-        return 'Not logged in'
+        return session.get('oidc_auth_profile', {}).get('preferred_username') or ''
+    return ''
     
 def publish_session_activities():
     """
@@ -179,9 +182,9 @@ def get_analysis_outputs(pathname, dashboardpath):
             html.Hr(),
         ])]
     print(f"Pathname : {pathname} - dashboardpath : {dashboardpath}")
-    actual_simlet=browser._get_id_from_object(browser.actual_simlet, 'simlet', 'name') if browser.actual_simlet is not None else "Select a simlet"
-    actual_test=browser._get_id_from_object(browser.actual_test, 'session', 'name') if browser.actual_test is not None else "Select an test"
-    actual_activity=browser._get_id_from_object(browser.actual_activity, 'activity', 'name') if browser.actual_activity is not None else "Select an activity"
+    actual_simlet=browser._get_id_from_object(browser.actual_simlet, 'simlet', 'name') if browser.actual_simlet is not None else I18n.t('browser.select_simlet')
+    actual_test=browser._get_id_from_object(browser.actual_test, 'session', 'name') if browser.actual_test is not None else I18n.t('browser.select_test')
+    actual_activity=browser._get_id_from_object(browser.actual_activity, 'activity', 'name') if browser.actual_activity is not None else I18n.t('browser.select_activity')
     tmon_style = {'display': 'none'} if len(err) > 0 else {'display': 'block'}
     return browser.current_path, actual_simlet, actual_test, actual_activity, [], [], run_analyse_style, html.Div(div_list), tmon_style, f"{pathname}{dashboardpath}"
 
@@ -360,7 +363,7 @@ def render_simlet_section(studies, id_getter, search=''):
     Returns:
         html.H3: The "Simlets" heading.
     """
-    return html.H3('Simlets', style={'margin': '0 0 4px 20px', 'fontFamily': 'Inter'})
+    return html.H3(I18n.t('simlets.title'), style={'margin': '0 0 4px 20px', 'fontFamily': 'Inter'})
 
 
 def render_simlet_explorer_panel(studies=None, search='', style=None):
@@ -414,13 +417,13 @@ def render_simlet_view_panel(sessions=None, search='', style=None, session_style
     """
     return html.Div([
         dcc.Tabs(id='simlet-view-tabs', value='sessions', children=[
-            dcc.Tab(label='general dashboards', value='general', children=[
+            dcc.Tab(label=I18n.t('sessions.general_tab'), value='general', children=[
                 html.Div(
-                    'Select a session from the Sessions dashboard to see its dashboards.',
+                    I18n.t('sessions.placeholder'),
                     style={'padding': '20px', 'fontFamily': 'Inter',
                            'color': TEXT_SECONDARY}),
             ]),
-            dcc.Tab(label='sessions dashboard', value='sessions', children=[
+            dcc.Tab(label=I18n.t('sessions.sessions_tab'), value='sessions', children=[
                 render_session_explorer_panel(sessions, search, style=session_style),
             ]),
         ]),
@@ -521,9 +524,9 @@ def init_storage(main, pathname, search=''):
             folder_buttons = [html.Button(f"{f.get('name')} ({f.get('id')})", id={'type': 'folder-button', 'index': f.get('id')}, n_clicks=0) for f in browser.dirs]
         TMonWidgets.accepted_sessions = browser.accepted_tests if at_simlet else []
         
-        actual_simlet=browser._get_id_from_object(browser.actual_simlet, 'simlet', 'name') if browser.actual_simlet is not None else "Select a simlet"
-        actual_test=browser._get_id_from_object(browser.actual_test, 'session', 'name') if browser.actual_test is not None else "Select an test"
-        actual_activity=browser._get_id_from_object(browser.actual_activity, 'activity', 'name') if browser.actual_activity is not None else "Select an activity"
+        actual_simlet=browser._get_id_from_object(browser.actual_simlet, 'simlet', 'name') if browser.actual_simlet is not None else I18n.t('browser.select_simlet')
+        actual_test=browser._get_id_from_object(browser.actual_test, 'session', 'name') if browser.actual_test is not None else I18n.t('browser.select_test')
+        actual_activity=browser._get_id_from_object(browser.actual_activity, 'activity', 'name') if browser.actual_activity is not None else I18n.t('browser.select_activity')
         # Set the styles here, not only in the style callback: init_storage
         # replaces the whole layout, so styles written to the old components
         # on the same page load would be lost.
@@ -536,7 +539,7 @@ def init_storage(main, pathname, search=''):
             html.Button('..', id='parent-directory', n_clicks=0, style=chrome_style),
             html.Div(id='folders-div', children=folder_buttons),
             html.Div(id='files-div', children=file_buttons),
-            html.Button('Run Analyse', id='run-analyse', n_clicks=0, style=run_analyse_style),
+            html.Button(I18n.t('browser.run_analyse'), id='run-analyse', n_clicks=0, style=run_analyse_style),
             # One persistent explorer panel in every state; its style decides
             # whether it is shown, so its ids never disappear from the layout.
             render_simlet_explorer_panel(
@@ -549,7 +552,7 @@ def init_storage(main, pathname, search=''):
         return appLayout
     else:
         return html.Div([
-                html.H4("Connect to your SIMVA account to access to your data."),
+                html.H4(I18n.t('browser.connect')),
                 html.H3(id='current-path', style={'display': 'none'}),
                 html.H4(id='current-simlet', style={'display': 'none'}),
                 html.H4(id='current-test', style={'display': 'none'}),
@@ -557,7 +560,7 @@ def init_storage(main, pathname, search=''):
                 html.Button('..', id='parent-directory', n_clicks=0, style={'display': 'none'}),
                 html.Div(id='folders-div', children=[], style={'display': 'none'}),
                 html.Div(id='files-div', children=[], style={'display': 'none'}),
-                html.Button('Run Analyse', id='run-analyse', n_clicks=0, style={'display': 'none'}),
+                html.Button(I18n.t('browser.run_analyse'), id='run-analyse', n_clicks=0, style={'display': 'none'}),
                 render_simlet_explorer_panel(),
                 render_simlet_view_panel(),
             ])
@@ -733,9 +736,9 @@ def update_browser(n_clicks_parent, folder_n_clicks, file_n_clicks, n_clicks_run
         file_buttons = [html.Button(f, id={'type': 'file-button', 'index': f}, n_clicks=0, style={'backgroundColor': 'green'}) for f in browser.files if f.endswith(browser.accept)]
         run_analyse_style = {'display': 'none'} if browser._isdir(browser.current_path) else {'display': 'block'}
         print("Pathname:", pathname)
-        actual_simlet=browser._get_id_from_object(browser.actual_simlet, 'simlet', 'name') if browser.actual_simlet is not None else "Select a simlet"
-        actual_test=browser._get_id_from_object(browser.actual_test, 'session', 'name') if browser.actual_test is not None else "Select an test"
-        actual_activity=browser._get_id_from_object(browser.actual_activity, 'activity', 'name') if browser.actual_activity is not None else "Select an activity"
+        actual_simlet=browser._get_id_from_object(browser.actual_simlet, 'simlet', 'name') if browser.actual_simlet is not None else I18n.t('browser.select_simlet')
+        actual_test=browser._get_id_from_object(browser.actual_test, 'session', 'name') if browser.actual_test is not None else I18n.t('browser.select_test')
+        actual_activity=browser._get_id_from_object(browser.actual_activity, 'activity', 'name') if browser.actual_activity is not None else I18n.t('browser.select_activity')
         return browser.current_path, actual_simlet,actual_test, actual_activity, folder_buttons, file_buttons, run_analyse_style, html.H1(""), {'display': 'none'}, pathname
 
 simvaBrowserBody = html.Div(
@@ -749,7 +752,7 @@ simvaBrowserBody = html.Div(
                 html.Button('..', id='parent-directory', n_clicks=0, style={'display': 'none'}),
                 html.Div(id='folders-div', children=[]),
                 html.Div(id='files-div', children=[]),
-                html.Button('Run Analyse', id='run-analyse', n_clicks=0, style={'display': 'none'}),
+                html.Button(I18n.t('browser.run_analyse'), id='run-analyse', n_clicks=0, style={'display': 'none'}),
                 # The panels stay in the layout in every browser state; only
                 # their visibility changes, so the callback ids always resolve.
                 render_simlet_explorer_panel(),

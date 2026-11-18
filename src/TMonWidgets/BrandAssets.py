@@ -12,11 +12,18 @@ import os
 _ASSETS_DIR = os.path.join(os.path.dirname(os.path.dirname(__file__)), "assets")
 
 
-def _data_uri(filename):
+def _data_uri(filename, mime="image/png"):
     with open(os.path.join(_ASSETS_DIR, filename), "rb") as handle:
         encoded = base64.b64encode(handle.read()).decode("ascii")
-    return f"data:image/png;base64,{encoded}"
+    return f"data:{mime};base64,{encoded}"
 
 
 LOGO_SRC = _data_uri("logo-tmon.png")
 WORDMARK_SRC = _data_uri("logo-name-tmon.png")
+
+# Icons used by the SIMVA-style header. Embedded like the logo so a proxy that
+# breaks `/assets/...` cannot leave empty image boxes in the bar.
+USER_ICON_SRC = _data_uri("user.png")
+POWER_ICON_SRC = _data_uri("power-button-off.png")
+INFO_ICON_SRC = _data_uri("information.png")
+CONTACT_ICON_SRC = _data_uri("eucm_icon.ico", "image/x-icon")

@@ -3,3 +3,5 @@
 __pycache__
 client_secrets.json
 *.json
+# Translation catalogues are source, not local configuration.
+!src/locales/*.json

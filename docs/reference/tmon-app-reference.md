@@ -54,18 +54,21 @@ t-mon/
 ### Shared Header
 
 `src/TMonWidgets/TMonWidget.py` exposes `build_header(with_login=False)`, which builds the
-sticky top bar used by both apps. The bar has the orange T-Mon background and shows the
-T-Mon glyph (`logo-tmon.png`) and wordmark (`logo-name-tmon.png`) on a white chip. Both
-images live in `src/assets/` but are embedded in the page as data URIs, so they still
-appear when the app is served under a path prefix where `/assets/...` would not resolve.
-The bar stays pinned to the top of the viewport while the page scrolls.
+sticky top bar used by both apps. It follows the SIMVA front-end header: a compact
+orange bar with the T-Mon logo and "Txmon - The xAPI Trace Monitor" on the left, and a
+right-hand nav with a language selector, Contact us, the signed-in username and a black
+Login/Logout pill. The icons and logo live in `src/assets/` but are embedded as data
+URIs, so they still appear behind a path prefix where `/assets/...` would not resolve.
 
-The SIMVA app uses `TMonSimvaHeader = build_header(with_login=True)`, which adds the
-login/logout, account and connection-status controls to the bar. The local file-upload
-app uses `TMonHeader` without them, since it has no authentication callbacks. The login
-callbacks in `SimvaBrowserWidget.py` keep targeting the same component ids
-(`main-login`, `login-logout-button`, `account-button`, `connection-status`), so moving
-the controls into the header did not change their behaviour.
+The SIMVA app uses `TMonSimvaHeader = build_header(with_login=True)`; the account item
+shows only the username and is hidden while logged out. The local file-upload app uses
+`TMonHeader` without the account controls. The login callbacks in
+`SimvaBrowserWidget.py` keep targeting the same component ids (`main-login`,
+`login-logout-button`, `account-button`, `connection-status`), so moving the controls
+into the header did not change their behaviour.
+
+Text comes from `src/locales/<lang>.json` through `TMonWidgets/I18n.py` (`en`, `es`,
+`fr`). The header selector writes `lng` into the URL and reloads, like SIMVA's i18n.
 
 `TMonFooter` is pinned to the bottom: both app layouts are flex columns with
 `minHeight: 100vh`, and the footer uses `marginTop: auto` plus `position: sticky; bottom: 0`.
