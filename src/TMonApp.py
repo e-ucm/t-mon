@@ -47,9 +47,21 @@ def toggle_sidebar(n_clicks, style):
     return {'display': 'block'}  # Default: visible on mobile
 
 @TMonApp.callback(
+    [Output('return-button', 'style'), Output('return-button', 'href')],
+    Input('url-t-mon', 'pathname')
+)
+def update_return_button(pathname):
+    target = TMonWidget.return_target(pathname)
+    if not target:
+        return {'display': 'none'}, no_update
+    return {'display': 'inline-block'}, target
+
+
+@TMonApp.callback(
     [Output('i18n-location', 'href'),
      Output('header-language', 'value'),
-     Output('header-contact-label', 'children')],
+     Output('header-contact-label', 'children'),
+     Output('return-button', 'children')],
     Input('header-language', 'value'),
     State('url-t-mon', 'search')
 )
@@ -62,9 +74,10 @@ def change_language(language, search):
         raise PreventUpdate
     I18n.set_language(language)
     label = I18n.translate('header.contact.title', language)
+    return_label = I18n.translate('navigation.return', language)
     if current != language:
-        return f'?lng={language}', language, label
-    return no_update, language, label
+        return f'?lng={language}', language, label, return_label
+    return no_update, language, label, return_label
 
 
 if __name__ == '__main__':

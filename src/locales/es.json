@@ -44,5 +44,7 @@
   "sessions.status.paused.title": "Pausada",
   "sessions.status.finished.title": "Finalizada",
   "header.account": "Cuenta",
-  "sessions.view_dashboard": "Ver panel"
+  "sessions.view_dashboard": "Ver panel",
+  "dashboard.no_tab_selected": "ninguna pestaña seleccionada, selecciona una pestaña.",
+  "navigation.return": "← Volver"
 }

@@ -44,5 +44,7 @@
   "sessions.status.paused.title": "En pause",
   "sessions.status.finished.title": "Terminée",
   "header.account": "Compte",
-  "sessions.view_dashboard": "Voir le tableau de bord"
+  "sessions.view_dashboard": "Voir le tableau de bord",
+  "dashboard.no_tab_selected": "aucun onglet sélectionné, sélectionnez un onglet.",
+  "navigation.return": "← Retour"
 }

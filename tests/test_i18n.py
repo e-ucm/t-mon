@@ -73,13 +73,15 @@ def test_language_choice_is_remembered_across_loads():
         session['lang'] = 'es'
         # An unset dropdown on a fresh page keeps the remembered language;
         # it must not reload with the English default.
-        href, value, contact, simva, upload = TMonSimvaApp.change_language(None, None)
+        href, value, contact, simva, upload, hint, back = (
+            TMonSimvaApp.change_language(None, None))
+        assert hint == 'ninguna pestaña seleccionada, selecciona una pestaña.'
         assert href is no_update
         assert value == 'es'
         assert contact == 'Contáctanos'
         assert simva == 'SIMVA'
         # A genuine user change reloads with the new language in the URL.
-        href, value, contact, _, _ = TMonSimvaApp.change_language('fr', None)
+        href, value, contact, _, _, _, _ = TMonSimvaApp.change_language('fr', None)
         assert href == '?lng=fr'
         assert value == 'fr'
         assert contact == 'Contactez-nous'

@@ -241,6 +241,24 @@ def test_session_dashboard_button_opens_the_analysis_entry(monkeypatch):
     assert fake.current_path == 'output/1/11/Analysis/'
 
 
+def test_upload_dashboard_puts_the_log_in_the_content_area():
+    result = BrowserWidget.uploaded_outputs(
+        [], {'display': 'block'}, 'xapi-sg-sample-data.json',
+        '2026-11-17T15:45:31.638000')
+    # The header keeps no file metadata; the log carries it in the content.
+    assert result[1] == '' and result[2] == ''
+    assert result[-1] == '/dashboard/upload'
+
+
+def test_upload_message_waits_for_a_file():
+    message = next(child for child in _walk(BrowserWidget.TMonUploadPanel)
+                   if getattr(child, 'id', None) == 'upload-no-tab-message')
+    assert message.children == 'no tab selected, select one tab.'
+    assert message.style['display'] == 'none'
+    assert BrowserWidget.show_upload_message_after_upload(None)['display'] == 'none'
+    assert BrowserWidget.show_upload_message_after_upload(['data:...'])['display'] == 'block'
+
+
 def test_upload_requires_login(monkeypatch):
     monkeypatch.setattr(BrowserWidget, 'flask', _FakeFlask(False))
     assert BrowserWidget.upload_allowed('upload') is False

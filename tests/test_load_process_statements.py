@@ -27,6 +27,15 @@ def new_statement():
     }
 
 
+def test_load_log_names_the_uploaded_file():
+    info = []
+    load_from_string(json.dumps(new_statement()), [], info, [],
+                     source='xapi-sg-sample-data.json 2026-11-17T15:45:31.638000')
+    assert '1st line is valid JSON' in info[0]
+    assert ('Displaying visualizations for xapi-sg-sample-data.json '
+            '2026-11-17T15:45:31.638000 ...') in info[-1]
+
+
 def test_is_json_and_not_list():
     assert is_json_and_not_list('{"actor": {"name": "a"}}')
     assert not is_json_and_not_list('[{"actor": {"name": "a"}}]')

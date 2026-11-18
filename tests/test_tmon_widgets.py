@@ -1,5 +1,5 @@
 import pandas as pd
-from dash import html, no_update
+from dash import dcc, html, no_update
 
 import TMonWidgets
 from TMonWidgets import MultiSelector, TMonWidget
@@ -60,7 +60,7 @@ def _walk(component):
     if isinstance(children, (list, tuple)):
         for child in children:
             yield from _walk(child)
-    elif children is not None and hasattr(children, "children"):
+    elif children is not None:
         yield from _walk(children)
 
 
@@ -209,3 +209,115 @@ def test_tag_text_color_switches_for_light_backgrounds():
     assert TMonWidget.tag_text_color('#3b82f6') == TMonWidget.TEXT_PRIMARY
     assert TMonWidget.tag_text_color('#ffff99') == TMonWidget.DARK_BACKGROUND
     assert TMonWidget.tag_text_color(None) == TMonWidget.TEXT_PRIMARY
+
+
+def test_return_target_points_one_level_up():
+    assert TMonWidget.return_target('/') is None
+    assert TMonWidget.return_target(None) is None
+    assert TMonWidget.return_target('/simlet/1') == '/'
+    assert TMonWidget.return_target(
+        '/simlet/1/session/11/dashboard/default') == '/simlet/1'
+    assert TMonWidget.return_target('/dashboard/upload') == '/'
+    assert TMonWidget.return_target('/1/11/Analysis/dashboard/tab=home_tab') == '/simlet/1'
+
+
+def test_header_has_a_hidden_return_link():
+    link = next(child for child in _walk(TMonWidget.TMonSimvaHeader)
+                if getattr(child, 'id', None) == 'return-button')
+    assert link.style['display'] == 'none'
+    assert link.href == ''
+
+
+def test_dashboard_tabs_are_vertical_with_svg_icons():
+    tabs = next(component for component in _walk(TMonWidget.TMonBody)
+                if getattr(component, 'id', None) == 't-mon-tabs')
+    assert isinstance(tabs, dcc.Tabs)
+    assert tabs.vertical is True
+    assert tabs.value is None
+    assert [tab.id for tab in tabs.children] == [
+        f'dashboard-tab-{value}' for value, _, _ in TMonWidget.DASHBOARD_TABS]
+    assert 'dashboard-tab-home_tab' in [tab.id for tab in tabs.children]
+    for tab in tabs.children:
+        icon, name = tab.label.children
+        assert isinstance(icon, html.Img)
+        assert icon.src.startswith('data:image/svg+xml;base64,')
+        assert name.className == 'tab-name'
+
+
+def test_dashboard_tabs_toggle_collapses_to_icons_only():
+    assert TMonWidget.toggle_dashboard_tabs(0) == ('dashboard-tabs-full', '◀')
+    assert TMonWidget.toggle_dashboard_tabs(1) == ('dashboard-tabs-compact', '▶')
+    assert TMonWidget.toggle_dashboard_tabs(2) == ('dashboard-tabs-full', '◀')
+
+
+def test_home_tab_is_hidden_only_in_a_session_dashboard():
+    assert TMonWidget.hide_home_tab('/simlet/1/session/11/dashboard/default') == {
+        'display': 'none'}
+    assert TMonWidget.hide_home_tab('/simlet/1') == {'display': 'block'}
+    assert TMonWidget.hide_home_tab('/dashboard/upload') == {'display': 'none'}
+    assert TMonWidget.hide_home_tab(None) == {'display': 'block'}
+
+
+def test_session_dashboard_has_no_default_tab(monkeypatch):
+    import dash
+    monkeypatch.setattr(
+        dash, 'callback_context',
+        type('Ctx', (), {'triggered': [{'prop_id': 'output-t-mon.style'}]})())
+    # The URL has no `tab=` parameter, but the session dashboard still must not
+    # fall back to HomePage.
+    value, users, objects = TMonWidget.update_tab(
+        {'display': 'block'}, '/simlet/1/session/11/dashboard/default',
+        '/simlet/1/session/11/dashboard/default')
+    assert value is None
+    assert users == [] and objects == []
+
+
+def test_no_tab_state_shows_the_selection_and_a_hint(monkeypatch):
+    import dash
+    monkeypatch.setattr(
+        dash, 'callback_context',
+        type('Ctx', (), {'triggered': [{'prop_id': 't-mon-tabs.value'}]})())
+    result = TMonWidget.update_output(
+        None, None, [], None, [], panel_style={'display': 'block'},
+        simlet_name='test', session_name='survey')
+    content = result[3]
+    texts = [child for child in _walk(content) if isinstance(child, str)]
+    assert 'no tab selected, select one tab.' in texts
+
+
+def test_default_page_shows_the_no_tab_message():
+    content = TMonWidget.render_homepage_content()
+    texts = [child for child in _walk(html.Div(content)) if isinstance(child, str)]
+    assert 'no tab selected, select one tab.' in texts
+
+
+def test_dashboard_header_names_the_selection():
+    assert TMonWidget.update_dashboard_title(
+        {'display': 'block'}, 'test', 'survey') == 'test / survey'
+    assert TMonWidget.update_dashboard_title(
+        {'display': 'block'}, html.Div(), html.Div()) == ''
+    assert TMonWidget.update_dashboard_title(
+        {'display': 'none'}, 'test', 'survey') == ''
+
+
+def test_dashboard_layout_puts_content_to_the_right_of_the_tabs():
+    def find(component, id):
+        return next(c for c in _walk(component) if getattr(c, 'id', None) == id)
+
+    body = TMonWidget.TMonBody
+    header = find(body, 'dashboard-header')
+    assert find(header, 'dashboard-title') is not None
+    assert find(header, 'users-multi-dynamic-dropdown') is not None
+    assert find(header, 'object-multi-dynamic-dropdown') is not None
+    assert find(header, 'activity-filter-div') is not None
+    tabs = find(body, 'dashboard-tabs-wrapper')
+    content = find(body, 'dashboard-content')
+    assert find(content, 'tabs-content') is not None
+    assert find(content, 'content') is not None
+    assert find(content, 'chart-creator-controls') is not None
+    # The sidebar and the content are siblings under one flex row.
+    row = next(c for c in _walk(body)
+               if isinstance(c, html.Div)
+               and (getattr(c, 'style', None) or {}).get('display') == 'flex'
+               and tabs in (c.children or []) and content in (c.children or []))
+    assert row.style['display'] == 'flex'

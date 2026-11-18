@@ -41,3 +41,23 @@ html, body {
 .header .header-right ul {
     list-style: none;
 }
+
+/* Vertical dashboard tabs: the toggle hides the names, leaving the icons. */
+.dashboard-tabs-compact .tab-name {
+    display: none;
+}
+
+.dashboard-tabs .tab {
+    min-width: 0;
+    text-align: left;
+}
+
+/* The tab bar is the dashboard sidebar; its content sits to the right. */
+#dashboard-tabs-wrapper {
+    border-right: 1px solid #ddd;
+    padding-right: 8px;
+}
+
+#dashboard-header {
+    background-color: #fafafa;
+}

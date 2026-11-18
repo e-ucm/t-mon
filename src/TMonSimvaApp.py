@@ -2,7 +2,7 @@ import os
 from dash import Dash, dcc, html, Input, Output, State, no_update
 from dash.exceptions import PreventUpdate
 from TMonWidgets.SimvaBrowserWidget import (
-    flask, simvaBrowserBody, TMonUploadPanel, TMonContent,
+    flask, simvaBrowserBody, TMonUploadPanel,
 )
 from TMonWidgets import TMonWidget, I18n
 
@@ -41,7 +41,6 @@ app.layout=html.Div(
         ),
         html.Div(id='simva-panel', children=[simvaBrowserBody]),
         TMonUploadPanel,
-        TMonContent,
         TMonWidget.TMonBody,
         TMonWidget.TMonFooter,
     ],
@@ -78,9 +77,10 @@ def simlet_selected(pathname):
      Output('simva-panel', 'style'),
      Output('upload-panel', 'style')],
     [Input('app-tabs', 'value'),
-     Input('url', 'pathname')],
+     Input('url', 'pathname'),
+     Input('output-t-mon', 'style')],
 )
-def switch_mode(tab, pathname):
+def switch_mode(tab, pathname, dashboard_style):
     """Show only the panel belonging to the selected mode.
 
     Once a simlet is selected the mode tabs are in the way: the page is about
@@ -91,6 +91,11 @@ def switch_mode(tab, pathname):
     # block` here would override that and stack "SIMVA" over "Upload file", so
     # the visible state has to keep it a flex row.
     visible_tabs = {'display': 'flex', 'flexDirection': 'row'}
+    hidden = {'display': 'none'}
+    if dashboard_style == {'display': 'block'}:
+        # The dashboard has its own header, sidebar and content; the SIMVA
+        # browser and the mode tabs are no longer part of the page.
+        return hidden, hidden, hidden
     if simlet_selected(pathname):
         return {'display': 'none'}, {'display': 'block'}, {'display': 'none'}
     if tab == 'upload':
@@ -100,11 +105,25 @@ def switch_mode(tab, pathname):
 
 
 @app.callback(
+    [Output('return-button', 'style'), Output('return-button', 'href')],
+    Input('url', 'pathname')
+)
+def update_return_button(pathname):
+    """Link back to the parent page everywhere except the studies list."""
+    target = TMonWidget.return_target(pathname)
+    if not target:
+        return {'display': 'none'}, no_update
+    return {'display': 'inline-block'}, target
+
+
+@app.callback(
     [Output('i18n-location', 'href'),
      Output('header-language', 'value'),
      Output('header-contact-label', 'children'),
      Output('app-tab-simva', 'label'),
-     Output('app-tab-upload', 'label')],
+     Output('app-tab-upload', 'label'),
+     Output('upload-no-tab-message', 'children'),
+     Output('return-button', 'children')],
     Input('header-language', 'value'),
     State('url', 'search')
 )
@@ -123,7 +142,9 @@ def change_language(language, search):
     I18n.set_language(language)
     labels = (I18n.translate('header.contact.title', language),
               I18n.translate('app.tab.simva', language),
-              I18n.translate('app.tab.upload', language))
+              I18n.translate('app.tab.upload', language),
+              I18n.translate('dashboard.no_tab_selected', language),
+              I18n.translate('navigation.return', language))
     if current != language:
         return f'?lng={language}', language, *labels
     return no_update, language, *labels

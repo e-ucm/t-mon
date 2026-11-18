@@ -44,5 +44,7 @@
   "sessions.status.paused.title": "Paused",
   "sessions.status.finished.title": "Finished",
   "header.account": "Account",
-  "sessions.view_dashboard": "View dashboard"
+  "sessions.view_dashboard": "View dashboard",
+  "dashboard.no_tab_selected": "no tab selected, select one tab.",
+  "navigation.return": "← Return"
 }

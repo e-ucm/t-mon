@@ -1,3 +1,5 @@
+from dash import no_update
+
 import TMonSimvaApp
 
 
@@ -28,13 +30,13 @@ def test_top_tabs_select_upload_or_simva():
 
 
 def test_switch_mode_shows_one_panel_at_a_time():
-    tabs, simva, upload = TMonSimvaApp.switch_mode("upload", "/")
+    tabs, simva, upload = TMonSimvaApp.switch_mode("upload", "/", {"display": "none"})
     assert tabs["display"] == "flex"
     assert tabs["flexDirection"] == "row"
     assert simva["display"] == "none"
     assert upload["display"] == "block"
 
-    tabs, simva, upload = TMonSimvaApp.switch_mode("simva", "/")
+    tabs, simva, upload = TMonSimvaApp.switch_mode("simva", "/", {"display": "none"})
     assert tabs["display"] == "flex"
     assert tabs["flexDirection"] == "row"
     assert simva["display"] == "block"
@@ -42,7 +44,7 @@ def test_switch_mode_shows_one_panel_at_a_time():
 
 
 def test_simlet_selection_hides_the_mode_tabs():
-    tabs, simva, upload = TMonSimvaApp.switch_mode("upload", "/simlet/1")
+    tabs, simva, upload = TMonSimvaApp.switch_mode("upload", "/simlet/1", {"display": "none"})
     assert tabs["display"] == "none"
     assert simva["display"] == "block"
     assert upload["display"] == "none"
@@ -55,6 +57,28 @@ def test_simlet_selection_hides_the_mode_tabs():
     assert TMonSimvaApp.simlet_selected(None) is False
 
     # Going back up to the studies list brings them back.
-    tabs, _, _ = TMonSimvaApp.switch_mode("simva", "/")
+    tabs, _, _ = TMonSimvaApp.switch_mode("simva", "/", {"display": "none"})
     assert tabs["display"] == "flex"
     assert tabs["flexDirection"] == "row"
+
+
+def test_return_button_is_hidden_only_at_the_studies_list():
+    for path, expected in (
+        ('/', {'display': 'none'}),
+        ('/simlet/1', {'display': 'inline-block'}),
+        ('/simlet/1/session/11/dashboard/default', {'display': 'inline-block'}),
+    ):
+        style, href = TMonSimvaApp.update_return_button(path)
+        assert style == expected
+        if expected['display'] == 'none':
+            assert href is no_update
+    _, href = TMonSimvaApp.update_return_button('/simlet/1')
+    assert href == '/'
+
+
+def test_dashboard_hides_the_simva_browser_and_the_mode_tabs():
+    tabs, simva, upload = TMonSimvaApp.switch_mode(
+        "simva", "/simlet/1/session/11/dashboard/default", {'display': 'block'})
+    assert tabs['display'] == 'none'
+    assert simva['display'] == 'none'
+    assert upload['display'] == 'none'

@@ -58,6 +58,17 @@ def login_logout_button_displayed(main, active_tab):
     label = I18n.t('header.logout.title') if flask.oidc.user_loggedin else I18n.t('header.login.title')
     return label, style, notice
 @callback(
+    Output('upload-no-tab-message', 'style'),
+    Input('upload-data', 'contents')
+)
+def show_upload_message_after_upload(contents):
+    """Only prompt for a tab once there is uploaded data to visualise."""
+    if contents:
+        return {'display': 'block', 'color': '#3c6d7a'}
+    return {'display': 'none'}
+
+
+@callback(
     Output('login-logout', 'children'),
     [Input('login-logout-button', 'n_clicks')]
 )
@@ -586,9 +597,12 @@ def load_uploaded_files(list_of_contents, list_of_names, list_of_dates):
     style = {'display': 'block'}
     for c, n, d in zip(list_of_contents or [], list_of_names or [], list_of_dates or []):
         out, err = [], []
+        when = datetime.fromtimestamp(d).isoformat()
+        source = f"{n} {when}"
         div_list.append(html.H5(n))
-        div_list.append(html.H6(datetime.fromtimestamp(d)))
-        load_players_info_from_uploaded_content(c, n, TMonWidgets.xapiData, out, err)
+        div_list.append(html.H6(when))
+        load_players_info_from_uploaded_content(
+            c, n, TMonWidgets.xapiData, out, err, source=source)
         div_list.append(html.Div(out))
         div_list.append(html.Div(err))
         if len(err) > 0:
@@ -599,11 +613,16 @@ def load_uploaded_files(list_of_contents, list_of_names, list_of_dates):
     return div_list, style
 
 
-def uploaded_outputs(div_list, style):
-    """The ten callback outputs for a local upload: clear the browser, show the log."""
-    empty = html.Div()
-    return (empty, empty, empty, empty, empty, empty,
-            {'display': 'none'}, div_list, style, "/dashboard/tab=home_tab")
+def uploaded_outputs(div_list, style, filename=None, when=None):
+    """The ten callback outputs for a local upload: clear the browser, show the log.
+
+    The file name and date are part of the log shown in the dashboard content,
+    not the header; the URL carries no tab so HomePage is not opened.
+    """
+    # Empty children must be strings, not Div components: the dashboard header
+    # reads the simlet/session slots as text.
+    return ('', '', '', '', '', '',
+            {'display': 'none'}, div_list, style, "/dashboard/upload")
 
 
 @callback(
@@ -638,7 +657,10 @@ def update_browser(n_clicks_parent, folder_n_clicks, file_n_clicks, n_clicks_run
     # in the other tab, so it must not be read as a SimVA selection.
     if upload_allowed(active_tab) and list_of_names:
         div_list, style = load_uploaded_files(list_of_contents, list_of_names, list_of_dates)
-        return uploaded_outputs(div_list, style)
+        name = list_of_names[0] if list_of_names else None
+        when = (datetime.fromtimestamp(list_of_dates[0]).isoformat()
+                if list_of_dates else None)
+        return uploaded_outputs(div_list, style, name, when)
     try: 
         browser
         if browser == None:
@@ -648,7 +670,10 @@ def update_browser(n_clicks_parent, folder_n_clicks, file_n_clicks, n_clicks_run
         if list_of_names and flask.oidc.user_loggedin:
             print(f"List_of_names : {list_of_names} - list_of_dates : {list_of_dates}")
             div_list, style = load_uploaded_files(list_of_contents, list_of_names, list_of_dates)
-            return uploaded_outputs(div_list, style)
+            name = list_of_names[0] if list_of_names else None
+            when = (datetime.fromtimestamp(list_of_dates[0]).isoformat()
+                    if list_of_dates else None)
+            return uploaded_outputs(div_list, style, name, when)
         else:
             return html.Div(),html.Div(),html.Div(),html.Div(),html.Div(),html.Div(),{'display': 'none'}, html.Div(), {'display': 'none'}, "/"
     else:
@@ -796,6 +821,8 @@ TMonUploadPanel = html.Div(
     children=[
         html.H3('Upload xAPI-SG files'),
         html.P('Select one or more JSON files to analyse after logging in to SIMVA.'),
+        html.P(I18n.t('dashboard.no_tab_selected'), id='upload-no-tab-message',
+               style={'display': 'none', 'color': '#3c6d7a'}),
         html.Div(id='upload-login-notice', children='',
                  style={'color': '#b34700', 'margin': '10px 0'}),
         dcc.Upload(

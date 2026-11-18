@@ -39,7 +39,7 @@ def log(target, o_str):
 #    an object o where with o.output: print() is valid
 #
 # Callback to update progress periodically
-def load_from_string(str, xapiData, info_output, err_output):
+def load_from_string(str, xapiData, info_output, err_output, source=None):
     progress = Progress(0)
     total=0
     count=0
@@ -76,7 +76,12 @@ def load_from_string(str, xapiData, info_output, err_output):
             f"File must contain EITHER 1 statement (in JSON) per line, or be a well-formed JSON of statements. Please select another file.")
         return e
     progress.value=1.0
-    log(info_output, f"... processed {count}/{total} statement(s) in {datetime.now() - start_time}. Displaying visualizations ...")
+    # `source` names the uploaded file and its date, so the final line says
+    # which data the visualisations are for instead of printing components.
+    destination = f" for {source}" if source else ""
+    log(info_output, f"... processed {count}/{total} statement(s) in "
+                     f"{datetime.now() - start_time}. Displaying visualizations"
+                     f"{destination} ...")
 
 def load_players_info_from_file(file, xapiData, out, err):
     log(out, f"{file}")
@@ -88,16 +93,18 @@ def load_players_info_from_file(file, xapiData, out, err):
             print(f"ERRORS FOUND ({len(err)} lines):\n" + "\n".join(err))
             sys.exit(-1)
 
-def load_players_info_from_uploaded_content(filecontent, filename, xapiData, out, err):
+def load_players_info_from_uploaded_content(filecontent, filename, xapiData, out, err,
+                                            source=None):
     log(out, f"{filename}")
     content_type, content_string = filecontent.split(',')
     decoded = base64.b64decode(content_string).decode('utf-8')
-    load_from_string(decoded, xapiData, out, err)
+    load_from_string(decoded, xapiData, out, err, source=source)
 
-def load_players_info_from_content(filecontent, filename, xapiData, out, err):
+def load_players_info_from_content(filecontent, filename, xapiData, out, err,
+                                   source=None):
     log(out, f"{filename}")
     decoded = filecontent.decode('utf-8')
-    load_from_string(decoded, xapiData, out, err)
+    load_from_string(decoded, xapiData, out, err, source=source)
 
 def processxapisgdata(statement, xapiData):
     # Extract the `id` from the first category object

@@ -1,3 +1,4 @@
+import base64
 import dash
 from dash import html, dash_table, dcc, callback, Output, Input, State, no_update
 from dash.exceptions import PreventUpdate
@@ -50,10 +51,12 @@ def get_value_from_url(url, valueId, urlValuesDelimiter='&'):
             return val[index+len(valueId):]
     return None
 
-homepagecontent=[
-   html.H2('T-Mon Home Page.'),
-   html.H3('Please select another tab to see default visualisations with this data.')
-]
+def render_homepage_content():
+    """The default view before a dashboard tab has been chosen."""
+    return [
+        html.H2('T-Mon Home Page.'),
+        html.H3(I18n.t('dashboard.no_tab_selected')),
+    ]
 
 
 def url_output(panel_style, query_string):
@@ -424,15 +427,55 @@ def render_simlet_tiles(studies):
     return html.Div(tiles, style={'padding': '20px'})
 
 @callback(
+    [Output('dashboard-tabs-wrapper', 'className'),
+     Output('dashboard-tabs-toggle', 'children')],
+    Input('dashboard-tabs-toggle', 'n_clicks')
+)
+def toggle_dashboard_tabs(n_clicks):
+    """Switch the vertical tab bar between icons + names and icons only."""
+    if (n_clicks or 0) % 2:
+        return 'dashboard-tabs-compact', '▶'
+    return 'dashboard-tabs-full', '◀'
+
+
+@callback(
+    Output('dashboard-title', 'children'),
+    [Input('output-t-mon', 'style'),
+     Input('current-simlet', 'children'),
+     Input('current-test', 'children')]
+)
+def update_dashboard_title(style, simlet_name, session_name):
+    """Name the open simlet and session in the dashboard header."""
+    if style != {'display': 'block'}:
+        return ''
+    # Children may be empty Dash components rather than text; only real names
+    # belong in the title.
+    return ' / '.join(str(part) for part in (simlet_name, session_name)
+                      if isinstance(part, str) and part)
+
+
+@callback(
+    Output('dashboard-tab-home_tab', 'style'),
+    Input('url', 'pathname')
+)
+def hide_home_tab(pathname):
+    """The HomePage grid has no place in a session or upload dashboard."""
+    if pathname and '/dashboard' in pathname:
+        if '/session/' in pathname or '/upload' in pathname:
+            return {'display': 'none'}
+    return {'display': 'block'}
+
+
+@callback(
     [
         Output('t-mon-tabs', 'value'),
         Output("users-multi-dynamic-dropdown", "value"),
         Output("object-multi-dynamic-dropdown", "value")
     ],
-    Input('output-t-mon', 'style'), 
-    State('url-t-mon', 'pathname')
+    Input('output-t-mon', 'style'),
+    [State('url-t-mon', 'pathname'), State('url', 'pathname')]
 )
-def update_tab(style, stateUrl):
+def update_tab(style, stateUrl, app_path):
     if style == {"display":"block"} : 
         print(f"StateUrl: {stateUrl}")
         new_tab=None
@@ -451,6 +494,14 @@ def update_tab(style, stateUrl):
             new_tab="home_tab"
             users=None
             object=None
+        # A session dashboard opens with no tab selected: the page shows the
+        # simlet/session names first and lets the user pick a visualisation.
+        if app_path and '/session/' in app_path and '/dashboard' in app_path:
+            tab = None
+            user_value = []
+            object_value = []
+            print(f"Session dashboard: no tab selected ({app_path})")
+            return tab, user_value, object_value
         tab=new_tab
         user_value=users.split(",") if users else []
         object_value=object.split(",") if object else []
@@ -757,15 +808,29 @@ def filterObjectIdDependingTab(df, value, tab):
     # write a relative query string into the URL: that would resolve against the
     # current path and overwrite the simlet id of a `/simlet/<id>` tile link.
     State('output-t-mon', 'style'),
+    State('current-simlet', 'children'),
+    State('current-test', 'children'),
+    State('url', 'pathname'),
 )
 def update_output(tab, user_search_value, user_value, object_search_value, object_value,
                   lrs_data_version=None, hidden_activities=None, created_charts=None,
-                  panel_style=None):
+                  panel_style=None, simlet_name=None, session_name=None,
+                  app_path=None):
     ctx = dash.callback_context
     triggered=ctx.triggered
     triggered_prop_id = ctx.triggered[0]['prop_id']
     res=f"Triggered : {triggered} - {triggered_prop_id}"
     print(res)
+    if ((tab is None or tab == '')
+            or (app_path and '/dashboard/upload' in app_path)):
+        # A session or upload dashboard starts here: show where the user is,
+        # then wait. Local uploads have no SimVA studies to tile.
+        # for a tab to be chosen. The activity buttons stay above this panel.
+        content = html.Div(
+            html.P(I18n.t('dashboard.no_tab_selected'),
+                   style={'fontFamily': INTER_FONT, 'color': TEXT_SECONDARY}),
+            style={'padding': '20px'})
+        return (no_update, [], [], content, [], [], creator_controls_style(tab))
     # Normalize the JSON data to a pandas DataFrame
     if ('object-multi-dynamic-dropdown' in triggered_prop_id or 'users-multi-dynamic-dropdown' in triggered_prop_id
             or 't-mon-tabs' in triggered_prop_id or 'lrs-data-version' in triggered_prop_id
@@ -818,7 +883,7 @@ def update_output(tab, user_search_value, user_value, object_search_value, objec
                         style={'padding': '20px'}
                     )
                 else:
-                    tab_content = html.Div(html.Div(homepagecontent))
+                    tab_content = html.Div(render_homepage_content())
             elif tab == 'progress_tab':
                 content=[]
                 content.append(html.H3('Player Progress Throw Serious game'))
@@ -989,7 +1054,8 @@ def update_output(tab, user_search_value, user_value, object_search_value, objec
                     object_unique_options, tab_content, x_options, y_options, creator_style)
         else:
             return (url_output(panel_style, "tab=home_tab"), [], [],
-                    html.Div(homepagecontent), [], [], creator_controls_style(tab))
+                    html.Div(render_homepage_content()), [], [],
+                    creator_controls_style(tab))
     else:
         raise PreventUpdate
     
@@ -1078,6 +1144,11 @@ def build_header(with_login=False, lang=None):
     }
 
     brand = html.Div([
+        html.A(I18n.t('navigation.return'), id='return-button', href='',
+               style={'display': 'none', 'marginRight': '14px',
+                      'fontFamily': 'sans-serif', 'fontSize': 12,
+                      'fontWeight': 'bold', 'color': '#000',
+                      'textDecoration': 'none'}),
         html.A([
             html.Img(
                 src=LOGO_SRC, alt='T-Mon logo',
@@ -1181,94 +1252,178 @@ TMonSimvaHeader = build_header(with_login=True)
 
 TMonSidebar=html.Div(id='sidebar', children=[])  # Will be populated by callbacks
 
+
+def tab_icon(path):
+    """A monochrome SVG data URI for a dashboard tab, in the SIMVA icon style."""
+    svg = (
+        '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" '
+        'fill="none" stroke="#1e1e1e" stroke-width="2" '
+        'stroke-linecap="round" stroke-linejoin="round">'
+        f'<path d="{path}"/></svg>'
+    )
+    return 'data:image/svg+xml;base64,' + base64.b64encode(
+        svg.encode('utf-8')).decode('ascii')
+
+
+# value, label key (English default), SVG path. The HomePage tab is only shown
+# outside a session dashboard, but it stays in the layout so callbacks keep
+# targeting a stable id.
+DASHBOARD_TABS = [
+    ('home_tab', 'HomePage', 'M3 11l9-8 9 8v9a1 1 0 0 1-1 1h-5v-6H9v6H4a1 1 0 0 1-1-1z'),
+    ('progress_tab', 'Progress', 'M4 19V9m6 10V5m6 14v-7m4 7H2'),
+    ('video_tab', 'Videos', 'M4 5h12v14H4zM16 10l5-3v10l-5-3'),
+    ('completable_tab', 'Completable', 'M9 11l3 3 8-8M5 12l3 3 3-3'),
+    ('alternative_tab', 'Alternatives', 'M6 6h12v12H6zM10 10h4v4h-4z'),
+    ('interaction_tab', 'Interactions',
+     'M8 12a3 3 0 100-6 3 3 0 000 6zm8 0a3 3 0 100-6 3 3 0 000 6M2 20v-2a4 4 0 014-4h4a4 4 0 014 4v2'),
+    ('accessible_tab', 'Accessible',
+     'M12 2a2 2 0 110 4 2 2 0 010-4zm-5 7h10l2 6h-3l2 7m-10-7h3l2 7'),
+    ('menu_tab', 'Menu', 'M4 6h16M4 12h16M4 18h16'),
+    ('data_tab', 'xAPI Data', 'M4 4h16v16H4zM4 10h16M10 4v16'),
+    ('create_tab', 'Create', 'M12 5v14M5 12h14'),
+]
+
+
+def return_target(pathname):
+    """The page one level up from ``pathname``, or None at the studies list."""
+    if not pathname or pathname == '/':
+        return None
+    if '/dashboard/upload' in pathname:
+        return '/'
+    if pathname.startswith('/simlet/'):
+        parts = [part for part in pathname.split('/') if part and '=' not in part]
+        if '/session/' in pathname and len(parts) >= 4:
+            return f'/simlet/{parts[1]}'
+        return '/'
+    # Analysis paths are /<simlet>/<session>/...; go back to the simlet.
+    parts = [part for part in pathname.split('/')
+             if part and '=' not in part and part not in ('dashboard', 'default')]
+    if len(parts) >= 2:
+        return f'/simlet/{parts[0]}'
+    if len(parts) == 1:
+        return '/'
+    return None
+
+
+def dashboard_tab_label(label, icon_path):
+    """The label of a dashboard tab: an icon beside a hideable name."""
+    return html.Span([
+        html.Img(src=tab_icon(icon_path),
+                 style={'height': '16px', 'width': '16px', 'marginRight': '8px'}),
+        html.Span(label, className='tab-name'),
+    ], style={'display': 'inline-flex', 'alignItems': 'center'})
+
+
 TMonBody=html.Div([
     dcc.Location(id='url-t-mon', refresh=False), # Location component for URL handling
     # Written only when the header language changes; the reload picks up lng.
     dcc.Location(id='i18n-location', refresh=True),
     html.Div(id='output-t-mon', style={'display': 'none'}, children=[
-        dcc.Dropdown(id='users-multi-dynamic-dropdown', multi=True),
-        dcc.Dropdown(id='object-multi-dynamic-dropdown', multi=True),
-        # Which activities of the session are in the view. Above the tabs and not inside
-        # one, so it applies to every visualisation at once instead of only to the tab it
-        # happens to sit in. The row is built by update_activity_filter and stays hidden
-        # until there is a choice to make.
         dcc.Store(id='activity-filter-hidden', data=[]),
-        html.Div(id='activity-filter-controls', style={'display': 'none'}, children=[
-            html.Span('Activities: ', style={'marginRight': '10px'}),
-            html.Button('All', id='activity-filter-all', n_clicks=0,
-                        style={'marginRight': '5px'}),
-            html.Button('None', id='activity-filter-none', n_clicks=0,
-                        style={'marginRight': '15px'}),
-            html.Span(id='activity-filter-info', children='', style={'color': '#555'}),
-        ]),
-        html.Div(id='activity-filter-div', children=[], style={'margin': '5px 0'}),
-        # The creator: the description of a chart to draw, kept in the store so several
-        # can be held at once and carried in the URL. The charts themselves are drawn in
-        # the Create tab below, where the other visualisations are, and these controls
-        # are left in the layout rather than drawn by a callback so that a redraw never
-        # takes the choices already made in them back.
         dcc.Store(id='created-charts', data=[]),
-        html.Div(id='chart-creator-controls', children=[
-            html.Span('Create a visualisation: ', style={'marginRight': '10px'}),
-            dcc.Dropdown(
-                id='chart-type',
-                options=[{'label': chart_type, 'value': chart_type} for chart_type in CHART_TYPES],
-                value='bar', clearable=False,
-                style={'display': 'inline-block', 'width': '110px', 'marginRight': '10px'}
-            ),
-            dcc.Dropdown(
-                id='chart-x', options=[], placeholder='on the x axis',
-                style={'display': 'inline-block', 'width': '230px', 'marginRight': '10px'}
-            ),
-            dcc.Dropdown(
-                id='chart-y', options=[], value=COUNT_LABEL, clearable=False,
-                style={'display': 'inline-block', 'width': '230px', 'marginRight': '10px'}
-            ),
-            dcc.Dropdown(
-                id='chart-aggregation',
-                options=[{'label': label, 'value': name}
-                         for name, label in AGGREGATION_LABELS.items()],
-                value='count', clearable=False,
-                style={'display': 'inline-block', 'width': '170px', 'marginRight': '10px'}
-            ),
-            html.Button('Add chart', id='chart-add', n_clicks=0),
-            html.Span(id='chart-creator-status', children='', style={'marginLeft': '10px', 'color': '#555'}),
-        ], style={'margin': '10px 0'}),
-        html.Div(
-            dcc.Tabs(id="t-mon-tabs", value="home_tab", children=[
-                dcc.Tab(label='HomePage', value='home_tab'),
-                dcc.Tab(label='Progress', value='progress_tab'),
-                dcc.Tab(label='Videos', value='video_tab'),
-                dcc.Tab(label='Completable', value='completable_tab'),
-                dcc.Tab(label='Alternatives', value='alternative_tab'),
-                dcc.Tab(label='Interactions', value='interaction_tab'),
-                dcc.Tab(label='Accessible', value='accessible_tab'),
-                dcc.Tab(label='Menu', value='menu_tab'),
-                dcc.Tab(label='xAPI Data', value='data_tab'),
-                dcc.Tab(label='Create', value='create_tab')
-            ])
-        ),
-        html.Div(id="tabs-content"),
-        # Live updates: only meaningful once statements have been loaded, so these
-        # controls live inside the panel that is revealed by a successful analysis.
-        html.Hr(),
+        # Dashboard header: where the user is, the filters and the activity
+        # selector. This replaces the SIMVA browser while a dashboard is open,
+        # so those controls no longer depend on the browser being visible.
+        html.Div(id='dashboard-header', children=[
+            html.H3(id='dashboard-title',
+                    style={'fontFamily': INTER_FONT, 'fontSize': 16,
+                           'margin': '0 0 6px'}),
+            html.Div([
+                dcc.Dropdown(id='users-multi-dynamic-dropdown', multi=True,
+                             style={'width': '260px'}),
+                dcc.Dropdown(id='object-multi-dynamic-dropdown', multi=True,
+                             style={'width': '260px'}),
+            ], style={'display': 'flex', 'gap': '10px', 'marginBottom': '6px'}),
+            html.Div(id='activity-filter-controls', style={'display': 'none'}, children=[
+                html.Span('Activities: ', style={'marginRight': '10px'}),
+                html.Button('All', id='activity-filter-all', n_clicks=0,
+                            style={'marginRight': '5px'}),
+                html.Button('None', id='activity-filter-none', n_clicks=0,
+                            style={'marginRight': '15px'}),
+                html.Span(id='activity-filter-info', children='', style={'color': '#555'}),
+            ]),
+            html.Div(id='activity-filter-div', children=[], style={'margin': '5px 0'}),
+        ], style={'padding': '8px 20px', 'borderBottom': '1px solid #ddd'}),
+        # The tab bar is a sidebar for the dashboard; the visualisations sit to
+        # its right. The app header and footer stay outside this panel.
         html.Div([
-            dcc.Checklist(
-                id='lrs-poll-enabled',
-                options=[{'label': ' Live updates', 'value': 'on'}],
-                value=[],
-                style={'display': 'inline-block', 'marginRight': '15px'}
-            ),
-            dcc.Dropdown(
-                id='lrs-poll-rate',
-                options=[{'label': f'{s} seconds', 'value': s} for s in (5, 10, 30, 60, 300)],
-                value=10,
-                clearable=False,
-                style={'display': 'inline-block', 'width': '140px'}
-            ),
-            html.Span(id='lrs-poll-count', children='', style={'marginLeft': '15px'}),
-        ]),
-        html.Div(id='lrs-poll-status', children='', style={'fontSize': '0.85em', 'color': '#555'})
+            html.Div([
+                html.Button('◀', id='dashboard-tabs-toggle', n_clicks=0,
+                            title='Show icons only / show tab names',
+                            style={'background': 'none', 'border': 'none',
+                                   'cursor': 'pointer', 'fontSize': '16px',
+                                   'padding': '6px'}),
+                dcc.Tabs(
+                    id='t-mon-tabs', value=None, vertical=True,
+                    className='dashboard-tabs',
+                    children=[
+                        dcc.Tab(id=f'dashboard-tab-{value}', value=value,
+                                label=dashboard_tab_label(label, icon))
+                        for value, label, icon in DASHBOARD_TABS
+                    ],
+                ),
+            ], id='dashboard-tabs-wrapper', className='dashboard-tabs-full',
+                style={'display': 'flex', 'alignItems': 'flex-start',
+                       'flex': '0 0 auto'}),
+            html.Div(id='dashboard-content', children=[
+                # Loader/upload log, including the file name and date, belongs
+                # beside the visualisations rather than above the tab bar.
+                html.Div(id='content', children=[]),
+                html.Div(id='chart-creator-controls', children=[
+                    html.Span('Create a visualisation: ', style={'marginRight': '10px'}),
+                    dcc.Dropdown(
+                        id='chart-type',
+                        options=[{'label': chart_type, 'value': chart_type}
+                                 for chart_type in CHART_TYPES],
+                        value='bar', clearable=False,
+                        style={'display': 'inline-block', 'width': '110px',
+                               'marginRight': '10px'}
+                    ),
+                    dcc.Dropdown(
+                        id='chart-x', options=[], placeholder='on the x axis',
+                        style={'display': 'inline-block', 'width': '230px',
+                               'marginRight': '10px'}
+                    ),
+                    dcc.Dropdown(
+                        id='chart-y', options=[], value=COUNT_LABEL, clearable=False,
+                        style={'display': 'inline-block', 'width': '230px',
+                               'marginRight': '10px'}
+                    ),
+                    dcc.Dropdown(
+                        id='chart-aggregation',
+                        options=[{'label': label, 'value': name}
+                                 for name, label in AGGREGATION_LABELS.items()],
+                        value='count', clearable=False,
+                        style={'display': 'inline-block', 'width': '170px',
+                               'marginRight': '10px'}
+                    ),
+                    html.Button('Add chart', id='chart-add', n_clicks=0),
+                    html.Span(id='chart-creator-status', children='',
+                              style={'marginLeft': '10px', 'color': '#555'}),
+                ], style={'margin': '10px 0'}),
+                html.Div(id="tabs-content"),
+                html.Hr(),
+                html.Div([
+                    dcc.Checklist(
+                        id='lrs-poll-enabled',
+                        options=[{'label': ' Live updates', 'value': 'on'}],
+                        value=[],
+                        style={'display': 'inline-block', 'marginRight': '15px'}
+                    ),
+                    dcc.Dropdown(
+                        id='lrs-poll-rate',
+                        options=[{'label': f'{s} seconds', 'value': s}
+                                 for s in (5, 10, 30, 60, 300)],
+                        value=10, clearable=False,
+                        style={'display': 'inline-block', 'width': '140px'}
+                    ),
+                    html.Span(id='lrs-poll-count', children='',
+                              style={'marginLeft': '15px'}),
+                ]),
+                html.Div(id='lrs-poll-status', children='',
+                         style={'fontSize': '0.85em', 'color': '#555'}),
+            ], style={'flex': '1 1 auto', 'minWidth': 0, 'padding': '10px 20px'}),
+        ], style={'display': 'flex', 'alignItems': 'flex-start'}),
     ])
 ])
 TMonFooter=html.Div([
