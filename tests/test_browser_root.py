@@ -1,6 +1,8 @@
 from dash import html
 
 from TMonWidgets import SimvaBrowserWidget as BrowserWidget
+from TMonWidgets import SimletExplorer
+from TMonWidgets.TMonWidget import render_simlet_tiles
 
 
 class _FakeOidc:
@@ -27,22 +29,33 @@ def _walk(component):
         yield from _walk(children)
 
 
-def test_root_section_shows_all_simlets():
+def test_root_section_shows_the_explorer():
     studies = [
         {'simlet_id': 'a', 'simlet_name': 'simlet A'},
         {'simlet_id': 'b', 'simlet_name': 'simlet B'},
     ]
-    section = BrowserWidget.render_simlet_section(studies, _get_id)
+    section = BrowserWidget.render_simlet_section(studies, _get_id, '?status=archived&limit=9')
+    assert section.children == 'Simlets'
 
-    headings = [child for child in _walk(section) if isinstance(child, html.H3)]
-    assert any(heading.children == 'Simlets' for heading in headings)
+    panel = BrowserWidget.render_simlet_explorer_panel(
+        studies, '?status=archived&limit=9')
+    assert panel.id == 'simlet-explorer-panel'
+    ids = [getattr(child, 'id', None) for child in _walk(panel)]
+    assert 'simlet-browser-grid' in ids
+    for name in ('status', 'search', 'sort', 'tags', 'limit', 'prev', 'next', 'info'):
+        assert f'simlet-explorer-{name}' in ids
+    status = next(child for child in _walk(panel)
+                  if getattr(child, 'id', None) == 'simlet-explorer-status')
+    assert status.value == 'archived'
 
-    links = [child for child in _walk(section) if isinstance(child, html.A)]
-    assert [link.href for link in links] == [
-        '/simlet/a',
-        '/simlet/b',
-    ]
-    assert [link.children.children[0].children for link in links] == ['simlet A', 'simlet B']
+    filters = SimletExplorer.parse_simlet_query('?status=archived&limit=9')
+    page, total = SimletExplorer.apply_simlet_filters(studies, filters)
+    assert total == 0  # neither study is archived
+    active = SimletExplorer.parse_simlet_query('')
+    page, total = SimletExplorer.apply_simlet_filters(studies, active)
+    assert total == 2
+    links = [child for child in _walk(render_simlet_tiles(page)) if isinstance(child, html.A)]
+    assert [link.href for link in links] == ['/simlet/a', '/simlet/b']
 
 
 def test_navigation_chrome_is_hidden_only_at_root(monkeypatch):
@@ -56,6 +69,15 @@ def test_navigation_chrome_is_hidden_only_at_root(monkeypatch):
     # A logged-out visitor never sees the browser navigation, including `..`.
     monkeypatch.setattr(BrowserWidget, 'flask', _FakeFlask(False))
     assert BrowserWidget.toggle_browser_chrome('output/simlet-id/') == hidden
+
+
+def test_simlet_explorer_panel_is_shown_only_on_the_studies_list(monkeypatch):
+    monkeypatch.setattr(BrowserWidget, 'flask', _FakeFlask(True))
+    assert BrowserWidget.toggle_simlet_explorer('output/', None) == {'display': 'block'}
+    assert BrowserWidget.toggle_simlet_explorer(None, None) == {'display': 'block'}
+    assert BrowserWidget.toggle_simlet_explorer('output/1/', None) == {'display': 'none'}
+    monkeypatch.setattr(BrowserWidget, 'flask', _FakeFlask(False))
+    assert BrowserWidget.toggle_simlet_explorer('output/', None) == {'display': 'none'}
 
 
 def test_dashboard_simlet_url_maps_to_browser_path():
@@ -90,8 +112,10 @@ def test_root_section_keeps_simlet_metadata():
         'createdAt': '2026-11-18T10:24:54.201Z',
         'updatedAt': '2026-11-18T10:24:54.201Z',
     }]
-    section = BrowserWidget.render_simlet_section(studies, _get_id)
-    texts = list(_tile_texts(section))
+    page, total = SimletExplorer.apply_simlet_filters(
+        studies, SimletExplorer.parse_simlet_query(''))
+    assert total == 1
+    texts = list(_tile_texts(render_simlet_tiles(page)))
     for expected in ("Created at: 2026/11/18", "Updated at: 2026/11/18",
                      "Sessions: 1", "Groups: 0", "Participants: 0", "Tags:", "test"):
         assert expected in texts

@@ -1,5 +1,24 @@
 # Reference: Simlet Tiles
 
+## Simlet Explorer (list controls)
+
+The studies-list level of the SIMVA tab shows a control row above the tiles:
+a status selector (Active / Archived), a name/description search bar, a sort
+selector (the same seven choices as the SimVA front end), a multi-select tag
+filter, a page-size input and Previous / Next buttons.
+
+The state lives in the browser URL query string so a filtered list can be
+shared. The default state is:
+
+```
+status=active&skip=0&limit=9&orderBy=id&order=asc
+```
+
+`searchString` and `searchTags` (a comma-separated list of tag ids) are added
+only when set. The same names are used by the SimVA API and the `simva-front`
+list pages. Implementation: `src/TMonWidgets/SimletExplorer.py`; the controls
+are rendered by `render_simlet_section()` in `SimvaBrowserWidget.py`.
+
 ## API Reference
 
 ### `render_simlet_tiles(studies)` Function

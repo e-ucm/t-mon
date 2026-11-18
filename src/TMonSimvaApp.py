@@ -12,6 +12,10 @@ app = Dash(
     server=flask.flaskServer,
     serve_locally=True,
     assets_folder=os.path.join(os.path.dirname(__file__), 'assets'),
+    # The simlet explorer's controls and grid are created by the callback that
+    # rebuilds the studies-list root, so they are not in the initial layout.
+    # Dash has to accept those ids as callback inputs/outputs.
+    #suppress_callback_exceptions=True,
 )
 
 # Layout of the dashboard. The top tabs choose between analysing local files and

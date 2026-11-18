@@ -6,6 +6,7 @@ from dash.exceptions import PreventUpdate
 import json
 import TMonWidgets
 from TMonWidgets.TMonWidget import HEADER_BUTTON_STYLE, render_simlet_tiles
+from TMonWidgets.SimletExplorer import parse_simlet_query, render_simlet_controls
 #Import LoadProcessStatements.py
 from LoadProcessStatements import load_from_string, load_players_info_from_uploaded_content
 # Import SimvaBrowser class from SimvaBrowser.py
@@ -337,36 +338,55 @@ def is_root_path(path):
     return current in ('', str(base or '').rstrip('/'))
 
 
-def render_simlet_section(studies, id_getter):
+def render_simlet_section(studies, id_getter, search=''):
     """
-    Build the grid of simlet tiles shown by the SIMVA tab at the root level.
+    Build the heading above the simlet explorer on the studies list.
 
-    The SimVA API names its fields ``simlet_id``/``simlet_name``, so plain
-    ``id``/``name`` keys are added for the dashboard grid. The rest of the
-    object is kept: dates, sessions, groups and tags are what the tiles show
-    alongside the name, and dropping them here would leave the grid with
-    nothing but identifiers.
+    The controls and grid live in a persistent panel (see
+    :func:`render_simlet_explorer_panel`) so their ids exist in every layout
+    state. Keeping them out of the callback-rebuilt folder list is what stops
+    Dash from reporting callback inputs that point at missing components.
 
     Args:
-        studies: Raw simlet objects from the SimVA API.
+        studies: Raw simlet objects from the SimVA API (unused here).
         id_getter: Callable ``(simlet, type, name) -> value`` of the browser.
+        search: The URL query string holding the explorer state (unused here).
 
     Returns:
-        html.Div: A "Simlets" heading followed by one tile per simlet.
+        html.H3: The "Simlets" heading.
     """
-    normalized = []
-    for simlet in studies or []:
-        simlet_id = id_getter(simlet, 'simlet', 'id')
-        if simlet_id is None:
-            continue
-        item = dict(simlet)
-        item['id'] = simlet_id
-        item['name'] = id_getter(simlet, 'simlet', 'name') or str(simlet_id)
-        normalized.append(item)
+    return html.H3('Simlets', style={'margin': '0 0 4px 20px', 'fontFamily': 'Inter'})
+
+
+def render_simlet_explorer_panel(studies=None, search=''):
+    """
+    Build the persistent panel holding the simlet controls and their grid.
+
+    The panel is present whatever the login/navigation state; a separate
+    callback only changes its visibility. Its ids can therefore always be
+    bound to the explorer callback.
+
+    Args:
+        studies: Loaded simlets, used to populate the tag selector.
+        search: The URL query string holding the explorer state.
+
+    Returns:
+        html.Div: The controls and the grid slot, hidden by default.
+    """
     return html.Div([
-        html.H3('Simlets', style={'margin': '0 0 4px 20px', 'fontFamily': 'Inter'}),
-        render_simlet_tiles(normalized),
-    ])
+        render_simlet_controls(parse_simlet_query(search), studies or []),
+        html.Div(id='simlet-browser-grid'),
+    ], id='simlet-explorer-panel', style={'display': 'none'})
+
+
+@callback(
+    Output('simlet-explorer-panel', 'style'),
+    [Input('current-path', 'children'), Input('main-login', 'children')]
+)
+def toggle_simlet_explorer(path, main):
+    """Show the simlet controls only on the logged-in studies list."""
+    visible = bool(flask.oidc.user_loggedin) and is_root_path(path)
+    return {'display': 'block'} if visible else {'display': 'none'}
 
 
 @callback(
@@ -391,10 +411,10 @@ def toggle_browser_chrome(path):
 
 @callback(
     Output('browser_div', 'children'),
-    Input('main-login', 'children'), 
-    State('url', 'pathname')
+    Input('main-login', 'children'),
+    [State('url', 'pathname'), State('url', 'search')]
 )
-def init_storage(main, pathname):
+def init_storage(main, pathname, search=''):
     if flask.oidc.user_loggedin:
         # Initialize SimvaBrowser
         global browser
@@ -427,7 +447,7 @@ def init_storage(main, pathname):
         # folder buttons and the one-tile preview the browser used to show.
         if browser.current_path == browser.base_path:
             folder_buttons = [render_simlet_section(
-                TMonWidgets.accepted_studies, browser._get_id_from_object)]
+                TMonWidgets.accepted_studies, browser._get_id_from_object, search)]
         else:
             folder_buttons = [html.Button(f"{f.get('name')} ({f.get('id')})", id={'type': 'folder-button', 'index': f.get('id')}, n_clicks=0) for f in browser.dirs]
         
@@ -445,6 +465,9 @@ def init_storage(main, pathname):
             html.Div(id='folders-div', children=folder_buttons),
             html.Div(id='files-div', children=file_buttons),
             html.Button('Run Analyse', id='run-analyse', n_clicks=0, style=run_analyse_style),
+            # One persistent explorer panel in every state; its style decides
+            # whether it is shown, so its ids never disappear from the layout.
+            render_simlet_explorer_panel(TMonWidgets.accepted_studies, search),
         ])
         return appLayout
     else:
@@ -458,6 +481,7 @@ def init_storage(main, pathname):
                 html.Div(id='folders-div', children=[], style={'display': 'none'}),
                 html.Div(id='files-div', children=[], style={'display': 'none'}),
                 html.Button('Run Analyse', id='run-analyse', n_clicks=0, style={'display': 'none'}),
+                render_simlet_explorer_panel(),
             ])
 
 def load_uploaded_files(list_of_contents, list_of_names, list_of_dates):
@@ -515,13 +539,14 @@ def uploaded_outputs(div_list, style):
      Input('upload-data', 'contents')],
     [State('current-path', 'children'),
      State('url', 'pathname'),
+     State('url', 'search'),
      State('upload-data', 'filename'),
      State('upload-data', 'last_modified'),
      State('app-tabs', 'value')]
 )
 def update_browser(n_clicks_parent, folder_n_clicks, file_n_clicks, n_clicks_run_analyse,
-                   list_of_contents, current_path, statepathname, list_of_names,
-                   list_of_dates, active_tab):
+                   list_of_contents, current_path, statepathname, state_search,
+                   list_of_names, list_of_dates, active_tab):
     # In the Upload tab a dropped file is local even if a SIMVA session is open
     # in the other tab, so it must not be read as a SimVA selection.
     if upload_allowed(active_tab) and list_of_names:
@@ -608,9 +633,9 @@ def update_browser(n_clicks_parent, folder_n_clicks, file_n_clicks, n_clicks_run
             return get_analysis_outputs(analysis_path, dashboardpath)
         if browser.current_path == browser.base_path:
             # Coming back up with ".." lands on the studies list again, so show
-            # the same Simlets grid as on a fresh load of "/".
+            # the same Simlets explorer as on a fresh load of "/".
             folder_buttons = [render_simlet_section(
-                TMonWidgets.accepted_studies, browser._get_id_from_object)]
+                TMonWidgets.accepted_studies, browser._get_id_from_object, state_search)]
         else:
             folder_buttons = [html.Button(f"{f.get('name')} ({f.get('id')})", id={'type': 'folder-button', 'index': f.get("id")}, n_clicks=0) for f in browser.dirs]
         file_buttons = [html.Button(f, id={'type': 'file-button', 'index': f}, n_clicks=0, style={'backgroundColor': 'green'}) for f in browser.files if f.endswith(browser.accept)]
@@ -633,6 +658,9 @@ simvaBrowserBody = html.Div(
                 html.Div(id='folders-div', children=[]),
                 html.Div(id='files-div', children=[]),
                 html.Button('Run Analyse', id='run-analyse', n_clicks=0, style={'display': 'none'}),
+                # The panel stays in the layout in every browser state; only
+                # its visibility changes, so the callback ids always resolve.
+                render_simlet_explorer_panel(),
             ]
         ),
         html.Div(id='debug-browser', children=[]),
