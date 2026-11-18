@@ -61,17 +61,78 @@ def test_root_section_shows_the_explorer():
     assert [link.href for link in links] == ['/simlet/a', '/simlet/b']
 
 
-def test_navigation_chrome_is_hidden_only_at_root(monkeypatch):
+def test_navigation_chrome_only_at_a_session_or_activity(monkeypatch):
     monkeypatch.setattr(BrowserWidget, 'flask', _FakeFlask(True))
-    hidden = ({'display': 'none'},) * 4
-    visible = ({'display': 'block'},) * 4
-    assert BrowserWidget.toggle_browser_chrome('output/') == hidden
-    assert BrowserWidget.toggle_browser_chrome(None) == hidden
-    assert BrowserWidget.toggle_browser_chrome('output/simlet-id/') == visible
 
-    # A logged-out visitor never sees the browser navigation, including `..`.
+    class _Selected:
+        base_path = 'output/'
+        actual_test = {'session_id': 11}
+        actual_activity = None
+
+    class _AtSimlet:
+        base_path = 'output/'
+        actual_test = None
+        actual_activity = None
+
+    monkeypatch.setattr(BrowserWidget, 'browser', _AtSimlet(), raising=False)
+    hidden = {'display': 'none'}
+    assert BrowserWidget.toggle_browser_chrome('output/') == (hidden,) * 5
+    assert BrowserWidget.toggle_browser_chrome(None) == (hidden,) * 5
+
+    # At the simlet level only the name and its two tabs are shown.
+    name, test, activity, parent, panel = BrowserWidget.toggle_browser_chrome(
+        'output/simlet-id/')
+    assert name['display'] == 'block'
+    assert (test, activity, parent) == (hidden, hidden, hidden)
+    assert panel == {'display': 'block'}
+
+    # Opening a session brings the old browser navigation back.
+    monkeypatch.setattr(BrowserWidget, 'browser', _Selected(), raising=False)
+    name, test, activity, parent, panel = BrowserWidget.toggle_browser_chrome(
+        'output/simlet-id/11/')
+    assert name['display'] == 'block'
+    assert (test, activity, parent) == ({'display': 'block'},) * 3
+    assert panel == hidden
+
+    # A logged-out visitor never sees any of it.
     monkeypatch.setattr(BrowserWidget, 'flask', _FakeFlask(False))
-    assert BrowserWidget.toggle_browser_chrome('output/simlet-id/') == hidden
+    assert BrowserWidget.toggle_browser_chrome('output/simlet-id/') == (hidden,) * 5
+
+
+def test_initial_layout_styles_hide_the_old_chrome_at_a_simlet(monkeypatch):
+    monkeypatch.setattr(BrowserWidget, 'flask', _FakeFlask(True))
+
+    class _AtSimlet:
+        base_path = 'output/'
+        actual_test = None
+        actual_activity = None
+
+    monkeypatch.setattr(BrowserWidget, 'browser', _AtSimlet(), raising=False)
+    name, chrome, panel = BrowserWidget.simlet_chrome_styles('output/1/')
+    assert name['display'] == 'block'
+    assert chrome == {'display': 'none'}
+    assert panel == {'display': 'block'}
+    # A deeper path with nothing resolved must not reveal the placeholders.
+    assert BrowserWidget.simlet_chrome_styles('output/1/999/') == (name, chrome, panel)
+
+    view = BrowserWidget.render_simlet_view_panel(
+        [], '', style=panel, session_style=panel)
+    assert view.style == panel
+    session_panel = next(child for child in _walk(view)
+                         if getattr(child, 'id', None) == 'session-explorer-panel')
+    assert session_panel.style == panel
+
+
+def test_simlet_view_has_two_tabs_with_the_sessions_list_in_the_second():
+    panel = BrowserWidget.render_simlet_view_panel(
+        [{'simlet_id': 1, 'session_name': 'A', 'session_status': 'active'}], '')
+    tabs = [child for child in _walk(panel) if getattr(child, 'id', None) == 'simlet-view-tabs']
+    assert len(tabs) == 1
+    assert [tab.label for tab in tabs[0].children] == [
+        'general dashboards', 'sessions dashboard']
+    ids = [getattr(child, 'id', None) for child in _walk(panel)]
+    assert 'session-explorer-search' in ids
+    assert 'session-browser-cards' in ids
 
 
 def test_simlet_explorer_panel_is_shown_only_on_the_studies_list(monkeypatch):

@@ -5,7 +5,9 @@ from dash.dependencies import Input, Output, State
 from dash.exceptions import PreventUpdate
 import json
 import TMonWidgets
-from TMonWidgets.TMonWidget import HEADER_BUTTON_STYLE, render_simlet_tiles
+from TMonWidgets.TMonWidget import (
+    HEADER_BUTTON_STYLE, TEXT_SECONDARY, render_simlet_tiles,
+)
 from TMonWidgets.SimletExplorer import parse_simlet_query, render_simlet_controls
 from TMonWidgets.SessionExplorer import (
     is_simlet_path, render_session_explorer_panel,
@@ -361,7 +363,7 @@ def render_simlet_section(studies, id_getter, search=''):
     return html.H3('Simlets', style={'margin': '0 0 4px 20px', 'fontFamily': 'Inter'})
 
 
-def render_simlet_explorer_panel(studies=None, search=''):
+def render_simlet_explorer_panel(studies=None, search='', style=None):
     """
     Build the persistent panel holding the simlet controls and their grid.
 
@@ -379,7 +381,8 @@ def render_simlet_explorer_panel(studies=None, search=''):
     return html.Div([
         render_simlet_controls(parse_simlet_query(search), studies or []),
         html.Div(id='simlet-browser-grid'),
-    ], id='simlet-explorer-panel', style={'display': 'none'})
+    ], id='simlet-explorer-panel',
+        style=style if style is not None else {'display': 'none'})
 
 
 @callback(
@@ -392,24 +395,82 @@ def toggle_simlet_explorer(path, main):
     return {'display': 'block'} if visible else {'display': 'none'}
 
 
+def simlet_level(path):
+    """Whether the browser is at a simlet, with no session opened yet."""
+    global browser
+    try:
+        base = browser.base_path
+    except (NameError, AttributeError):
+        base = 'output/'
+    return is_simlet_path(path, base)
+
+
+def render_simlet_view_panel(sessions=None, search='', style=None, session_style=None):
+    """
+    The two-tab view shown once a simlet is open.
+
+    The simlet name stays above the tabs; the session and activity headings and
+    the ``..`` button are replaced by the tabs at this level.
+    """
+    return html.Div([
+        dcc.Tabs(id='simlet-view-tabs', value='sessions', children=[
+            dcc.Tab(label='general dashboards', value='general', children=[
+                html.Div(
+                    'Select a session from the Sessions dashboard to see its dashboards.',
+                    style={'padding': '20px', 'fontFamily': 'Inter',
+                           'color': TEXT_SECONDARY}),
+            ]),
+            dcc.Tab(label='sessions dashboard', value='sessions', children=[
+                render_session_explorer_panel(sessions, search, style=session_style),
+            ]),
+        ]),
+    ], id='simlet-view-panel',
+        style=style if style is not None else {'display': 'none'})
+
+
+def simlet_chrome_styles(path):
+    """
+    Styles for the simlet name, the old navigation headings and the tab panel.
+
+    Shared by ``init_storage`` (which rebuilds the whole browser layout) and
+    the style callback, so the first render and later navigation agree.
+    """
+    hidden = {'display': 'none'}
+    if not flask.oidc.user_loggedin or is_root_path(path):
+        return hidden, hidden, hidden
+
+    global browser
+    try:
+        has_test = browser.actual_test is not None
+        has_activity = browser.actual_activity is not None
+    except (NameError, AttributeError):
+        has_test = has_activity = False
+    at_simlet = simlet_level(path) or not (has_test or has_activity)
+
+    name_style = {'display': 'block', 'fontSize': '18px',
+                  'margin': '4px 0 10px 20px'}
+    chrome = {'display': 'block'} if (has_test or has_activity) else hidden
+    panel = {'display': 'block'} if at_simlet else hidden
+    return name_style, chrome, panel
+
+
 @callback(
     [Output('current-simlet', 'style'),
      Output('current-test', 'style'),
      Output('current-activity', 'style'),
-     Output('parent-directory', 'style')],
+     Output('parent-directory', 'style'),
+     Output('simlet-view-panel', 'style')],
     Input('current-path', 'children'),
 )
 def toggle_browser_chrome(path):
-    """Hide the selection headings and parent button on the studies list.
+    """Choose the chrome for the studies list, a simlet, or a deeper selection.
 
-    At the root there is nothing selected and nowhere to go back to: the SIMVA
-    tab shows only the Simlets grid. Deeper in the tree the browser navigation
-    is shown as before. A logged-out visitor never sees it, including the `..`
-    button, whatever path the URL happens to carry.
+    The studies list shows only the Simlets grid. At the simlet level only the
+    simlet name and its two tabs are shown; the session/activity headings and
+    the ``..`` button appear again once a session is opened.
     """
-    visible = bool(flask.oidc.user_loggedin) and not is_root_path(path)
-    style = {'display': 'block'} if visible else {'display': 'none'}
-    return style, style, style, style
+    name_style, chrome, panel = simlet_chrome_styles(path)
+    return name_style, chrome, chrome, chrome, panel
 
 
 @callback(
@@ -463,11 +524,13 @@ def init_storage(main, pathname, search=''):
         actual_simlet=browser._get_id_from_object(browser.actual_simlet, 'simlet', 'name') if browser.actual_simlet is not None else "Select a simlet"
         actual_test=browser._get_id_from_object(browser.actual_test, 'session', 'name') if browser.actual_test is not None else "Select an test"
         actual_activity=browser._get_id_from_object(browser.actual_activity, 'activity', 'name') if browser.actual_activity is not None else "Select an activity"
-        chrome_style = ({'display': 'none'} if browser.current_path == browser.base_path
-                        else {'display': 'block'})
+        # Set the styles here, not only in the style callback: init_storage
+        # replaces the whole layout, so styles written to the old components
+        # on the same page load would be lost.
+        name_style, chrome_style, panel_style = simlet_chrome_styles(browser.current_path)
         appLayout = html.Div([
             html.H3(id='current-path', children=browser.current_path, style={'display': 'none'}),
-            html.H4(id='current-simlet', children=actual_simlet, style=chrome_style),
+            html.H4(id='current-simlet', children=actual_simlet, style=name_style),
             html.H4(id='current-test', children=actual_test, style=chrome_style),
             html.H4(id='current-activity', children=actual_activity, style=chrome_style),
             html.Button('..', id='parent-directory', n_clicks=0, style=chrome_style),
@@ -476,8 +539,12 @@ def init_storage(main, pathname, search=''):
             html.Button('Run Analyse', id='run-analyse', n_clicks=0, style=run_analyse_style),
             # One persistent explorer panel in every state; its style decides
             # whether it is shown, so its ids never disappear from the layout.
-            render_simlet_explorer_panel(TMonWidgets.accepted_studies, search),
-            render_session_explorer_panel(TMonWidgets.accepted_sessions, search),
+            render_simlet_explorer_panel(
+                TMonWidgets.accepted_studies, search,
+                style={'display': 'block'} if at_root else {'display': 'none'}),
+            render_simlet_view_panel(
+                TMonWidgets.accepted_sessions, search, style=panel_style,
+                session_style=panel_style),
         ])
         return appLayout
     else:
@@ -492,7 +559,7 @@ def init_storage(main, pathname, search=''):
                 html.Div(id='files-div', children=[], style={'display': 'none'}),
                 html.Button('Run Analyse', id='run-analyse', n_clicks=0, style={'display': 'none'}),
                 render_simlet_explorer_panel(),
-                render_session_explorer_panel(),
+                render_simlet_view_panel(),
             ])
 
 def load_uploaded_files(list_of_contents, list_of_names, list_of_dates):
@@ -686,7 +753,7 @@ simvaBrowserBody = html.Div(
                 # The panels stay in the layout in every browser state; only
                 # their visibility changes, so the callback ids always resolve.
                 render_simlet_explorer_panel(),
-                render_session_explorer_panel(),
+                render_simlet_view_panel(),
             ]
         ),
         html.Div(id='debug-browser', children=[]),

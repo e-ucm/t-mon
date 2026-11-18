@@ -21,14 +21,20 @@ are rendered by `render_simlet_section()` in `SimvaBrowserWidget.py`.
 
 ## Sessions list
 
-Opening a simlet (`/simlet/<id>`) replaces the folder buttons with a Sessions
-list styled after the SimVA front-end Sessions tab: cards show the session
-name, description, status badge (Active / Paused / Finished), creation date,
-activity and participant counts, and coloured tags. The same filter row as the
-simlets page is available, with four sessions per page by default.
+Opening a simlet (`/simlet/<id>`) leaves only the simlet name at the top,
+followed by two tabs: **general dashboards** and **sessions dashboard**. The
+session/activity headings and the `..` button are hidden at this level and
+return once a session is opened.
+
+The sessions dashboard shows a list styled after the SimVA front-end Sessions
+tab: cards show the session name, description, status badge (Active / Paused /
+Finished), creation date, activity and participant counts, and coloured tags.
+The same filter row as the simlets page is available, with four sessions per
+page by default.
 
 Activities are **not** shown on arrival: they appear only after a session card
-is clicked. Implementation: `src/TMonWidgets/SessionExplorer.py`.
+is clicked. Implementation: `src/TMonWidgets/SessionExplorer.py`; the tab view
+is built by `render_simlet_view_panel()` in `SimvaBrowserWidget.py`.
 
 ## API Reference
 

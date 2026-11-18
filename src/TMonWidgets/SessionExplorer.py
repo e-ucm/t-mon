@@ -317,14 +317,15 @@ def render_session_controls(filters, sessions):
               'gap': '4px', 'margin': '10px 20px'})
 
 
-def render_session_explorer_panel(sessions=None, search=''):
+def render_session_explorer_panel(sessions=None, search='', style=None):
     """The persistent panel holding the session controls and their cards."""
     return html.Div([
         html.H3('Sessions', style={'margin': '0 0 4px 20px', 'fontFamily': 'Inter'}),
         dcc.Store(id='session-explorer-state', data={'skip': 0}),
         render_session_controls(parse_session_query(search), sessions or []),
         html.Div(id='session-browser-cards'),
-    ], id='session-explorer-panel', style={'display': 'none'})
+    ], id='session-explorer-panel',
+        style=style if style is not None else {'display': 'none'})
 
 
 @callback(
