@@ -427,6 +427,17 @@ def render_simlet_tiles(studies):
     return html.Div(tiles, style={'padding': '20px'})
 
 @callback(
+    Output('content', 'style'),
+    Input('t-mon-tabs', 'value')
+)
+def show_interpretation_log_on_arrival(tab):
+    """Keep the load/interpretation log only until a tab is chosen."""
+    if tab is None or tab == '':
+        return {'display': 'block'}
+    return {'display': 'none'}
+
+
+@callback(
     [Output('dashboard-tabs-wrapper', 'className'),
      Output('dashboard-tabs-toggle', 'children')],
     Input('dashboard-tabs-toggle', 'n_clicks')
@@ -821,16 +832,20 @@ def update_output(tab, user_search_value, user_value, object_search_value, objec
     triggered_prop_id = ctx.triggered[0]['prop_id']
     res=f"Triggered : {triggered} - {triggered_prop_id}"
     print(res)
-    if ((tab is None or tab == '')
-            or (app_path and '/dashboard/upload' in app_path)):
-        # A session or upload dashboard starts here: show where the user is,
-        # then wait. Local uploads have no SimVA studies to tile.
-        # for a tab to be chosen. The activity buttons stay above this panel.
-        content = html.Div(
-            html.P(I18n.t('dashboard.no_tab_selected'),
-                   style={'fontFamily': INTER_FONT, 'color': TEXT_SECONDARY}),
-            style={'padding': '20px'})
+    if tab is None or tab == '':
+        # No visualization chosen yet: show where the user is and wait. The
+        # activity buttons stay above this panel. A chosen tab must always fall
+        # through, including in the upload dashboard.
+        content = html.Div(render_homepage_content(), style={'padding': '20px'})
         return (no_update, [], [], content, [], [], creator_controls_style(tab))
+
+    def publish_url(query):
+        # An uploaded file is local to this page; writing a relative tab query
+        # would replace `/dashboard/upload` in the URL and reset the tab on the
+        # next load. Leave the dashboard URL alone in that mode.
+        if app_path and '/dashboard/upload' in app_path:
+            return no_update
+        return url_output(panel_style, query)
     # Normalize the JSON data to a pandas DataFrame
     if ('object-multi-dynamic-dropdown' in triggered_prop_id or 'users-multi-dynamic-dropdown' in triggered_prop_id
             or 't-mon-tabs' in triggered_prop_id or 'lrs-data-version' in triggered_prop_id
@@ -861,7 +876,7 @@ def update_output(tab, user_search_value, user_value, object_search_value, objec
                 if hidden_activities:
                     new_query_params[HIDDEN_ACTIVITIES_PARAM] = ",".join(hidden_activities)
                 return (
-                    url_output(panel_style, urlencode(new_query_params)),
+                    publish_url(urlencode(new_query_params)),
                     user_unique_options,
                     object_unique_options,
                     html.Div(html.Div([
@@ -876,14 +891,9 @@ def update_output(tab, user_search_value, user_value, object_search_value, objec
                     creator_style,
                 )
             if tab == 'home_tab':
-                # Display simlet tiles if studies are available, otherwise show default content
-                if TMonWidgets.accepted_studies:
-                    tab_content = html.Div(
-                        render_simlet_tiles(TMonWidgets.accepted_studies),
-                        style={'padding': '20px'}
-                    )
-                else:
-                    tab_content = html.Div(render_homepage_content())
+                # The simlet grid lives in the SIMVA browser's studies list,
+                # never in a dashboard. A local upload has no SimVA studies.
+                tab_content = html.Div(render_homepage_content())
             elif tab == 'progress_tab':
                 content=[]
                 content.append(html.H3('Player Progress Throw Serious game'))
@@ -1050,10 +1060,10 @@ def update_output(tab, user_search_value, user_value, object_search_value, objec
             # Construct a new query string with unique parameters
             new_query_string = urlencode(new_query_params, safe=" ")
             print(f"new_query_string: {new_query_string}")
-            return (url_output(panel_style, new_query_string), user_unique_options,
+            return (publish_url(new_query_string), user_unique_options,
                     object_unique_options, tab_content, x_options, y_options, creator_style)
         else:
-            return (url_output(panel_style, "tab=home_tab"), [], [],
+            return (publish_url("tab=home_tab"), [], [],
                     html.Div(render_homepage_content()), [], [],
                     creator_controls_style(tab))
     else:
@@ -1305,6 +1315,15 @@ def return_target(pathname):
     return None
 
 
+def live_updates_style(pathname):
+    """Show the footer poll controls only in a SIMVA dashboard, not elsewhere."""
+    if not pathname or '/dashboard' not in pathname:
+        return {'display': 'none'}
+    if '/dashboard/upload' in pathname:
+        return {'display': 'none'}
+    return {'display': 'flex', 'alignItems': 'center'}
+
+
 def dashboard_tab_label(label, icon_path):
     """The label of a dashboard tab: an icon beside a hideable name."""
     return html.Span([
@@ -1402,32 +1421,34 @@ TMonBody=html.Div([
                               style={'marginLeft': '10px', 'color': '#555'}),
                 ], style={'margin': '10px 0'}),
                 html.Div(id="tabs-content"),
-                html.Hr(),
-                html.Div([
-                    dcc.Checklist(
-                        id='lrs-poll-enabled',
-                        options=[{'label': ' Live updates', 'value': 'on'}],
-                        value=[],
-                        style={'display': 'inline-block', 'marginRight': '15px'}
-                    ),
-                    dcc.Dropdown(
-                        id='lrs-poll-rate',
-                        options=[{'label': f'{s} seconds', 'value': s}
-                                 for s in (5, 10, 30, 60, 300)],
-                        value=10, clearable=False,
-                        style={'display': 'inline-block', 'width': '140px'}
-                    ),
-                    html.Span(id='lrs-poll-count', children='',
-                              style={'marginLeft': '15px'}),
-                ]),
-                html.Div(id='lrs-poll-status', children='',
-                         style={'fontSize': '0.85em', 'color': '#555'}),
             ], style={'flex': '1 1 auto', 'minWidth': 0, 'padding': '10px 20px'}),
         ], style={'display': 'flex', 'alignItems': 'flex-start'}),
     ])
 ])
 TMonFooter=html.Div([
     html.Hr(style={'margin': '0 0 8px 0'}),
+    # Live updates only apply to statements read from SIMVA/LRS. Local uploads
+    # have no source to poll, so this row is hidden unless the SIMVA app shows it.
+    html.Div([
+        dcc.Checklist(
+            id='lrs-poll-enabled',
+            options=[{'label': ' Live updates', 'value': 'on'}],
+            value=[],
+            style={'display': 'inline-block', 'marginRight': '15px'}
+        ),
+        dcc.Dropdown(
+            id='lrs-poll-rate',
+            options=[{'label': f'{s} seconds', 'value': s}
+                     for s in (5, 10, 30, 60, 300)],
+            value=10, clearable=False,
+            style={'display': 'inline-block', 'width': '140px'}
+        ),
+        html.Span(id='lrs-poll-count', children='',
+                  style={'marginLeft': '15px'}),
+        html.Span(id='lrs-poll-status', children='',
+                  style={'fontSize': '0.85em', 'color': '#555',
+                         'marginLeft': '15px'}),
+    ], id='live-updates-footer', style={'display': 'none', 'alignItems': 'center'}),
     html.H4(children='T-MON, by eUCM research team',
             style={'margin': '0', 'fontFamily': INTER_FONT, 'fontSize': 14}),
 ], style={

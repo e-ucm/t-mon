@@ -105,6 +105,14 @@ def switch_mode(tab, pathname, dashboard_style):
 
 
 @app.callback(
+    Output('live-updates-footer', 'style'),
+    Input('url', 'pathname')
+)
+def toggle_live_updates(pathname):
+    return TMonWidget.live_updates_style(pathname)
+
+
+@app.callback(
     [Output('return-button', 'style'), Output('return-button', 'href')],
     Input('url', 'pathname')
 )

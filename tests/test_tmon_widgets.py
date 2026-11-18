@@ -244,6 +244,33 @@ def test_dashboard_tabs_are_vertical_with_svg_icons():
         assert name.className == 'tab-name'
 
 
+def test_live_updates_live_in_the_footer_and_only_for_simva():
+    footer_ids = [getattr(child, 'id', None)
+                  for child in _walk(TMonWidget.TMonFooter)]
+    for expected in ('live-updates-footer', 'lrs-poll-enabled', 'lrs-poll-rate',
+                     'lrs-poll-count', 'lrs-poll-status'):
+        assert expected in footer_ids
+    content_ids = [getattr(child, 'id', None)
+                   for child in _walk(TMonWidget.TMonBody)]
+    # The controls are not beside the charts any more.
+    assert 'lrs-poll-enabled' not in content_ids
+    panel = next(child for child in _walk(TMonWidget.TMonFooter)
+                 if getattr(child, 'id', None) == 'live-updates-footer')
+    assert panel.style['display'] == 'none'
+    assert TMonWidget.live_updates_style('/dashboard/upload') == {'display': 'none'}
+    assert TMonWidget.live_updates_style('/') == {'display': 'none'}
+    assert TMonWidget.live_updates_style('/simlet/1') == {'display': 'none'}
+    assert TMonWidget.live_updates_style(
+        '/simlet/1/session/11/dashboard/default')['display'] == 'flex'
+
+
+def test_interpretation_log_is_visible_only_on_arrival():
+    assert TMonWidget.show_interpretation_log_on_arrival(None) == {'display': 'block'}
+    assert TMonWidget.show_interpretation_log_on_arrival('') == {'display': 'block'}
+    assert TMonWidget.show_interpretation_log_on_arrival('progress_tab') == {
+        'display': 'none'}
+
+
 def test_dashboard_tabs_toggle_collapses_to_icons_only():
     assert TMonWidget.toggle_dashboard_tabs(0) == ('dashboard-tabs-full', '◀')
     assert TMonWidget.toggle_dashboard_tabs(1) == ('dashboard-tabs-compact', '▶')
@@ -272,6 +299,53 @@ def test_session_dashboard_has_no_default_tab(monkeypatch):
     assert users == [] and objects == []
 
 
+def test_upload_dashboard_never_shows_simlet_tiles(monkeypatch):
+    import dash
+    from dash import dcc
+    monkeypatch.setattr(
+        dash, 'callback_context',
+        type('Ctx', (), {'triggered': [{'prop_id': 't-mon-tabs.value'}]})())
+    statement = {
+        'actor': {'name': 'Player'},
+        'object': {'id': 'activity-1'},
+        'verb': {'id': 'http://example.com/verb'},
+    }
+    monkeypatch.setattr(TMonWidgets, 'xapiData', [statement])
+    monkeypatch.setattr(TMonWidgets, 'accepted_studies', [
+        {'id': '1', 'name': 'a simlet'},
+    ])
+    result = TMonWidget.update_output(
+        'home_tab', None, [], None, [],
+        panel_style={'display': 'block'}, app_path='/dashboard/upload')
+    links = [child for child in _walk(result[3]) if isinstance(child, dcc.Link)]
+    anchors = [child for child in _walk(result[3]) if isinstance(child, html.A)]
+    assert not links
+    assert all(not str(getattr(link, 'href', '')).startswith('/simlet/')
+               for link in anchors)
+
+
+def test_upload_dashboard_tab_shows_its_content(monkeypatch):
+    import dash
+    monkeypatch.setattr(
+        dash, 'callback_context',
+        type('Ctx', (), {'triggered': [{'prop_id': 't-mon-tabs.value'}]})())
+    statement = {
+        'actor': {'name': 'Player'},
+        'object': {'id': 'activity-1',
+                   'definition': {'type': 'https://w3id.org/xapi/seriousgames/'
+                                          'activity-types/Screen'}},
+        'verb': {'id': 'http://example.com/verb'},
+    }
+    monkeypatch.setattr(TMonWidgets, 'xapiData', [statement])
+    result = TMonWidget.update_output(
+        'progress_tab', None, [], None, [],
+        panel_style={'display': 'block'}, app_path='/dashboard/upload')
+    assert result[0] is no_update  # local upload must not rewrite the URL
+    texts = [child for child in _walk(result[3]) if isinstance(child, str)]
+    assert any('Player Progress' in text for text in texts)
+    assert not any('no tab selected' in text for text in texts)
+
+
 def test_no_tab_state_shows_the_selection_and_a_hint(monkeypatch):
     import dash
     monkeypatch.setattr(
@@ -282,6 +356,7 @@ def test_no_tab_state_shows_the_selection_and_a_hint(monkeypatch):
         simlet_name='test', session_name='survey')
     content = result[3]
     texts = [child for child in _walk(content) if isinstance(child, str)]
+    assert 'T-Mon Home Page.' in texts
     assert 'no tab selected, select one tab.' in texts
 
 
