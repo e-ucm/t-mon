@@ -1,4 +1,5 @@
 import pandas as pd
+from dash import html
 
 import TMonWidgets
 from TMonWidgets import MultiSelector, TMonWidget
@@ -50,3 +51,46 @@ def test_search_value_from_multi_selector_no_search_no_selection():
     filtered, options = MultiSelector.searchValueFromMultiSelector(df, "object", None, None)
     assert len(filtered) == 2
     assert [o["value"] for o in options] == ["Alpha", "Beta"]
+
+
+def _walk(component):
+    """Yield a Dash component and everything nested in its children."""
+    yield component
+    children = getattr(component, "children", None)
+    if isinstance(children, (list, tuple)):
+        for child in children:
+            yield from _walk(child)
+    elif children is not None and hasattr(children, "children"):
+        yield from _walk(children)
+
+
+def test_header_is_sticky_and_shows_both_logos():
+    header = TMonWidget.build_header()
+    assert header.style["position"] == "sticky"
+    assert header.style["top"] == 0
+    assert header.style["backgroundColor"] == TMonWidget.BRAND_ORANGE
+    sources = [child.src for child in _walk(header) if isinstance(child, html.Img)]
+    assert len(sources) == 2
+    assert all(src.startswith("data:image/png;base64,") for src in sources)
+    assert sources[0] != sources[1]
+
+
+def test_header_login_controls_only_when_requested():
+    plain_ids = [getattr(child, "id", None)
+                 for child in _walk(TMonWidget.build_header())]
+    assert "main-login" not in plain_ids
+    assert "login-logout-button" not in plain_ids
+
+    simva_ids = [getattr(child, "id", None)
+                 for child in _walk(TMonWidget.build_header(with_login=True))]
+    for expected in ("main-login", "login-logout-button", "account-button",
+                     "login-logout", "account", "connection-status"):
+        assert expected in simva_ids
+
+
+def test_footer_stays_at_the_bottom():
+    footer = TMonWidget.TMonFooter
+    assert footer.style["position"] == "sticky"
+    assert footer.style["bottom"] == 0
+    # Pushes the footer down when the page content is shorter than the viewport.
+    assert footer.style["marginTop"] == "auto"

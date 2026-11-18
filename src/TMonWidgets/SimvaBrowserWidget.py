@@ -5,6 +5,7 @@ from dash.dependencies import Input, Output, State
 from dash.exceptions import PreventUpdate
 import json
 import TMonWidgets
+from TMonWidgets.TMonWidget import HEADER_BUTTON_STYLE
 #Import LoadProcessStatements.py
 from LoadProcessStatements import load_from_string, load_players_info_from_uploaded_content
 # Import SimvaBrowser class from SimvaBrowser.py
@@ -53,10 +54,12 @@ def login_logout_button_click(n_clicks):
     [Input('main-login', 'children')]
 )
 def account_button(main):
+    # The callback owns this component's style, so it has to keep the header's
+    # button appearance as well as changing its visibility.
     if flask.oidc.user_loggedin:
-        return "Account", {'display': 'block'}
+        return "Account", dict(HEADER_BUTTON_STYLE, display='block')
     else:
-        return None, {'display': 'none'}
+        return None, dict(HEADER_BUTTON_STYLE, display='none')
 
 @callback(
     Output('account', 'children'),
@@ -559,10 +562,3 @@ simvaBrowserBody = html.Div(
     ]
 )
 
-LoginLogoutBody = html.Div(id="main-login", children=[
-    html.Button(id='login-logout-button', n_clicks=0),
-    html.Button(id='account-button', n_clicks=0),
-    html.Div(id='login-logout'),
-    html.Div(id='account',children=[]),
-    html.Div(id='connection-status',children=[])
-])

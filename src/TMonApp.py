@@ -1,17 +1,33 @@
+import os
 from dash import Dash, html, Input, Output, State
 from TMonWidgets import UploadWidget, TMonWidget
 
-# Initialize the app
-TMonApp = Dash(__name__, serve_locally=True)
+# Initialize the app. The explicit assets folder keeps the logo images resolvable
+# no matter which directory the app is launched from.
+TMonApp = Dash(
+    __name__,
+    serve_locally=True,
+    assets_folder=os.path.join(os.path.dirname(__file__), 'assets'),
+)
 # App layout
 TMonApp.layout = html.Div([
         TMonWidget.TMonHeader,
+        html.H2('Select JSON xAPI-SG file to process and see visualizations', style={
+            'margin': '20px 20px 0',
+            'color': '#1e1e1e',
+            'fontFamily': 'Inter',
+        }),
         html.Div([
             TMonWidget.TMonSidebar,
             TMonWidget.TMonBody,
         ], style={'display': 'flex'}),
         TMonWidget.TMonFooter
-    ]
+    ],
+    style={
+        'minHeight': '100vh',
+        'display': 'flex',
+        'flexDirection': 'column',
+    }
 )
 
 # Sidebar toggle callback

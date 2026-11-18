@@ -4,6 +4,7 @@ from dash.exceptions import PreventUpdate
 import pandas as pd
 import json
 import TMonWidgets
+from TMonWidgets.BrandAssets import LOGO_SRC, WORDMARK_SRC
 from LoadProcessStatements import resolve_actor_name_column, flatten_for_display
 from TMonWidgets.ActivityFilter import filter_df_by_activities, statements_activity_ids
 from TMonWidgets.ChartBuilder import (
@@ -699,6 +700,8 @@ def update_output(tab, user_search_value, user_value, object_search_value, objec
 # Brand colors
 BRAND_PRIMARY = "#078493"
 BRAND_SOFT = "#8ec8c7"
+# The orange of the T-Mon logo, used for the top bar.
+BRAND_ORANGE = "#f26522"
 TEXT_PRIMARY = "#fff"
 TEXT_SECONDARY = "#3c6d7a"
 SURFACE_SUNKEN = "#e8e5e2"
@@ -709,7 +712,19 @@ DARK_BACKGROUND = "#1e1e1e"
 LIGHT_CARD = "#fcfcfc"
 INTER_FONT = "Inter"
 SIDEBAR_HEIGHT = 108
-TOP_BAR_HEIGHT = 38
+# Enough room for the logo and wordmark alongside the login controls.
+TOP_BAR_HEIGHT = 56
+# Dark text on a white button reads well on the orange bar.
+HEADER_BUTTON_STYLE = {
+    'backgroundColor': '#fff',
+    'border': f'1px solid {DARK_BACKGROUND}',
+    'borderRadius': '4px',
+    'color': DARK_BACKGROUND,
+    'fontFamily': INTER_FONT,
+    'fontSize': 13,
+    'padding': '6px 14px',
+    'cursor': 'pointer',
+}
 
 # Simlet tiles design
 SIMLET_TILE_WIDTH = 250
@@ -717,48 +732,92 @@ SIMLET_TILE_HEIGHT = 180
 SIMLET_TILE_MARGIN = 16
 SIMLET_TITLE_MAX_LINES = 2
 
-TMonHeader=html.Div([
-    html.Div([
-        # Logo section - TMON with Mountain glyph
-        html.Div([
-            html.Div("TMON", style={
-                'fontFamily': INTER_FONT,
-                'fontWeight': 'Semi Bold',
-                'fontSize': 17,
-                'color': '#078493',
-                'margin': '0',
-                'letterSpacing': '0',
-            }),
-        ], style={'display': 'flex', 'alignItems': 'center', 'gap': '8'}),
+def build_header(with_login=False):
+    """
+    Build the sticky top bar shared by the T-Mon apps.
 
+    The brand is always shown: the T-Mon glyph and wordmark are embedded in the
+    component, so they render even when the app sits behind a proxy that breaks
+    ``/assets/...`` URLs. They sit on a light chip because both marks are orange
+    and would disappear on the orange bar. The SIMVA app also asks for the login
+    controls; the local file-upload app leaves them out, since it has no
+    authentication callbacks to drive them.
+
+    Args:
+        with_login (bool): Include the SIMVA login/account controls.
+
+    Returns:
+        html.Div: The header, pinned to the top of the viewport.
+    """
+    brand = html.Div([
+        # The white chip keeps the orange marks legible on the orange bar.
+        html.Div([
+            html.Img(
+                src=LOGO_SRC,
+                alt='T-Mon logo',
+                style={'height': '30px', 'width': '30px', 'display': 'block'},
+            ),
+            html.Img(
+                src=WORDMARK_SRC,
+                alt='T-Mon',
+                style={'height': '26px', 'display': 'block'},
+            ),
+        ], style={
+            'display': 'flex',
+            'alignItems': 'center',
+            'gap': '10',
+            'backgroundColor': '#fff',
+            'borderRadius': '6px',
+            'padding': '4px 10px',
+        }),
         # Sidebar toggle button (mobile)
         html.Button('☰', id='sidebar-toggle', n_clicks=0, style={
             'display': 'none',
             'background': 'none',
             'border': 'none',
-            'color': '#fff',
+            'color': DARK_BACKGROUND,
             'fontSize': 20,
             'padding': '4px 8px',
             'cursor': 'pointer',
         }),
-    ], style={
-        'height': f'{TOP_BAR_HEIGHT}px',
+    ], style={'display': 'flex', 'alignItems': 'center', 'gap': '12'})
+
+    children = [brand]
+    if with_login:
+        # Keep these ids exactly: the login/account callbacks in SimvaBrowserWidget
+        # target them, wherever the controls are placed in the layout.
+        children.append(html.Div(id='main-login', children=[
+            html.Button('Login', id='login-logout-button', n_clicks=0,
+                        className='header-login-button', style=HEADER_BUTTON_STYLE),
+            html.Button('Account', id='account-button', n_clicks=0,
+                        className='header-account-button', style=HEADER_BUTTON_STYLE),
+            html.Div(id='login-logout'),
+            html.Div(id='account', children=[]),
+            html.Div(id='connection-status', children='', className='header-connection-status',
+                     style={'fontFamily': INTER_FONT, 'fontSize': 12,
+                            'color': DARK_BACKGROUND, 'whiteSpace': 'nowrap'}),
+        ], style={'display': 'flex', 'alignItems': 'center', 'gap': '10'}))
+
+    return html.Div(children, style={
+        'position': 'sticky',
+        'top': 0,
+        'zIndex': 1000,
+        'display': 'flex',
         'alignItems': 'center',
+        'justifyContent': 'space-between',
+        'height': f'{TOP_BAR_HEIGHT}px',
         'padding': '0 20px',
-        'backgroundColor': DARK_BACKGROUND,
-        'color': '#fff',
-    }),
-    html.Hr(style={'borderColor': 'rgba(255,255,255,0.1)', 'margin': '8px 0'}),
-    html.H2(children='Select JSON xAPI-SG file to process and see visualizations', style={
+        'backgroundColor': BRAND_ORANGE,
+        'color': DARK_BACKGROUND,
         'margin': '0',
-        'color': '#fff',
-        'fontFamily': INTER_FONT,
-    }),
-], style={
-    'backgroundColor': DARK_BACKGROUND,
-    'color': '#fff',
-    'margin': '0',
-})
+        'borderBottom': '1px solid rgba(0,0,0,0.15)',
+    })
+
+
+# Kept for the local file-upload app, which needs the brand but no login controls.
+TMonHeader = build_header()
+# The SIMVA app shares the same bar with its login controls attached.
+TMonSimvaHeader = build_header(with_login=True)
 
 TMonSidebar=html.Div(id='sidebar', children=[])  # Will be populated by callbacks
 
@@ -851,6 +910,17 @@ TMonBody=html.Div([
     ])
 ])
 TMonFooter=html.Div([
-    html.Hr(),
-    html.H4(children='T-MON, by eUCM research team')
-])
+    html.Hr(style={'margin': '0 0 8px 0'}),
+    html.H4(children='T-MON, by eUCM research team',
+            style={'margin': '0', 'fontFamily': INTER_FONT, 'fontSize': 14}),
+], style={
+    # `marginTop: auto` in the page's flex column puts it at the bottom even on a
+    # short page; sticky bottom keeps it in view while a long page scrolls.
+    'position': 'sticky',
+    'bottom': 0,
+    'zIndex': 999,
+    'marginTop': 'auto',
+    'padding': '8px 20px',
+    'backgroundColor': '#fff',
+    'borderTop': '1px solid rgba(0,0,0,0.1)',
+})
