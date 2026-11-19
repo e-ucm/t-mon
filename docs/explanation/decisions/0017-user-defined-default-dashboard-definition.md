@@ -284,7 +284,7 @@ because they define which statements are in the loaded view.
 
 ## Status
 
-- **Status**: Proposed
+- **Status**: Accepted
 - **Date**: 2026-11-19
 - **Tags**: #configuration #dashboard #i18n #json #visualization
 

@@ -1,0 +1,227 @@
+{
+  "version": 1,
+  "name": "Default xAPI-SG dashboard",
+  "layout": {
+    "type": "grid",
+    "columns": 2,
+    "rows": 2
+  },
+  "general_filters": [
+    {
+      "id": "player",
+      "label": "Player",
+      "column": "actor.name",
+      "mode": "multi",
+      "values": []
+    },
+    {
+      "id": "activity",
+      "label": "Activity",
+      "column": "object.id",
+      "mode": "multi",
+      "values": []
+    }
+  ],
+  "tabs": [
+    {
+      "id": "home_tab",
+      "title": "HomePage",
+      "markdown": "# T-Mon Home Page.\nSelect a tab to inspect the statements that were loaded.",
+      "pages": [
+        {
+          "id": "home",
+          "title": "Home",
+          "layout": {"type": "one"},
+          "graphs": []
+        }
+      ]
+    },
+    {
+      "id": "progress_tab",
+      "title": "Player Progress Throw Serious game",
+      "markdown": "# Player progress\nProgress is read from the xAPI `result.progress` field.",
+      "layout": {"type": "vertical"},
+      "pages": [
+        {
+          "id": "progress",
+          "title": "Progress",
+          "markdown": "Progress is shown for every activity left by the filters.",
+          "filters": [
+            {
+              "id": "progress-activity",
+              "label": "Progress activity",
+              "column": "object.id",
+              "mode": "single",
+              "values": []
+            }
+          ],
+          "graphs": [
+            {
+              "id": "progress-over-time",
+              "title": "Progress over time",
+              "type": "line",
+              "x": {"label": "Time", "data": "timestamp", "date": true},
+              "y": {"label": "Progress", "data": "result.progress"}
+            },
+            {
+              "id": "statements-by-player",
+              "title": "Statements by player",
+              "type": "bar",
+              "x": {"label": "Player", "data": "actor.name"},
+              "y": {"label": "Statements", "data": "count"}
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "video_tab",
+      "title": "Videos",
+      "markdown": "# Videos\nWhich videos were seen and skipped.",
+      "pages": [
+        {
+          "id": "videos",
+          "title": "Videos",
+          "layout": {"type": "grid", "columns": 2, "rows": 1},
+          "filters": [
+            {
+              "id": "video-type",
+              "label": "Activity type",
+              "column": "object.definition.type",
+              "mode": "multi",
+              "values": []
+            }
+          ],
+          "graphs": [
+            {
+              "id": "videos-by-player",
+              "title": "Videos by player",
+              "type": "bar",
+              "x": {"label": "Player", "data": "actor.name"},
+              "y": {"label": "Statements", "data": "count"}
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "completable_tab",
+      "title": "Completable",
+      "markdown": "# Completables\nProgress, scores and times of completed activities.",
+      "pages": [
+        {
+          "id": "completables",
+          "title": "Completables",
+          "graphs": [
+            {
+              "id": "completable-progress",
+              "title": "Completable progress",
+              "type": "line",
+              "x": {"label": "Time", "data": "timestamp", "date": true},
+              "y": {"label": "Progress", "data": "result.progress"}
+            },
+            {
+              "id": "completable-players",
+              "title": "Completables by player",
+              "type": "heatmap",
+              "x": {"label": "Activity", "data": "object.id"},
+              "y": {"label": "Player", "data": "actor.name"}
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "alternative_tab",
+      "title": "Alternatives",
+      "markdown": "# Alternatives\nAnswers chosen for question activities.",
+      "pages": [
+        {
+          "id": "alternatives",
+          "title": "Alternatives",
+          "graphs": [
+            {
+              "id": "answers",
+              "title": "Answers",
+              "type": "bar",
+              "x": {"label": "Answer", "data": "result.response"},
+              "y": {"label": "Statements", "data": "count"}
+            },
+            {
+              "id": "players-by-answer",
+              "title": "Players by answer",
+              "type": "heatmap",
+              "x": {"label": "Answer", "data": "result.response"},
+              "y": {"label": "Player", "data": "actor.name"}
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "interaction_tab",
+      "title": "Interactions",
+      "markdown": "# Interactions\nObjects the players interacted with.",
+      "pages": [
+        {
+          "id": "interactions",
+          "title": "Interactions",
+          "graphs": [
+            {
+              "id": "interactions-by-object",
+              "title": "Interactions by object",
+              "type": "bar",
+              "x": {"label": "Object", "data": "object.id"},
+              "y": {"label": "Statements", "data": "count"}
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "accessible_tab",
+      "title": "Accessible",
+      "markdown": "# Accessible zones\nZones reached by the players.",
+      "pages": [
+        {
+          "id": "accessibles",
+          "title": "Accessibles",
+          "graphs": [
+            {
+              "id": "accessibles-by-player",
+              "title": "Accessible zones by player",
+              "type": "heatmap",
+              "x": {"label": "Zone", "data": "object.id"},
+              "y": {"label": "Player", "data": "actor.name"}
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "menu_tab",
+      "title": "Menu",
+      "markdown": "# Menus\nSelections made in game menus.",
+      "pages": [
+        {
+          "id": "menus",
+          "title": "Menus",
+          "graphs": [
+            {
+              "id": "menu-selections",
+              "title": "Menu selections",
+              "type": "bar",
+              "x": {"label": "Selection", "data": "result.response"},
+              "y": {"label": "Statements", "data": "count"}
+            }
+          ]
+        }
+      ]
+    }
+  ],
+  "xapi_data_tab": {
+    "id": "xapi_data",
+    "title": "xapi data",
+    "markdown": "All statements loaded for this session."
+  }
+}

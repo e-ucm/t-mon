@@ -5,3 +5,5 @@ client_secrets.json
 *.json
 # Translation catalogues are source, not local configuration.
 !src/locales/*.json
+# The shipped default dashboard definition is source configuration.
+!src/config/default-dashboard.json

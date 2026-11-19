@@ -1,5 +1,6 @@
 import base64
 import hashlib
+import logging
 import dash
 from dash import html, dash_table, dcc, callback, Output, Input, State, no_update
 from dash.exceptions import PreventUpdate
@@ -11,6 +12,7 @@ from TMonWidgets.BrandAssets import (
     CONTACT_ICON_SRC,
 )
 from TMonWidgets import I18n
+from TMonWidgets import DefaultDashboard, GraphTypes
 from LoadProcessStatements import resolve_actor_name_column, flatten_for_display
 from TMonWidgets.ActivityFilter import filter_df_by_activities, statements_activity_ids
 from TMonWidgets.ChartBuilder import (
@@ -88,6 +90,102 @@ def render_homepage_content():
         html.H2('T-Mon Home Page.'),
         html.H3(I18n.t('dashboard.no_tab_selected')),
     ]
+
+
+# Tabs of the default dashboard carry the same icons as their legacy ids. A new
+# id from a deployment file gets a plain one; the icon is chrome, not wording.
+DEFAULT_TAB_ICON_PATH = 'M12 5v14M5 12h14'
+
+
+def dashboard_tabs():
+    """The tab bar of the deployed dashboard, or the compatibility tabs."""
+    definition = DASHBOARD_DEFINITION
+    if not definition:
+        return DASHBOARD_TABS
+    icons = {value: icon for value, _, icon in DASHBOARD_TABS}
+    return [
+        (tab['id'], tab['title'], icons.get(tab['id'], DEFAULT_TAB_ICON_PATH))
+        for tab in definition['tabs']
+    ]
+
+
+def default_tab_page(tab):
+    """The definition's tab and page for a tab value, if it has one."""
+    if not DASHBOARD_DEFINITION:
+        return None, None
+    return DefaultDashboard.find_tab(tab, DASHBOARD_DEFINITION)
+
+
+def definition_filters(tab, page, selected):
+    """The general and page filters of a default tab, with the live selections."""
+    if not tab:
+        return []
+    specs = DefaultDashboard.filters_for(
+        tab['id'], page['id'] if page else None, DASHBOARD_DEFINITION)
+    return DefaultDashboard.with_selected_values(specs, selected)
+
+
+def render_definition_filter_controls(filters, df):
+    """Filter row above a default page. Its labels come from the definition."""
+    controls = []
+    for spec in filters or []:
+        values = list(spec.get('values') or [])
+        controls.append(html.Div([
+            html.Span(f"{spec['label']}: ", style={'marginRight': '6px'}),
+            dcc.Dropdown(
+                id={'type': 'definition-filter', 'index': spec['id']},
+                options=filter_options(df, spec['column']),
+                value=(values if spec['mode'] == 'multi'
+                       else (values[0] if values else None)),
+                multi=spec['mode'] == 'multi',
+                clearable=True,
+                style={'width': '260px', 'display': 'inline-block',
+                       'marginRight': '12px'},
+            ),
+        ], style={'display': 'inline-block', 'marginBottom': '8px'}))
+    return html.Div(controls, style={
+        'display': 'flex', 'flexWrap': 'wrap', 'alignItems': 'center',
+        'gap': '8px', 'marginBottom': '10px',
+    }) if controls else html.Div()
+
+
+def render_default_page(tab, page, df, chart_df, selected):
+    """Draw a tab of the default definition from its own data and wording."""
+    children = [html.H3(tab['title'])]
+    if tab.get('markdown'):
+        children.append(dcc.Markdown(tab['markdown'], dangerously_allow_html=False))
+    if page.get('markdown'):
+        children.append(dcc.Markdown(page['markdown'], dangerously_allow_html=False))
+    children.append(render_definition_filter_controls(
+        definition_filters(tab, page, selected), df))
+    for graph in page.get('graphs') or []:
+        children.append(dcc.Graph(
+            id=f"default-{tab['id']}-{page['id']}-{graph['id']}",
+            figure=GraphTypes.render_graph(chart_df, graph),
+        ))
+    return html.Div(children)
+
+
+def render_xapi_data_tab(data_tab, df):
+    """The reserved audit tab: the full flattened view, without dashboard filters."""
+    table_df = flatten_for_display(df)
+    data = table_df.where(pd.notna(table_df), None).to_dict('records')
+    children = []
+    if data_tab.get('markdown'):
+        children.append(dcc.Markdown(data_tab['markdown'],
+                                     dangerously_allow_html=False))
+    children.extend([
+        html.H3(f"Length table : {len(data)}"),
+        dash_table.DataTable(
+            id='table-all-xapi-data',
+            columns=[{"name": column, "id": column} for column in table_df.columns],
+            data=data,
+            filter_action='native',
+            sort_action="native",
+            sort_mode="multi",
+        ),
+    ])
+    return html.Div(children)
 
 
 def url_output(panel_style, query_string):
@@ -726,7 +824,7 @@ def dashboard_tab_children(pages):
     tabs = [
         dcc.Tab(id=f'dashboard-tab-{value}', value=value,
                 label=dashboard_tab_label(label, icon))
-        for value, label, icon in DASHBOARD_TABS
+        for value, label, icon in dashboard_tabs()
     ]
     for page in pages or []:
         if not isinstance(page, dict) or not page.get("id"):
@@ -1168,13 +1266,16 @@ def filterObjectIdDependingTab(df, value, tab):
     # are reads here: the stores have a single writer in update_page_state.
     Input('page-filters', 'data'),
     Input('dashboard-pages', 'data'),
+    # Selected values of the dashboard-definition filters. It is dialogue, not
+    # user-page state, so changing one redraws only the definition's graphs.
+    Input('definition-filters', 'data'),
 )
 def update_output(tab, user_search_value, user_value, object_search_value, object_value,
                   lrs_data_version=None, hidden_activities=None, created_charts=None,
                   panel_style=None, simlet_name=None, session_name=None,
                   app_path=None, graph_layout='one', graph_rows=3,
                   graph_columns=2, graph_page=1, split_x=2, split_y=2,
-                  page_filters=None, dashboard_pages=None):
+                  page_filters=None, dashboard_pages=None, definition_filter_values=None):
     ctx = dash.callback_context
     triggered=ctx.triggered
     triggered_prop_id = ctx.triggered[0]['prop_id']
@@ -1198,7 +1299,8 @@ def update_output(tab, user_search_value, user_value, object_search_value, objec
     if ('object-multi-dynamic-dropdown' in triggered_prop_id or 'users-multi-dynamic-dropdown' in triggered_prop_id
             or 't-mon-tabs' in triggered_prop_id or 'lrs-data-version' in triggered_prop_id
             or 'activity-filter-hidden' in triggered_prop_id or 'created-charts' in triggered_prop_id
-            or 'page-filters' in triggered_prop_id or 'dashboard-pages' in triggered_prop_id):
+            or 'page-filters' in triggered_prop_id or 'dashboard-pages' in triggered_prop_id
+            or 'definition-filters' in triggered_prop_id):
         if len(TMonWidgets.xapiData) > 0:
             df = pd.json_normalize(TMonWidgets.xapiData)
             df = resolve_actor_name_column(df)
@@ -1215,11 +1317,18 @@ def update_output(tab, user_search_value, user_value, object_search_value, objec
             # page while the header dropdowns still offer the whole session.
             active_charts, active_filters = items_for_key(
                 page_key(tab), dashboard_pages, created_charts, page_filters)
-            # Only user pages (including the Create tab) show the filter row, so
-            # the built-in Progress and Videos tabs keep showing all statements.
-            chart_df = (apply_page_filters(filtered_df, active_filters)
-                        if tab == CREATE_TAB_KEY or tab.startswith(PAGE_TAB_PREFIX)
-                        else filtered_df)
+            tab_def, page_def = default_tab_page(tab)
+            selected = (definition_filter_values
+                        if isinstance(definition_filter_values, dict) else {})
+            if tab_def is not None and tab_def['id'] != DefaultDashboard.XAPI_TAB_ID:
+                # A default page is narrowed in the ADR's order: statements,
+                # header selectors, dashboard filters, tab filters, page filters.
+                chart_df = DefaultDashboard.apply_filters(
+                    filtered_df, definition_filters(tab_def, page_def, selected))
+            elif tab == CREATE_TAB_KEY or tab.startswith(PAGE_TAB_PREFIX):
+                chart_df = apply_page_filters(filtered_df, active_filters)
+            else:
+                chart_df = filtered_df
             # The creator is offered the axes the data has: any column on the x axis, and
             # on the y axis only the ones holding a number, since nothing else can be
             # summed or averaged. Counting statements needs no value at all.
@@ -1254,30 +1363,32 @@ def update_output(tab, user_search_value, user_value, object_search_value, objec
                 # The simlet grid lives in the SIMVA browser's studies list,
                 # never in a dashboard. A local upload has no SimVA studies.
                 tab_content = html.Div(render_homepage_content())
+            elif tab_def is not None and tab_def['id'] == DefaultDashboard.XAPI_TAB_ID:
+                # The audit tab ignores dashboard filters: it shows the full set
+                # of statements the header and activity controls left in view.
+                tab_content = render_xapi_data_tab(tab_def, filtered_df)
+            elif tab_def is not None and tab_def['id'] == 'create_tab':
+                # The Create tab and every user-defined page share one renderer:
+                # a row of filters, the named charts, and one + slot to add more.
+                tab_content = html.Div([
+                    html.H3('Your visualisations'),
+                    html.P(
+                        "Every chart you create is listed here and drawn from the statements the "
+                        "filters leave in the view. Add one with the + button below."
+                    ),
+                ] + render_page_items(chart_df, active_charts, active_filters,
+                                      CREATE_TAB_KEY))
+            elif tab_def is not None and page_def is not None:
+                tab_content = render_default_page(
+                    tab_def, page_def, filtered_df, chart_df, selected)
             elif tab in BUILTIN_TAB_VISUALS:
-                # Progress, Videos and the five former placeholder tabs share
-                # one catalogue renderer. It discovers targets from chart_df,
-                # so it draws the same views the header selectors left for the
-                # other tabs and never invents data for an absent activity.
+                # Only reached when the definition file could not be read. The
+                # legacy catalogue renderer then supplies the built-in tabs.
                 tab_content = render_builtin_tab(chart_df, tab)
             elif tab == 'data_tab':
-                # Flatten nested statement values (e.g. context.contextActivities.parent,
-                # an array per the xAPI spec) into sub-columns, on a display-only copy:
-                # the charts share filtered_df and must keep one row per statement.
-                table_df = flatten_for_display(filtered_df)
-                data = table_df.where(pd.notna(table_df), None).to_dict('records')
-                tab_content= html.Div([
-                    html.H3("Length table : " + str(len(data))),
-                    dash_table.DataTable(
-                        id='table-all-xapi-data',
-                        columns=[{"name": i, "id": i} for i in table_df.columns],
-                        data=data,
-                        filter_action='native',
-                        sort_action="native",
-                        sort_mode="multi",
-                        #sort_by=[{'column_id': 'timestamp', 'direction': 'asc'}],
-                    )
-                ])
+                # Legacy link to the data tab when running on the fallback tabs.
+                tab_content = render_xapi_data_tab(
+                    {'markdown': ''}, filtered_df)
             elif tab == 'create_tab':
                 # The Create tab and every user-defined page share one renderer:
                 # a row of filters, the named charts, and one + slot to add more.
@@ -1322,6 +1433,18 @@ def update_output(tab, user_search_value, user_value, object_search_value, objec
             # Construct a new query string with unique parameters
             new_query_string = urlencode(new_query_params, safe=" ")
             print(f"new_query_string: {new_query_string}")
+            if tab_def is not None and page_def is not None:
+                # A definition page carries its own arrangement, or inherits it
+                # from its tab and then the dashboard. The UI controls keep their
+                # values for user-created pages, where they are the author's tool.
+                arrangement = DefaultDashboard.layout_for(
+                    page_def.get('layout'), DASHBOARD_DEFINITION, tab_def)
+                graph_layout = arrangement['graph-layout']
+                graph_rows = arrangement['graph-rows']
+                graph_columns = arrangement['graph-columns']
+                graph_page = arrangement['graph-page']
+                split_x = arrangement['graph-split-x']
+                split_y = arrangement['graph-split-y']
             tab_content = arrange_graphs(
                 tab_content, graph_layout, graph_rows, graph_columns, graph_page,
                 split_x, split_y)
@@ -1596,6 +1719,17 @@ BUILTIN_TAB_VISUALS = {
         'visuals': ('menu-selection-count',),
     },
 }
+
+# The deployed JSON file is the source of the default dashboard. The two tables
+# above stay available only when that file is missing or invalid, so a bad
+# deployment is loud but does not leave the application without any tabs.
+try:
+    DASHBOARD_DEFINITION = DefaultDashboard.load()
+except DefaultDashboard.DashboardDefinitionError as error:
+    logging.getLogger(__name__).warning(
+        "Default dashboard definition could not be loaded; using compatibility tabs: %s",
+        error)
+    DASHBOARD_DEFINITION = None
 
 # A tab with many games or levels would become a wall of charts. Four targets
 # per tab keep it readable and match the twelve-graph ceiling of a user page.
@@ -1919,6 +2053,12 @@ TMonBody=html.Div([
         # of filters above it always describe the same view.
         dcc.Store(id='dashboard-pages', data=[]),
         dcc.Store(id='page-filters', data=[]),
+        # Selected values of the filters declared by the default dashboard. The
+        # definition supplies their labels and columns; this store only holds
+        # what the user has chosen in the row above a page's graphs.
+        dcc.Store(id='definition-filters',
+                  data=(DefaultDashboard.initial_filter_values(DASHBOARD_DEFINITION)
+                        if DASHBOARD_DEFINITION else {})),
         # Which page the creation popup belongs to, and the last import waiting
         # for the user to choose Replace, Append or Cancel.
         dcc.Store(id='item-modal-target', data=None),
@@ -2011,7 +2151,7 @@ TMonBody=html.Div([
                     children=[
                         dcc.Tab(id=f'dashboard-tab-{value}', value=value,
                                 label=dashboard_tab_label(label, icon))
-                        for value, label, icon in DASHBOARD_TABS
+                        for value, label, icon in dashboard_tabs()
                     ],
                 ),
             ], id='dashboard-tabs-wrapper', className='dashboard-tabs-full',
@@ -2147,6 +2287,27 @@ _MODAL_HIDDEN = {'display': 'none'}
 def render_dashboard_tabs(pages):
     """Rebuild the tab bar when a named page is added, renamed or imported."""
     return dashboard_tab_children(pages)
+
+
+@callback(
+    Output('definition-filters', 'data'),
+    Input({'type': 'definition-filter', 'index': dash.dependencies.ALL}, 'value'),
+    State('definition-filters', 'data'),
+)
+def update_definition_filter_values(values, current):
+    """Remember the choice made in one of the dashboard definition's filters."""
+    triggered = dash.callback_context.triggered
+    if not triggered or not triggered[0].get('prop_id'):
+        raise PreventUpdate
+    identifier = _pattern_index(triggered[0]['prop_id'], '.value')
+    if identifier is None:
+        raise PreventUpdate
+    value = triggered[0].get('value')
+    selected = list(value) if isinstance(value, (list, tuple)) else (
+        [value] if value else [])
+    updated = dict(current or {})
+    updated[str(identifier)] = selected
+    return updated
 
 
 @callback(
