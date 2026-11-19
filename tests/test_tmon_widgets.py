@@ -330,7 +330,8 @@ def test_session_dashboard_has_no_default_tab(monkeypatch):
     # The URL has no `tab=` parameter, but the session dashboard still must not
     # fall back to HomePage.
     value, users, objects = TMonWidget.update_tab(
-        {'display': 'block'}, '/simlet/1/session/11/dashboard/default',
+        {'display': 'block'}, None,
+        '/simlet/1/session/11/dashboard/default',
         '/simlet/1/session/11/dashboard/default')
     assert value is None
     assert users == [] and objects == []

@@ -18,6 +18,15 @@ import plotly.express as px
 
 from vis import xAPISGnoDataToFillVisualization
 
+from TMonWidgets.VisualizationCatalog import (
+    VISUALS,
+    build_named_visual,
+    describe_named,
+    game_ids,
+    short_label,
+    target_ids,
+)
+
 # Chart types offered. A pie reads a single column of values against labels, which is
 # why it is drawn apart from the other three.
 CHART_TYPES = ("bar", "line", "pie", "scatter")
@@ -135,6 +144,48 @@ def normalise_spec(spec, df=None):
     """
     if not isinstance(spec, dict):
         return None
+    # A named visualisation has no axes of its own: its description carries an id
+    # and, for the progress figures, the game it is drawn for. Columns are still
+    # validated below for generic charts only.
+    visual = spec.get("visual")
+    if visual in VISUALS:
+        entry = VISUALS[visual]
+        game = spec.get("game") or ""
+        if entry.needs_game:
+            # Without statements (a config file being parsed, for instance) the
+            # game cannot be checked against the data, so keep what was stored.
+            if df is not None and not df.empty:
+                available = game_ids(df)
+                if game not in available:
+                    game = available[0] if available else ""
+        else:
+            game = ""
+
+        target = spec.get("target") or ""
+        mode = spec.get("mode") or ""
+        if entry.target_kind:
+            if df is not None and not df.empty:
+                available = target_ids(df, entry.target_kind)
+                if target not in available:
+                    matching = [value for value in available
+                                if short_label(value) == str(target)]
+                    target = matching[0] if matching else (
+                        available[0] if available else "")
+            if entry.modes and mode not in entry.modes:
+                mode = entry.modes[0]
+        else:
+            target = ""
+            mode = ""
+        return {
+            "type": "bar",
+            "x": "",
+            "y": COUNT_LABEL,
+            "aggregation": "count",
+            "visual": visual,
+            "game": game,
+            "target": target,
+            "mode": mode,
+        }
     chart_type = spec.get("type") if spec.get("type") in CHART_TYPES else "bar"
     aggregation = spec.get("aggregation") if spec.get("aggregation") in AGGREGATIONS else "count"
     x = spec.get("x")
@@ -162,6 +213,8 @@ def describe(spec):
     Returns:
         str: The title to put above the figure.
     """
+    if spec.get("visual") in VISUALS:
+        return describe_named(spec)
     x = str(spec.get("x") or "").split(".")[-1]
     y = spec.get("y") or COUNT_LABEL
     if y == COUNT_LABEL:
@@ -203,6 +256,8 @@ def build_chart(df, spec):
         plotly.graph_objects.Figure: The figure to show.
     """
     spec = normalise_spec(spec, df)
+    if spec is not None and spec.get("visual") in VISUALS:
+        return build_named_visual(df, spec)
     if spec is None or df is None or df.empty:
         return xAPISGnoDataToFillVisualization.noDataToFillVis(10)
     x, y, aggregation = spec["x"], spec["y"], spec["aggregation"]
@@ -261,7 +316,19 @@ def encode_spec(spec):
         str or None: The description as `type|x|y|aggregation`, or None when there is
             nothing worth writing down.
     """
-    if not isinstance(spec, dict) or not spec.get("x"):
+    if not isinstance(spec, dict):
+        return None
+    if spec.get("visual") in VISUALS:
+        # A named visualisation is marked by a first field that is not a chart type,
+        # so old four-field links are read as generic charts and stay valid. The
+        # two middle fields were placeholders and now carry a target and a mode.
+        fields = [
+            "named", spec["visual"], str(spec.get("game") or ""),
+            str(spec.get("target") or ""), str(spec.get("mode") or ""), "count",
+        ]
+        return SPEC_SEPARATOR.join(
+            SPEC_EMPTY if not value else value for value in fields)
+    if not spec.get("x"):
         return None
     # Counting statements is the absence of a value to measure, so it is written as the
     # absence rather than as its label: a link stays readable, and the label changes
@@ -290,7 +357,19 @@ def decode_specs(value):
     specs = []
     for entry in (value or "").split(","):
         parts = [part if part != SPEC_EMPTY else "" for part in entry.split(SPEC_SEPARATOR)]
-        parts += [""] * (4 - len(parts))
+        parts += [""] * (6 - len(parts))
+        if parts[0] == "named" and parts[1] in VISUALS:
+            specs.append({
+                "type": "bar",
+                "x": "",
+                "y": COUNT_LABEL,
+                "aggregation": "count",
+                "visual": parts[1],
+                "game": parts[2],
+                "target": parts[3],
+                "mode": parts[4],
+            })
+            continue
         # A description read back is held in the same shape as one just built, so the
         # list the dashboard keeps never carries two ways of saying the same thing. The
         # link stays the short one it is, since encode_spec writes the label back as the

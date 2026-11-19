@@ -7,6 +7,12 @@ completed_verb_id="http://adlnet.gov/expapi/verbs/completed"
 seriousgame_object="https://w3id.org/xapi/seriousgames/activity-types/serious-game"
 progress_verbs=[initialized_verb_id,progressed_verb_id,completed_verb_id]
 
+
+def is_serious_game(value):
+    """Accept the full xAPI-SG type and its last path segment alike."""
+    return str(value).rstrip("/").split("/")[-1].lower() == "serious-game"
+
+
 # Define a function to update the progress for specific verbs
 def update_progress(row):
     if row['verb.id'] == initialized_verb_id:
@@ -22,7 +28,8 @@ def ProgressPlayerLineChart(df, game):
         global result_progress_column
         result_progress_column=result_progress_columns[0]
         progress_data=df.loc[df['verb.id'].isin(progress_verbs)].copy()
-        progress_data=progress_data.loc[progress_data["object.definition.type"]==seriousgame_object]
+        progress_data=progress_data.loc[
+            progress_data["object.definition.type"].map(is_serious_game)]
         progress_data[result_progress_column] = progress_data.apply(update_progress, axis=1)
         bar_game_data=progress_data.loc[progress_data['object.id'] == game].copy()
         return bar_game_data
@@ -70,7 +77,8 @@ def update_started_completed_progress(row):
     
 def ProgressPlayerPie(df, game):
     progress_data=df.loc[df['verb.id'].isin(progress_verbs)].copy()
-    progress_game=progress_data.loc[progress_data["object.definition.type"]==seriousgame_object]
+    progress_game=progress_data.loc[
+        progress_data["object.definition.type"].map(is_serious_game)]
     progress_game=progress_game.loc[progress_game["object.id"] == game]
     
     # Filter for "started" and "completed"

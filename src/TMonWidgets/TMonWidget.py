@@ -1,4 +1,5 @@
 import base64
+import hashlib
 import dash
 from dash import html, dash_table, dcc, callback, Output, Input, State, no_update
 from dash.exceptions import PreventUpdate
@@ -26,15 +27,45 @@ from TMonWidgets.ChartBuilder import (
     normalise_spec,
     numeric_columns,
 )
-from TMonWidgets.MultiSelector import searchValueFromMultiSelector
+from TMonWidgets.MultiSelector import (
+    MAX_PAGE_FILTERS,
+    PAGE_FILTER_PARAM,
+    apply_page_filters,
+    decode_filters,
+    encode_filters,
+    filter_options,
+    filterable_columns,
+    normalise_filter,
+    searchValueFromMultiSelector,
+)
+from TMonWidgets.VisualizationCatalog import (
+    GROUPED_VISUALS, VISUALS, build_named_visual, describe_named, game_ids,
+    short_label, target_ids,
+)
+from TMonWidgets.PageConfig import (
+    LAYOUT_KEYS,
+    build_document,
+    import_config,
+    list_saved,
+    load_named,
+    save_named,
+    delete_named,
+    serialize as serialize_config,
+)
 from vis import xAPISGPlayersProgress, xAPISGVideosSeenSkipped
 from urllib.parse import unquote, urlencode
 from datetime import datetime
+import uuid
 
 # Query parameter carrying the activities left out of the view. The name is deliberately
 # not `activity`: get_value_from_url matches substrings, so `activity=` would also be
 # found inside `hidden-activity=` and would read back the wrong value.
 HIDDEN_ACTIVITIES_PARAM = "hidden-activity"
+
+# A user-defined visualisation page is a tab whose value starts with this prefix;
+# the built-in Create tab keeps the plain ``create_tab`` value for old links.
+PAGE_TAB_PREFIX = "page:"
+CREATE_TAB_KEY = "create_tab"
 
 # A button row only earns its place when there is a choice to make, which needs at least
 # two activities: a selection that is a single activity, and a data set that names none,
@@ -484,10 +515,20 @@ def hide_home_tab(pathname):
         Output("object-multi-dynamic-dropdown", "value")
     ],
     Input('output-t-mon', 'style'),
+    Input('config-command', 'data'),
     [State('url-t-mon', 'pathname'), State('url', 'pathname')]
 )
-def update_tab(style, stateUrl, app_path):
-    if style == {"display":"block"} : 
+def update_tab(style, config_command, stateUrl, app_path=None):
+    triggered_prop_id = (dash.callback_context.triggered or [{}])[0].get('prop_id', '')
+    if 'config-command' in triggered_prop_id and (config_command or {}).get('config'):
+        config = config_command['config']
+        header = config.get('header') or {}
+        return (
+            config.get('active_tab') or None,
+            list(header.get('actor.name') or []),
+            list(header.get('object.id') or []),
+        )
+    if style == {"display":"block"} :
         print(f"StateUrl: {stateUrl}")
         new_tab=None
         urlValues=None
@@ -573,6 +614,141 @@ def created_charts_from_url(pathname):
     return decode_specs(get_value_from_url(pathname or "", f"{CREATED_CHARTS_PARAM}="))
 
 
+def page_filters_from_url(pathname):
+    """Read the page filters a link asks for."""
+    return decode_filters(get_value_from_url(pathname or "", f"{PAGE_FILTER_PARAM}="))
+
+
+def new_page_id():
+    """A short id for a user-defined page, unique enough for one session."""
+    return uuid.uuid4().hex[:10]
+
+
+def page_key(tab):
+    """The item-store key for a tab value."""
+    if isinstance(tab, str) and tab.startswith(PAGE_TAB_PREFIX):
+        return tab
+    return CREATE_TAB_KEY
+
+
+def page_by_key(pages, key):
+    """Find a stored custom page by its tab value or its id."""
+    for page in pages or []:
+        if not isinstance(page, dict):
+            continue
+        identifier = str(page.get("id") or "")
+        if key in (identifier, f"{PAGE_TAB_PREFIX}{identifier}"):
+            return page
+    return None
+
+
+def items_for_key(key, pages, charts, filters):
+    """Return the charts and filters held by the active page."""
+    page = page_by_key(pages, key)
+    if page is not None:
+        return list(page.get("charts") or []), list(page.get("filters") or [])
+    return list(charts or []), list(filters or [])
+
+
+def render_filter_controls(filters, target, df):
+    """The row of page filters above a page's visualisations."""
+    controls = []
+    for index, spec in enumerate(filters or []):
+        normalised = normalise_filter(spec, df)
+        if normalised is None:
+            continue
+        options = filter_options(df, normalised["column"])
+        controls.append(html.Div([
+            html.Span(f"{normalised['column']}: ", style={'marginRight': '6px'}),
+            dcc.Dropdown(
+                id={'type': 'page-filter', 'index': f"{target}:{index}"},
+                options=options,
+                value=normalised["values"] if normalised["mode"] == "multi"
+                else (normalised["values"][0] if normalised["values"] else None),
+                multi=normalised["mode"] == "multi",
+                clearable=True,
+                style={'width': '260px', 'display': 'inline-block',
+                       'marginRight': '12px'},
+            ),
+            html.Button('×', id={'type': 'item-remove', 'index': f'filter:{index}'},
+                        n_clicks=0, title=I18n.t('page.delete'),
+                        style={'background': 'none', 'border': 'none',
+                               'cursor': 'pointer', 'fontSize': '16px'}),
+        ], style={'display': 'inline-block', 'marginBottom': '8px'}))
+    return html.Div(controls, style={
+        'display': 'flex', 'flexWrap': 'wrap', 'alignItems': 'center',
+        'gap': '8px', 'marginBottom': '10px',
+    }) if controls else html.Div()
+
+
+def render_item(spec, index, target, df, is_filter=False):
+    """One created chart or filter, with its remove button."""
+    label = 'Filter' if is_filter else describe(spec)
+    return html.Div([
+        html.Div([
+            html.Span(label, style={'fontFamily': INTER_FONT, 'fontSize': 13,
+                                    'marginRight': '10px'}),
+            html.Button('Remove', id={'type': 'item-remove',
+                                      'index': f'{"filter" if is_filter else "chart"}:{index}'},
+                        n_clicks=0,
+                        style={'backgroundColor': 'lightgray', 'marginBottom': '5px'}),
+        ]),
+        dcc.Graph(figure=build_chart(df, spec)),
+    ])
+
+
+def render_add_slot(target):
+    """The single empty slot that opens the creation popup."""
+    return html.Button('+', id={'type': 'item-add-slot', 'index': target},
+                       n_clicks=0, title=I18n.t('visual.open'),
+                       style={'width': '72px', 'height': '72px', 'fontSize': '28px',
+                              'border': f'2px dashed {BRAND_PRIMARY}',
+                              'background': LIGHT_CARD, 'color': BRAND_PRIMARY,
+                              'cursor': 'pointer', 'borderRadius': '8px',
+                              'margin': '10px'})
+
+
+def render_page_items(df, charts, filters, target):
+    """A page's contents: filter row, charts, then one + slot.
+
+    Returned as a flat list so the layout controls can place each chart on the
+    grid instead of treating the whole page as one item.
+    """
+    items = [render_filter_controls(filters, target, df)]
+    for index, spec in enumerate(charts or []):
+        items.append(render_item(spec, index, target, df))
+    items.append(render_add_slot(target))
+    return items
+
+
+def dashboard_tab_children(pages):
+    """Built-in tabs plus the user's named pages, in creation order."""
+    tabs = [
+        dcc.Tab(id=f'dashboard-tab-{value}', value=value,
+                label=dashboard_tab_label(label, icon))
+        for value, label, icon in DASHBOARD_TABS
+    ]
+    for page in pages or []:
+        if not isinstance(page, dict) or not page.get("id"):
+            continue
+        identifier = str(page["id"])
+        tabs.append(dcc.Tab(
+            id={'type': 'custom-dashboard-tab', 'index': identifier},
+            value=f"{PAGE_TAB_PREFIX}{identifier}",
+            label=dashboard_tab_label(str(page.get("name") or I18n.t('page.unnamed')),
+                                      'M12 5v14M5 12h14'),
+        ))
+    return tabs
+
+
+def current_config(charts, filters, pages, layout, header, hidden, tab):
+    """The document exported or saved from the dashboard's current state."""
+    return build_document(
+        charts=charts, filters=filters, pages=pages, layout=layout,
+        header=header, hidden=hidden, active_tab=tab,
+    )
+
+
 def creator_controls_style(tab):
     """
     Return whether the creator row is shown, which is only in its own tab.
@@ -607,6 +783,7 @@ def creator_controls_style(tab):
         # The panel is revealed by a successful analysis, which is when the selection,
         # and with it the statements, changes.
         Input('output-t-mon', 'style'),
+        Input('config-command', 'data'),
     ],
     [
         State('activity-filter-hidden', 'data'),
@@ -616,7 +793,7 @@ def creator_controls_style(tab):
     ]
 )
 def update_activity_filter(button_n_clicks, all_n_clicks, none_n_clicks, lrs_data_version,
-                           panel_style, hidden, pathname):
+                           panel_style, config_command, hidden, pathname):
     """
     Change which activities are out of the view, and drop what no longer applies.
 
@@ -637,7 +814,10 @@ def update_activity_filter(button_n_clicks, all_n_clicks, none_n_clicks, lrs_dat
     known = statements_activity_ids(TMonWidgets.xapiData)
     hidden = [str(value) for value in (hidden or [])]
     print(f"Activities : known={known} - hidden={hidden} - triggered={triggered_prop_id}")
-    if 'output-t-mon' in triggered_prop_id and panel_style == {"display": "block"}:
+    if 'config-command' in triggered_prop_id and (config_command or {}).get('config'):
+        hidden = [str(value) for value in
+                  (config_command['config'].get('hidden_activities') or [])]
+    elif 'output-t-mon' in triggered_prop_id and panel_style == {"display": "block"}:
         hidden = [activity_id for activity_id in hidden_activities_from_url(pathname)
                   if activity_id in known]
     elif 'activity-filter-all' in triggered_prop_id and int(all_n_clicks or 0) > 0:
@@ -713,58 +893,214 @@ def render_activity_filter(hidden, lrs_data_version):
     )
 
 
+def _pattern_index(prop_id, suffix):
+    """Read the index of the pattern-matching component that triggered a callback."""
+    try:
+        return json.loads(prop_id.rsplit(suffix, 1)[0])['index']
+    except (ValueError, KeyError, IndexError):
+        return None
+
+
 @callback(
     [
+        Output('dashboard-pages', 'data'),
         Output('created-charts', 'data'),
+        Output('page-filters', 'data'),
+        Output('item-status', 'children'),
         Output('chart-creator-status', 'children'),
     ],
     [
+        Input('page-add', 'n_clicks'),
+        Input('page-rename', 'n_clicks'),
+        Input({'type': 'page-delete', 'index': dash.dependencies.ALL}, 'n_clicks'),
+        Input('item-add', 'n_clicks'),
+        Input({'type': 'item-remove', 'index': dash.dependencies.ALL}, 'n_clicks'),
+        Input({'type': 'page-filter', 'index': dash.dependencies.ALL}, 'value'),
         Input('chart-add', 'n_clicks'),
         Input({'type': 'chart-remove', 'index': dash.dependencies.ALL}, 'n_clicks'),
-        # A new selection takes its charts from the link, for the same reason the
-        # activities do: this is where a shared link or a reload is read.
+        # A new selection takes the Create tab's state from the link.
         Input('output-t-mon', 'style'),
+        Input('config-command', 'data'),
     ],
     [
+        State('t-mon-tabs', 'value'),
+        State('item-modal-target', 'data'),
+        State('page-name-input', 'value'),
+        State('item-kind', 'value'),
+        State('item-chart-type', 'value'),
+        State('item-column', 'value'),
+        State('item-game', 'value'),
+        State('item-target', 'value'),
+        State('item-mode', 'value'),
         State('chart-type', 'value'),
         State('chart-x', 'value'),
         State('chart-y', 'value'),
         State('chart-aggregation', 'value'),
+        State('dashboard-pages', 'data'),
         State('created-charts', 'data'),
-        # A State, never an Input, for the same reason as in update_activity_filter.
+        State('page-filters', 'data'),
         State('url-t-mon', 'pathname'),
     ]
 )
-def update_created_charts(add_n_clicks, remove_n_clicks, panel_style, chart_type, chart_x,
-                          chart_y, chart_aggregation, charts, pathname):
+def update_page_state(page_add_n, page_rename_n, page_delete_n, item_add_n,
+                      item_remove_n, filter_values, chart_add_n, chart_remove_n,
+                      panel_style, config_command, tab, target, page_name,
+                      item_kind, item_chart_type, item_column, item_game,
+                      item_target, item_mode,
+                      chart_type, chart_x, chart_y, chart_aggregation,
+                      pages, charts, filters, pathname):
     """
-    Add and remove the charts the creator holds, and take them from a link.
+    The single writer of the page, chart and filter stores.
 
-    This is the only callback that writes the list, so the store, the buttons that
-    remove a chart and the URL the dashboard carries it in never disagree.
+    A user-defined page owns its charts and filters; the built-in Create tab owns
+    the two legacy stores. All mutations go through this callback so a store and
+    the buttons that draw it cannot disagree.
     """
     triggered = dash.callback_context.triggered
     triggered_prop_id = triggered[0]['prop_id'] if triggered else ''
-    charts = [chart for chart in (charts or []) if isinstance(chart, dict)]
+    pages = [dict(page) for page in (pages or []) if isinstance(page, dict)]
+    charts = [spec for spec in (charts or []) if isinstance(spec, dict)]
+    filters = [spec for spec in (filters or []) if isinstance(spec, dict)]
+    # The tab that is open owns the items, whether or not the popup was used.
+    # The modal target is only a hint for where an added item belongs.
+    key = page_key(tab)
+    target_charts, target_filters = items_for_key(key, pages, charts, filters)
     status = ''
+
+    if 'config-command' in triggered_prop_id and (config_command or {}).get('config'):
+        config = config_command['config']
+        imported_pages = list((config.get('tabs') or {}).get('custom') or [])
+        imported_charts = list((config.get('create_tab') or {}).get('charts') or [])
+        imported_filters = list((config.get('create_tab') or {}).get('filters') or [])
+        if config_command.get('action') == 'append':
+            known_ids = {str(page.get('id')) for page in pages}
+            for page in imported_pages:
+                page = dict(page)
+                identifier = str(page.get('id') or new_page_id())
+                if identifier in known_ids:
+                    identifier = f"{identifier}-{new_page_id()[:4]}"
+                page['id'] = identifier
+                known_ids.add(identifier)
+                pages.append(page)
+            charts = charts + imported_charts
+            # Filters describe the view, not a chart: adding the same one twice
+            # would narrow nothing twice and clutter the row.
+            known_filters = {json.dumps(spec, sort_keys=True) for spec in filters}
+            for spec in imported_filters:
+                fingerprint = json.dumps(spec, sort_keys=True)
+                if fingerprint not in known_filters:
+                    filters.append(spec)
+                    known_filters.add(fingerprint)
+        else:
+            pages = imported_pages
+            charts = imported_charts
+            filters = imported_filters
+        status = I18n.t('config.status')
+        return (pages[:12], charts[:MAX_CREATED_CHARTS],
+                filters[:MAX_PAGE_FILTERS], status, status)
+
     if 'output-t-mon' in triggered_prop_id and panel_style == {"display": "block"}:
         charts = created_charts_from_url(pathname)
-    elif 'chart-add' in triggered_prop_id and int(add_n_clicks or 0) > 0:
-        spec = normalise_spec({
-            "type": chart_type, "x": chart_x, "y": chart_y, "aggregation": chart_aggregation
+        filters = page_filters_from_url(pathname)
+        # The working copies are the ones written back at the end, so a shared
+        # link must fill them too rather than being overwritten by stale ones.
+        target_charts, target_filters = charts, filters
+    elif 'page-add' in triggered_prop_id and int(page_add_n or 0) > 0:
+        identifier = new_page_id()
+        pages.append({
+            'id': identifier,
+            'name': str(page_name or f"{I18n.t('page.unnamed')} {len(pages) + 1}"),
+            'charts': [], 'filters': [],
         })
-        if spec is None:
-            status = 'Pick a column for the x axis first.'
-        elif len(charts) >= MAX_CREATED_CHARTS:
-            status = f'The dashboard holds {MAX_CREATED_CHARTS} charts at most, remove one first.'
+        status = I18n.t('visual.added')
+    elif 'page-rename' in triggered_prop_id and int(page_rename_n or 0) > 0:
+        page = page_by_key(pages, key)
+        if page is not None and page_name:
+            page['name'] = str(page_name)[:80]
+            status = I18n.t('visual.added')
+    elif 'page-delete' in triggered_prop_id and page_delete_n and max(page_delete_n) > 0:
+        # A single button deletes the page that is open, not a page named by the
+        # button's index. The Create tab cannot be deleted.
+        active_key = page_key(tab)
+        page = page_by_key(pages, active_key)
+        if page is not None:
+            pages = [candidate for candidate in pages if candidate is not page]
+            status = I18n.t('visual.added')
+    elif 'item-remove' in triggered_prop_id and item_remove_n and max(item_remove_n) > 0:
+        parts = str(_pattern_index(triggered_prop_id, '.n_clicks') or '').split(':')
+        if len(parts) == 2 and parts[0] == 'chart':
+            index = int(parts[1])
+            if 0 <= index < len(target_charts):
+                target_charts = target_charts[:index] + target_charts[index + 1:]
+        elif len(parts) == 2 and parts[0] == 'filter':
+            index = int(parts[1])
+            if 0 <= index < len(target_filters):
+                target_filters = target_filters[:index] + target_filters[index + 1:]
+    elif 'page-filter' in triggered_prop_id and filter_values:
+        raw_index = _pattern_index(triggered_prop_id, '.value')
+        parts = str(raw_index or '').split(':')
+        if len(parts) == 2 and parts[0] == key:
+            index = int(parts[1])
+            if 0 <= index < len(target_filters):
+                spec = dict(target_filters[index])
+                spec['values'] = ([value for value in filter_values or [] if value]
+                                  if isinstance(filter_values, list)
+                                  else [filter_values] if filter_values else [])
+                target_filters[index] = normalise_filter(spec) or spec
+    elif 'chart-remove' in triggered_prop_id and chart_remove_n and max(chart_remove_n) > 0:
+        index = _pattern_index(triggered_prop_id, '.n_clicks')
+        if isinstance(index, int) and 0 <= index < len(target_charts):
+            target_charts = target_charts[:index] + target_charts[index + 1:]
+    elif ('item-add' in triggered_prop_id and int(item_add_n or 0) > 0
+          or 'chart-add' in triggered_prop_id and int(chart_add_n or 0) > 0):
+        kind = item_kind or 'generic'
+        if 'chart-add' in triggered_prop_id:
+            spec = normalise_spec({
+                'type': chart_type, 'x': chart_x, 'y': chart_y,
+                'aggregation': chart_aggregation,
+            })
+        elif kind in VISUALS:
+            spec = normalise_spec({
+                'visual': kind, 'game': item_game,
+                'target': item_target, 'mode': item_mode,
+            })
+        elif kind in ('filter-multi', 'filter-single'):
+            spec = normalise_filter({
+                'column': item_column,
+                'mode': 'multi' if kind == 'filter-multi' else 'single',
+            })
         else:
-            charts = charts + [spec]
-    elif 'chart-remove' in triggered_prop_id and remove_n_clicks and max(remove_n_clicks) > 0:
-        index = int(json.loads(triggered_prop_id.rsplit('.n_clicks', 1)[0])['index'])
-        if 0 <= index < len(charts):
-            charts = charts[:index] + charts[index + 1:]
-    print(f"Charts : {[describe(chart) for chart in charts]} - triggered={triggered_prop_id}")
-    return charts[:MAX_CREATED_CHARTS], status
+            spec = normalise_spec({
+                'type': item_chart_type or 'bar', 'x': item_column,
+                'y': COUNT_LABEL, 'aggregation': 'count',
+            })
+        if spec is None:
+            status = I18n.t('visual.no_column')
+        else:
+            is_filter = 'column' in spec and 'mode' in spec
+            current_filters = target_filters if is_filter else target_charts
+            limit = MAX_PAGE_FILTERS if is_filter else MAX_CREATED_CHARTS
+            if len(current_filters) >= limit:
+                status = I18n.t('visual.max_filters' if is_filter else 'visual.max_charts')
+            elif is_filter:
+                target_filters = target_filters + [spec]
+                status = I18n.t('visual.added')
+            else:
+                target_charts = target_charts + [spec]
+                status = I18n.t('visual.added')
+
+    if key != CREATE_TAB_KEY:
+        page = page_by_key(pages, key)
+        if page is not None:
+            page['charts'] = target_charts[:MAX_CREATED_CHARTS]
+            page['filters'] = target_filters[:MAX_PAGE_FILTERS]
+    else:
+        charts = target_charts[:MAX_CREATED_CHARTS]
+        filters = target_filters[:MAX_PAGE_FILTERS]
+    print(f"Pages: {len(pages)} - charts: {len(charts)} - filters: {len(filters)} "
+          f"- triggered={triggered_prop_id}")
+    return (pages[:12], charts[:MAX_CREATED_CHARTS],
+            filters[:MAX_PAGE_FILTERS], status, status)
 
 
 def filterObjectIdDependingTab(df, value, tab):
@@ -828,12 +1164,17 @@ def filterObjectIdDependingTab(df, value, tab):
     Input('graph-page', 'value'),
     Input('graph-split-x', 'value'),
     Input('graph-split-y', 'value'),
+    # The filters of the open page and the named pages the user has made. Both
+    # are reads here: the stores have a single writer in update_page_state.
+    Input('page-filters', 'data'),
+    Input('dashboard-pages', 'data'),
 )
 def update_output(tab, user_search_value, user_value, object_search_value, object_value,
                   lrs_data_version=None, hidden_activities=None, created_charts=None,
                   panel_style=None, simlet_name=None, session_name=None,
                   app_path=None, graph_layout='one', graph_rows=3,
-                  graph_columns=2, graph_page=1, split_x=2, split_y=2):
+                  graph_columns=2, graph_page=1, split_x=2, split_y=2,
+                  page_filters=None, dashboard_pages=None):
     ctx = dash.callback_context
     triggered=ctx.triggered
     triggered_prop_id = ctx.triggered[0]['prop_id']
@@ -856,7 +1197,8 @@ def update_output(tab, user_search_value, user_value, object_search_value, objec
     # Normalize the JSON data to a pandas DataFrame
     if ('object-multi-dynamic-dropdown' in triggered_prop_id or 'users-multi-dynamic-dropdown' in triggered_prop_id
             or 't-mon-tabs' in triggered_prop_id or 'lrs-data-version' in triggered_prop_id
-            or 'activity-filter-hidden' in triggered_prop_id or 'created-charts' in triggered_prop_id):
+            or 'activity-filter-hidden' in triggered_prop_id or 'created-charts' in triggered_prop_id
+            or 'page-filters' in triggered_prop_id or 'dashboard-pages' in triggered_prop_id):
         if len(TMonWidgets.xapiData) > 0:
             df = pd.json_normalize(TMonWidgets.xapiData)
             df = resolve_actor_name_column(df)
@@ -867,6 +1209,17 @@ def update_output(tab, user_search_value, user_value, object_search_value, objec
             filtered_df, user_unique_options=searchValueFromMultiSelector(df, "actor.name", user_search_value, user_value)
             filtered_df, object_unique_options=searchValueFromMultiSelector(filtered_df, "object.id", object_search_value, object_value)
             object_unique_options=filterObjectIdDependingTab(df, object_unique_options, tab)
+            # A user-defined page keeps its own charts and filters in its store
+            # entry; the built-in Create tab uses the two legacy stores. Both are
+            # resolved here so the page-level filters narrow every chart on the
+            # page while the header dropdowns still offer the whole session.
+            active_charts, active_filters = items_for_key(
+                page_key(tab), dashboard_pages, created_charts, page_filters)
+            # Only user pages (including the Create tab) show the filter row, so
+            # the built-in Progress and Videos tabs keep showing all statements.
+            chart_df = (apply_page_filters(filtered_df, active_filters)
+                        if tab == CREATE_TAB_KEY or tab.startswith(PAGE_TAB_PREFIX)
+                        else filtered_df)
             # The creator is offered the axes the data has: any column on the x axis, and
             # on the y axis only the ones holding a number, since nothing else can be
             # summed or averaged. Counting statements needs no value at all.
@@ -901,106 +1254,12 @@ def update_output(tab, user_search_value, user_value, object_search_value, objec
                 # The simlet grid lives in the SIMVA browser's studies list,
                 # never in a dashboard. A local upload has no SimVA studies.
                 tab_content = html.Div(render_homepage_content())
-            elif tab == 'progress_tab':
-                content=[]
-                content.append(html.H3('Player Progress Throw Serious game'))
-                seriousgamesId=df.loc[df["object.definition.type"]=="https://w3id.org/xapi/seriousgames/activity-types/serious-game"]['object.id'].unique()
-                for game in seriousgamesId:
-                    bargamedata=xAPISGPlayersProgress.ProgressPlayerLineChart(filtered_df, game)
-                    fig=xAPISGPlayersProgress.displayPlayerProgressFig(
-                        bar_game_data=bargamedata,
-                        game=game
-                    )
-                    content.append(dcc.Graph(id=f"barchart-{game}",figure=fig))
-                    fig=xAPISGPlayersProgress.displayPlayerProgressInitFig(
-                        bar_game_data=bargamedata,
-                        game=game
-                    )
-                    content.append(dcc.Graph(id=f"barchart-init-{game}",figure=fig))
-                    fig=xAPISGPlayersProgress.displayPlayerProgressPieFig(
-                        pie_chart_data=xAPISGPlayersProgress.ProgressPlayerPie(filtered_df, game),
-                        game=game
-                    )
-                    content.append(dcc.Graph(id=f"pie-{game}",figure=fig))
-                tab_content = html.Div(html.Div(content))
-            elif tab == 'video_tab':
-                tab_content= html.Div([
-                    html.H3('Video Seen/Skipped'),
-                    dcc.Graph(
-                        id='video-skipped-seen',
-                        figure=xAPISGVideosSeenSkipped.VideoSeenSkippedBarChart(filtered_df)
-                    )
-                ])
-            elif tab == 'completable_tab':
-                tab_content= html.Div([
-                    html.H3('Tab content 3'),
-                    dcc.Graph(
-                        id='graph-2-tabs-dcc',
-                        figure={
-                            'data': [{
-                                'x': [1, 2, 3],
-                                'y': [5, 10, 6],
-                                'type': 'bar'
-                            }]
-                        }
-                    )
-                ])
-            elif tab == 'alternative_tab':
-                tab_content= html.Div([
-                    html.H3('Tab content 4'),
-                    dcc.Graph(
-                        id='graph-2-tabs-dcc',
-                        figure={
-                            'data': [{
-                                'x': [1, 2, 3],
-                                'y': [5, 10, 6],
-                                'type': 'bar'
-                            }]
-                        }
-                    )
-                ])
-            elif tab == 'interaction_tab':
-                tab_content= html.Div([
-                    html.H3('Tab content 5'),
-                    dcc.Graph(
-                        id='graph-2-tabs-dcc',
-                        figure={
-                            'data': [{
-                                'x': [1, 2, 3],
-                                'y': [5, 10, 6],
-                                'type': 'bar'
-                            }]
-                        }
-                    )
-                ])
-            elif tab == 'accessible_tab':
-                tab_content= html.Div([
-                    html.H3('Tab content 6'),
-                    dcc.Graph(
-                        id='graph-2-tabs-dcc',
-                        figure={
-                            'data': [{
-                                'x': [1, 2, 3],
-                                'y': [5, 10, 6],
-                                'type': 'bar'
-                            }]
-                        }
-                    )
-                ])
-            elif tab == 'menu_tab':
-                tab_content= html.Div([
-                    html.H3('Tab content 7'),
-                    dcc.Graph(
-                        id='graph-2-tabs-dcc',
-                        figure={
-                            'data': [{
-                                'x': [1, 2, 3],
-                                'y': [5, 10, 6],
-                                'type': 'bar'
-                            }]
-                        }
-                    )
-                ])
+            elif tab in BUILTIN_TAB_VISUALS:
+                # Progress, Videos and the five former placeholder tabs share
+                # one catalogue renderer. It discovers targets from chart_df,
+                # so it draws the same views the header selectors left for the
+                # other tabs and never invents data for an absent activity.
+                tab_content = render_builtin_tab(chart_df, tab)
             elif tab == 'data_tab':
                 # Flatten nested statement values (e.g. context.contextActivities.parent,
                 # an array per the xAPI spec) into sub-columns, on a display-only copy:
@@ -1020,32 +1279,22 @@ def update_output(tab, user_search_value, user_value, object_search_value, objec
                     )
                 ])
             elif tab == 'create_tab':
-                # The charts the creator holds, drawn from the same filtered statements
-                # every other tab reads, so they follow the activity buttons, the player
-                # and object selectors, and the live updates without being asked again.
-                content=[]
-                for index, spec in enumerate(created_charts or []):
-                    content.append(html.Div([
-                        html.Button('Remove', id={'type': 'chart-remove', 'index': index},
-                                    n_clicks=0, style={'backgroundColor': 'lightgray',
-                                                       'marginBottom': '5px'}),
-                        dcc.Graph(figure=build_chart(filtered_df, spec)),
-                    ]))
-                tab_content=html.Div(html.Div([
+                # The Create tab and every user-defined page share one renderer:
+                # a row of filters, the named charts, and one + slot to add more.
+                # They all draw from chart_df, which the page filters narrowed.
+                tab_content=html.Div([
                     html.H3('Your visualisations'),
                     html.P(
                         "Every chart you create is listed here and drawn from the statements the "
-                        "filters leave in the view. Add one with the row above: pick a chart type, "
-                        "the column for each axis and how to count or measure, then press Add chart."
+                        "filters leave in the view. Add one with the + button below."
                     ),
-                ] + content) if content else [
-                    html.H3('No visualisation created yet'),
-                    html.P(
-                        "Pick a chart type, the column to put on each axis and how to count or "
-                        "measure the statements, then press Add chart. The chart is drawn here "
-                        "straight away."
-                    ),
-                ])
+                ] + render_page_items(chart_df, active_charts, active_filters,
+                                      CREATE_TAB_KEY))
+            elif tab.startswith(PAGE_TAB_PREFIX):
+                page = page_by_key(dashboard_pages, tab)
+                name = str((page or {}).get('name') or I18n.t('page.unnamed'))
+                tab_content=html.Div([html.H3(name)] + render_page_items(
+                    chart_df, active_charts, active_filters, tab))
             else:
                 tab_content = html.Div()
             new_query_params = { 'tab': tab }
@@ -1057,12 +1306,18 @@ def update_output(tab, user_search_value, user_value, object_search_value, objec
                 # Only written when something is hidden, so a link to a whole session
                 # stays the short one it is without the parameter.
                 new_query_params[HIDDEN_ACTIVITIES_PARAM]=",".join(hidden_activities)
-            if created_charts and len(created_charts)>0:
-                # The charts a link carries, in the order they are drawn.
-                encoded = [encode_spec(spec) for spec in created_charts]
+            if active_charts:
+                # The charts a link carries, in the order they are drawn. Both
+                # generic charts and named visualisations are encoded.
+                encoded = [encode_spec(spec) for spec in active_charts]
                 described = [value for value in encoded if value]
                 if described:
                     new_query_params[CREATED_CHARTS_PARAM]=",".join(described)
+            filters_in_url = encode_filters(active_filters)
+            if filters_in_url:
+                # The definition and the selected values travel in the link so
+                # a shared page opens with the same narrowed view.
+                new_query_params[PAGE_FILTER_PARAM]=filters_in_url
             print(f"Query param url:{new_query_params}")
             # Construct a new query string with unique parameters
             new_query_string = urlencode(new_query_params, safe=" ")
@@ -1303,6 +1558,111 @@ DASHBOARD_TABS = [
     ('create_tab', 'Create', 'M12 5v14M5 12h14'),
 ]
 
+# One renderer serves every built-in tab. Each mapping names the visuals whose
+# source notebooks belong to the tab; their targets are discovered from the
+# loaded statements, so the same figure can also be created on a user page.
+# The first two headings keep their historical wording for existing links and
+# tests; the new ones are translation keys.
+BUILTIN_TAB_VISUALS = {
+    'progress_tab': {
+        'heading': 'Player Progress Throw Serious game',
+        'visuals': ('progress-line', 'progress-origin', 'progress-pie'),
+    },
+    'video_tab': {
+        'heading': 'Video Seen/Skipped',
+        'visuals': ('video-seen-skipped',),
+    },
+    'completable_tab': {
+        'heading_key': 'visual.group.completables',
+        'visuals': ('completable-progress-change', 'completable-progress',
+                    'completable-scores', 'completable-times'),
+    },
+    'alternative_tab': {
+        'heading_key': 'visual.group.alternatives',
+        'visuals': ('correct-incorrect-by-player', 'correct-incorrect-by-question',
+                    'alternatives-selected'),
+    },
+    'interaction_tab': {
+        'heading_key': 'visual.group.interactions',
+        'visuals': ('item-interaction-time', 'item-interaction-heatmap',
+                    'item-interaction-count', 'item-action-type-count'),
+    },
+    'accessible_tab': {
+        'heading_key': 'visual.group.accessibles',
+        'visuals': ('accessible-time', 'accessible-heatmap', 'accessible-count'),
+    },
+    'menu_tab': {
+        'heading_key': 'visual.group.menus',
+        'visuals': ('menu-selection-count',),
+    },
+}
+
+# A tab with many games or levels would become a wall of charts. Four targets
+# per tab keep it readable and match the twelve-graph ceiling of a user page.
+MAX_BUILTIN_TARGETS = 4
+MAX_BUILTIN_FIGURES = 12
+
+
+def builtin_graph_id(tab, visual, target):
+    """A stable Dash id for one built-in figure, unique across tabs and targets."""
+    digest = hashlib.sha1(
+        f"{tab}|{visual}|{target or ''}".encode('utf-8')).hexdigest()[:12]
+    return f"builtin-{visual}-{digest}"
+
+
+def _figure_has_no_data(figure):
+    """Whether a builder returned the shared empty figure rather than a chart."""
+    if figure is None or not getattr(figure, 'data', ()):
+        return True
+    return any(
+        'no data' in str(getattr(annotation, 'text', '')).lower()
+        for annotation in (getattr(figure.layout, 'annotations', ()) or ())
+    )
+
+
+def render_builtin_tab(df, tab):
+    """Draw a built-in tab from the catalogue, one titled figure per target."""
+    mapping = BUILTIN_TAB_VISUALS.get(tab)
+    if mapping is None:
+        return html.Div()
+    heading = (I18n.t(mapping['heading_key']) if 'heading_key' in mapping
+               else mapping['heading'])
+    content = [html.H3(heading)]
+    targets_by_kind = {}
+    shown = 0
+    for visual in mapping['visuals']:
+        entry = VISUALS[visual]
+        if entry.target_kind:
+            if entry.target_kind not in targets_by_kind:
+                targets_by_kind[entry.target_kind] = target_ids(df, entry.target_kind)
+            targets = targets_by_kind[entry.target_kind][:MAX_BUILTIN_TARGETS]
+        else:
+            targets = ['']
+        if not targets:
+            targets = ['']
+            empty_tab = True
+        else:
+            empty_tab = False
+        for target in targets:
+            spec = {'visual': visual, 'target': target}
+            if entry.needs_game:
+                spec['game'] = target
+            if entry.modes:
+                spec['mode'] = entry.modes[0]
+            figure = build_named_visual(df, spec)
+            content.append(html.H4(describe_named(spec)))
+            children = []
+            if empty_tab or _figure_has_no_data(figure):
+                children.append(html.Span(I18n.t('figure.no-data'),
+                                          style={'marginRight': '10px'}))
+            children.append(dcc.Graph(
+                id=builtin_graph_id(tab, visual, target), figure=figure))
+            content.append(html.Div(children))
+            shown += 1
+            if shown >= MAX_BUILTIN_FIGURES:
+                return html.Div(content)
+    return html.Div(content)
+
 
 def return_target(pathname):
     """The page one level up from ``pathname``, or None at the studies list."""
@@ -1345,18 +1705,41 @@ GRAPH_LAYOUT_OPTIONS = [
 MAX_GRAPHS_PER_PAGE = 12
 
 
+def _is_graph_item(item):
+    """A chart is a bare graph or a wrapper holding one (created charts have a
+    title and a remove button beside the figure)."""
+    if isinstance(item, dcc.Graph):
+        return True
+    if isinstance(item, html.Div):
+        children = item.children
+        children = children if isinstance(children, (list, tuple)) else [children]
+        return any(_is_graph_item(child) for child in children)
+    return False
+
+
+def _is_add_slot(item):
+    """The + button that opens the creation popup."""
+    identifier = getattr(item, 'id', None)
+    return (isinstance(item, html.Button) and isinstance(identifier, dict)
+            and identifier.get('type') == 'item-add-slot')
+
+
 def arrange_graphs(content, layout, rows, columns, page, split_x=2, split_y=2):
     """
     Lay out a tab's graphs and show at most twelve of them per page.
 
-    Non-graph elements (headings) stay above the graphs on the first page.
+    Non-graph elements (headings and the filter row) stay above the graphs on the
+    first page; the + slot stays below them so a new chart can always be added.
+    Created charts are wrappers around a figure, so they count as graphs too.
     """
     node = content
     while isinstance(node, html.Div) and isinstance(node.children, html.Div):
         node = node.children
     items = node.children if isinstance(node.children, (list, tuple)) else [node]
-    headings = [item for item in items if not isinstance(item, dcc.Graph)]
-    graphs = [item for item in items if isinstance(item, dcc.Graph)]
+    headings = [item for item in items
+                if not _is_graph_item(item) and not _is_add_slot(item)]
+    add_slots = [item for item in items if _is_add_slot(item)]
+    graphs = [item for item in items if _is_graph_item(item)]
     if not graphs:
         return content
 
@@ -1412,6 +1795,10 @@ def arrange_graphs(content, layout, rows, columns, page, split_x=2, split_y=2):
         ])
     else:
         children.extend(shown)
+    if add_slots:
+        # The creation slot is available on every page of the layout, below the
+        # charts it belongs to.
+        children.extend(add_slots)
     info = html.Span(
         f"{start + 1}-{start + len(shown)} of {len(graphs)}",
         style={'gridColumn': '1 / -1', 'fontFamily': INTER_FONT,
@@ -1428,6 +1815,98 @@ def dashboard_tab_label(label, icon_path):
     ], style={'display': 'inline-flex', 'alignItems': 'center'})
 
 
+def visual_kind_options():
+    """Grouped choices of the + popup: named visuals, generic charts, filters."""
+    groups = [
+        {'label': I18n.t(group), 'options': [
+            {'label': VISUALS[identifier].label, 'value': identifier}
+            for identifier in identifiers
+        ]}
+        for group, identifiers in GROUPED_VISUALS
+    ]
+    groups.append({
+        'label': I18n.t('visual.group.generic'),
+        'options': [{'label': name, 'value': name} for name in CHART_TYPES],
+    })
+    groups.append({
+        'label': I18n.t('visual.group.filters'),
+        'options': [
+            {'label': I18n.t('visual.mode.multi'), 'value': 'filter-multi'},
+            {'label': I18n.t('visual.mode.single'), 'value': 'filter-single'},
+        ],
+    })
+    return groups
+
+
+def item_modal_layout():
+    """The popup opened by a page's + slot to add a chart or a filter."""
+    return html.Div(
+        id='item-modal', style={'display': 'none', 'position': 'fixed',
+                                'top': '15%', 'left': '25%', 'width': '50%',
+                                'background': LIGHT_CARD, 'border': f'2px solid {BRAND_PRIMARY}',
+                                'borderRadius': '8px', 'padding': '20px', 'zIndex': 2000,
+                                'boxShadow': '0 4px 16px rgba(0,0,0,0.2)'},
+        children=[
+            html.H3(I18n.t('visual.open'), style={'marginTop': 0}),
+            dcc.Dropdown(id='item-kind', options=visual_kind_options(),
+                         placeholder=I18n.t('visual.open'), clearable=False,
+                         style={'marginBottom': '10px'}),
+            # The game choice only makes sense for the progress figures, and the
+            # column choice only for a generic chart or a filter. A callback
+            # shows the pair that the selected kind needs.
+            html.Div(id='item-game-div', children=[
+                html.Span(I18n.t('visual.game'), style={'marginRight': '6px'}),
+                dcc.Dropdown(id='item-game', options=[], clearable=False),
+            ], style={'marginBottom': '10px'}),
+            html.Div(id='item-column-div', children=[
+                html.Span(I18n.t('visual.column'), style={'marginRight': '6px'}),
+                dcc.Dropdown(id='item-column', options=[]),
+            ], style={'marginBottom': '10px'}),
+            # Target-based notebook figures offer the relevant activity ids
+            # instead of a column. The callback shows this row only for them.
+            html.Div(id='item-target-div', children=[
+                html.Span(I18n.t('visual.target'), style={'marginRight': '6px'}),
+                dcc.Dropdown(id='item-target', options=[]),
+            ], style={'marginBottom': '10px'}),
+            # Only the progress-change figure has more than one time mode.
+            html.Div(id='item-mode-div', children=[
+                html.Span(I18n.t('visual.option'), style={'marginRight': '6px'}),
+                dcc.Dropdown(id='item-mode', options=[], clearable=False),
+            ], style={'marginBottom': '10px'}),
+            # Kept for the state of the legacy generic chart creator.
+            dcc.Dropdown(id='item-chart-type', options=[
+                {'label': name, 'value': name} for name in CHART_TYPES
+            ], value='bar', style={'display': 'none'}),
+            html.Div([
+                html.Button(I18n.t('visual.add'), id='item-add', n_clicks=0,
+                            style={'marginRight': '8px'}),
+                html.Button(I18n.t('visual.cancel'), id='item-cancel', n_clicks=0),
+                html.Span(id='item-status', children='',
+                          style={'marginLeft': '10px', 'color': '#555'}),
+            ]),
+        ],
+    )
+
+
+def config_confirm_layout():
+    """The Replace / Append / Cancel choice shown before an import is applied."""
+    return html.Div(
+        id='config-confirm-modal',
+        style={'display': 'none', 'position': 'fixed', 'top': '25%',
+               'left': '35%', 'width': '30%', 'background': LIGHT_CARD,
+               'border': f'2px solid {BRAND_PRIMARY}', 'borderRadius': '8px',
+               'padding': '20px', 'zIndex': 2000},
+        children=[
+            html.H3(I18n.t('config.confirm'), style={'marginTop': 0}),
+            html.Button(I18n.t('config.replace'), id='config-confirm-replace',
+                        n_clicks=0, style={'marginRight': '8px'}),
+            html.Button(I18n.t('config.append'), id='config-confirm-append',
+                        n_clicks=0, style={'marginRight': '8px'}),
+            html.Button(I18n.t('visual.cancel'), id='config-confirm-cancel', n_clicks=0),
+        ],
+    )
+
+
 TMonBody=html.Div([
     dcc.Location(id='url-t-mon', refresh=False), # Location component for URL handling
     # Written only when the header language changes; the reload picks up lng.
@@ -1435,6 +1914,19 @@ TMonBody=html.Div([
     html.Div(id='output-t-mon', style={'display': 'none'}, children=[
         dcc.Store(id='activity-filter-hidden', data=[]),
         dcc.Store(id='created-charts', data=[]),
+        # Named pages and the filters of the open page. The stores have one
+        # writer (update_page_state) and many readers, so a chart and the row
+        # of filters above it always describe the same view.
+        dcc.Store(id='dashboard-pages', data=[]),
+        dcc.Store(id='page-filters', data=[]),
+        # Which page the creation popup belongs to, and the last import waiting
+        # for the user to choose Replace, Append or Cancel.
+        dcc.Store(id='item-modal-target', data=None),
+        dcc.Store(id='config-pending', data=None),
+        # A loaded/imported configuration is announced here; callbacks that
+        # own a tab, a hidden-activity list, a page or the layout listen to it.
+        dcc.Store(id='config-command', data=None),
+        dcc.Download(id='config-download'),
         # Dashboard header: where the user is, the filters and the activity
         # selector. This replaces the SIMVA browser while a dashboard is open,
         # so those controls no longer depend on the browser being visible.
@@ -1457,6 +1949,52 @@ TMonBody=html.Div([
                 html.Span(id='activity-filter-info', children='', style={'color': '#555'}),
             ]),
             html.Div(id='activity-filter-div', children=[], style={'margin': '5px 0'}),
+            # A page is a named tab with its own charts and filters. The name
+            # input feeds New page and Rename page; Delete page removes the
+            # open one. These controls live in the header so they are reachable
+            # whatever visualisation page is being viewed.
+            html.Div([
+                dcc.Input(id='page-name-input', type='text',
+                          placeholder=I18n.t('page.name'),
+                          style={'width': '200px', 'marginRight': '6px'}),
+                html.Button(I18n.t('page.add'), id='page-add', n_clicks=0,
+                            style={'marginRight': '4px'}),
+                html.Button(I18n.t('page.rename'), id='page-rename', n_clicks=0,
+                            style={'marginRight': '4px'}),
+                html.Button(I18n.t('page.delete'),
+                            id={'type': 'page-delete', 'index': 'current'},
+                            n_clicks=0),
+            ], style={'margin': '4px 0'}),
+            # Configuration travels either as a downloaded file or as a named
+            # save kept on the server for this user. Upload must ask before it
+            # replaces what is on screen, hence the confirm popup below.
+            html.Div([
+                dcc.Input(id='config-name-input', type='text',
+                          placeholder=I18n.t('config.name'),
+                          style={'width': '180px', 'marginRight': '6px'}),
+                html.Button(I18n.t('config.save'), id='config-save', n_clicks=0,
+                            style={'marginRight': '4px'}),
+                html.Button(I18n.t('config.load'), id='config-load', n_clicks=0,
+                            style={'marginRight': '4px'}),
+                html.Button(I18n.t('config.delete'), id='config-delete', n_clicks=0,
+                            style={'marginRight': '4px'}),
+                html.Button(I18n.t('config.refresh'), id='config-refresh', n_clicks=0,
+                            style={'marginRight': '4px'}),
+                html.Button(I18n.t('config.export'), id='config-export', n_clicks=0,
+                            style={'marginRight': '4px'}),
+                dcc.Dropdown(id='config-saved-dropdown', options=[], value=None,
+                             placeholder=I18n.t('config.load'),
+                             style={'width': '200px', 'display': 'inline-block',
+                                    'verticalAlign': 'middle', 'marginRight': '6px'}),
+                dcc.Upload(id='config-import', children=I18n.t('config.import'),
+                           accept='.json,application/json',
+                           style={'display': 'inline-block', 'padding': '5px 10px',
+                                  'border': f'1px solid {BRAND_PRIMARY}',
+                                  'borderRadius': '4px', 'cursor': 'pointer'}),
+                html.Span(id='config-status', children='',
+                          style={'marginLeft': '10px', 'color': '#555'}),
+            ], style={'margin': '4px 0', 'display': 'flex', 'alignItems': 'center',
+                      'flexWrap': 'wrap'}),
         ], style={'padding': '8px 20px', 'borderBottom': '1px solid #ddd'}),
         # The tab bar is a sidebar for the dashboard; the visualisations sit to
         # its right. The app header and footer stay outside this panel.
@@ -1515,6 +2053,8 @@ TMonBody=html.Div([
                     html.Span(id='chart-creator-status', children='',
                               style={'marginLeft': '10px', 'color': '#555'}),
                 ], style={'margin': '10px 0'}),
+                item_modal_layout(),
+                config_confirm_layout(),
                 html.Div([
                     html.Span(I18n.t('graphs.layout'),
                               style={'marginRight': '6px', 'fontSize': 12}),
@@ -1592,3 +2132,241 @@ TMonFooter=html.Div([
     'backgroundColor': '#fff',
     'borderTop': '1px solid rgba(0,0,0,0.1)',
 })
+
+
+# The creation and confirmation popups share one style object each so no two
+# callbacks write the same Output property.
+_MODAL_VISIBLE = {'display': 'block'}
+_MODAL_HIDDEN = {'display': 'none'}
+
+
+@callback(
+    Output('t-mon-tabs', 'children'),
+    Input('dashboard-pages', 'data'),
+)
+def render_dashboard_tabs(pages):
+    """Rebuild the tab bar when a named page is added, renamed or imported."""
+    return dashboard_tab_children(pages)
+
+
+@callback(
+    [Output('item-modal', 'style'), Output('item-modal-target', 'data')],
+    [
+        Input({'type': 'item-add-slot', 'index': dash.dependencies.ALL}, 'n_clicks'),
+        Input('item-cancel', 'n_clicks'),
+        Input('item-add', 'n_clicks'),
+    ],
+    [State('t-mon-tabs', 'value')],
+)
+def toggle_item_modal(slot_clicks, cancel_clicks, add_clicks, tab):
+    """Open the + popup for the page whose slot was clicked; close it after an add."""
+    triggered = dash.callback_context.triggered
+    prop_id = triggered[0]['prop_id'] if triggered else ''
+    if 'item-add-slot' in prop_id and any(slot_clicks or []):
+        target = _pattern_index(prop_id, '.n_clicks')
+        return _MODAL_VISIBLE, str(target) if target else page_key(tab)
+    if 'item-add' in prop_id or 'item-cancel' in prop_id:
+        return _MODAL_HIDDEN, no_update
+    raise PreventUpdate
+
+
+@callback(
+    [
+        Output('item-game', 'options'),
+        Output('item-column', 'options'),
+        Output('item-target', 'options'),
+        Output('item-target', 'value'),
+        Output('item-mode', 'options'),
+        Output('item-mode', 'value'),
+        Output('item-game-div', 'style'),
+        Output('item-column-div', 'style'),
+        Output('item-target-div', 'style'),
+        Output('item-mode-div', 'style'),
+    ],
+    [
+        Input('item-kind', 'value'),
+        Input('lrs-data-version', 'data'),
+        Input('output-t-mon', 'style'),
+    ],
+)
+def update_item_modal_fields(kind, lrs_version, panel_style):
+    """Offer the games, targets, modes and columns the selected visual needs."""
+    if panel_style != {'display': 'block'} or not TMonWidgets.xapiData:
+        return ([], [], [], None, [], None,
+                _MODAL_HIDDEN, _MODAL_HIDDEN, _MODAL_HIDDEN, _MODAL_HIDDEN)
+    df = pd.json_normalize(TMonWidgets.xapiData)
+    df = resolve_actor_name_column(df)
+    games = [{'label': game, 'value': game} for game in game_ids(df)]
+    columns = [{'label': column, 'value': column}
+               for column in filterable_columns(df)]
+
+    entry = VISUALS.get(kind)
+    targets = []
+    target_value = None
+    if entry is not None and entry.target_kind and not entry.needs_game:
+        identifiers = target_ids(df, entry.target_kind)
+        targets = [{'label': short_label(identifier), 'value': identifier}
+                   for identifier in identifiers]
+        target_value = identifiers[0] if identifiers else None
+
+    modes = []
+    mode_value = None
+    if entry is not None and entry.modes:
+        modes = [{'label': I18n.t(f'visual.mode.{mode}'), 'value': mode}
+                 for mode in entry.modes]
+        mode_value = entry.modes[0]
+
+    game_style = _MODAL_VISIBLE if entry is not None and entry.needs_game else _MODAL_HIDDEN
+    column_style = (_MODAL_VISIBLE if kind in CHART_TYPES
+                    or kind in ('filter-multi', 'filter-single') else _MODAL_HIDDEN)
+    target_style = (_MODAL_VISIBLE if targets or entry is not None and entry.target_kind
+                    and not entry.needs_game else _MODAL_HIDDEN)
+    mode_style = _MODAL_VISIBLE if entry is not None and entry.modes else _MODAL_HIDDEN
+    return (games, columns, targets, target_value, modes, mode_value,
+            game_style, column_style, target_style, mode_style)
+
+
+@callback(
+    [
+        Output('graph-layout', 'value'),
+        Output('graph-rows', 'value'),
+        Output('graph-columns', 'value'),
+        Output('graph-page', 'value'),
+        Output('graph-split-x', 'value'),
+        Output('graph-split-y', 'value'),
+    ],
+    [Input('config-command', 'data')],
+)
+def apply_config_layout(command):
+    """Restore the layout controls carried by an imported configuration."""
+    if not command or not command.get('config'):
+        raise PreventUpdate
+    layout = command['config'].get('layout') or {}
+    return tuple(layout.get(key, no_update) for key in LAYOUT_KEYS)
+
+
+@callback(
+    [
+        Output('config-download', 'data'),
+        Output('config-command', 'data'),
+        Output('config-pending', 'data'),
+        Output('config-confirm-modal', 'style'),
+        Output('config-saved-dropdown', 'options'),
+        Output('config-status', 'children'),
+    ],
+    [
+        Input('config-export', 'n_clicks'),
+        Input('config-save', 'n_clicks'),
+        Input('config-import', 'contents'),
+        Input('config-load', 'n_clicks'),
+        Input('config-delete', 'n_clicks'),
+        Input('config-refresh', 'n_clicks'),
+        Input('config-confirm-replace', 'n_clicks'),
+        Input('config-confirm-append', 'n_clicks'),
+        Input('config-confirm-cancel', 'n_clicks'),
+        Input('output-t-mon', 'style'),
+    ],
+    [
+        State('config-name-input', 'value'),
+        State('config-saved-dropdown', 'value'),
+        State('config-pending', 'data'),
+        State('created-charts', 'data'),
+        State('page-filters', 'data'),
+        State('dashboard-pages', 'data'),
+        State('t-mon-tabs', 'value'),
+        State('graph-layout', 'value'),
+        State('graph-rows', 'value'),
+        State('graph-columns', 'value'),
+        State('graph-page', 'value'),
+        State('graph-split-x', 'value'),
+        State('graph-split-y', 'value'),
+        State('users-multi-dynamic-dropdown', 'value'),
+        State('object-multi-dynamic-dropdown', 'value'),
+        State('activity-filter-hidden', 'data'),
+    ],
+)
+def handle_config_actions(export_n, save_n, import_contents, load_n, delete_n,
+                          refresh_n, replace_n, append_n, cancel_n, panel_style,
+                          name, selected, pending, charts, filters, pages, tab,
+                          graph_layout, graph_rows, graph_columns, graph_page,
+                          split_x, split_y, users, objects, hidden):
+    """Export, save, load, delete and import a dashboard configuration."""
+    triggered = dash.callback_context.triggered
+    prop_id = triggered[0]['prop_id'] if triggered else ''
+
+    def result(status='', command=no_update, pending_value=no_update,
+               options=no_update, download=no_update, modal=no_update):
+        return (download, command, pending_value, modal, options, status)
+
+    def document():
+        return current_config(
+            charts, filters, pages,
+            {
+                'graph-layout': graph_layout, 'graph-rows': graph_rows,
+                'graph-columns': graph_columns, 'graph-page': graph_page,
+                'graph-split-x': split_x, 'graph-split-y': split_y,
+            },
+            {'actor.name': users or [], 'object.id': objects or []},
+            hidden or [], tab,
+        )
+
+    if 'config-export' in prop_id and int(export_n or 0) > 0:
+        return result(
+            download={'content': serialize_config(document()),
+                      'filename': 'tmon-dashboard.json'},
+            status=I18n.t('config.status'),
+        )
+    if 'config-save' in prop_id and int(save_n or 0) > 0:
+        try:
+            safe = save_named(name or 'dashboard', document())
+            status = f"{I18n.t('config.status')}: {safe}"
+        except ValueError as error:
+            status = str(error)
+        return result(status=status,
+                      options=[{'label': item, 'value': item}
+                               for item in list_saved()])
+    if 'config-import' in prop_id and import_contents:
+        try:
+            parsed = import_config(import_contents)
+        except ValueError as error:
+            return result(status=str(error), modal=_MODAL_HIDDEN)
+        return result(pending_value=parsed, modal=_MODAL_VISIBLE)
+    if 'config-load' in prop_id and int(load_n or 0) > 0:
+        if not selected:
+            return result(status=I18n.t('config.name'))
+        try:
+            parsed = load_named(selected)
+        except ValueError as error:
+            return result(status=str(error))
+        return result(
+            command={'action': 'replace', 'config': parsed,
+                     'nonce': uuid.uuid4().hex},
+            status=I18n.t('config.status'),
+        )
+    if 'config-delete' in prop_id and int(delete_n or 0) > 0:
+        if selected:
+            try:
+                delete_named(selected)
+            except ValueError as error:
+                return result(status=str(error))
+        return result(
+            status=I18n.t('config.status'),
+            options=[{'label': item, 'value': item} for item in list_saved()],
+        )
+    if ('config-confirm-replace' in prop_id and int(replace_n or 0) > 0
+            or 'config-confirm-append' in prop_id and int(append_n or 0) > 0):
+        action = 'replace' if 'config-confirm-replace' in prop_id else 'append'
+        if not pending:
+            return result(modal=_MODAL_HIDDEN)
+        return result(
+            command={'action': action, 'config': pending,
+                     'nonce': uuid.uuid4().hex},
+            pending_value=None, modal=_MODAL_HIDDEN,
+            status=I18n.t('config.status'),
+        )
+    if 'config-confirm-cancel' in prop_id and int(cancel_n or 0) > 0:
+        return result(pending_value=None, modal=_MODAL_HIDDEN)
+    if 'output-t-mon' in prop_id and panel_style == {'display': 'block'}:
+        return result(options=[{'label': item, 'value': item}
+                               for item in list_saved()])
+    raise PreventUpdate

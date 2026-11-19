@@ -1,10 +1,14 @@
 import os
+from flask import jsonify, request
 from dash import Dash, dcc, html, Input, Output, State, no_update
 from dash.exceptions import PreventUpdate
 from TMonWidgets.SimvaBrowserWidget import (
     flask, simvaBrowserBody, TMonUploadPanel,
 )
 from TMonWidgets import TMonWidget, I18n
+from TMonWidgets.PageConfig import (
+    delete_named, list_saved, load_named, save_named,
+)
 
 # Initialize Dash app with Flask server. The explicit assets folder keeps the
 # logo images resolvable no matter which directory the app is launched from.
@@ -156,6 +160,47 @@ def change_language(language, search):
     if current != language:
         return f'?lng={language}', language, *labels
     return no_update, language, *labels
+
+
+# Named configuration storage for external clients. The Dash toolbar reaches the
+# same per-user directory through TMonWidgets.PageConfig; these endpoints expose
+# the list/save/load/delete operations over the existing authenticated server.
+CONFIG_ROUTE = '/api/tmon/configs'
+
+
+@flask.flaskServer.route(CONFIG_ROUTE, methods=['GET'])
+def tmon_config_list():
+    """Names saved for the current user."""
+    return jsonify({'names': list_saved()})
+
+
+@flask.flaskServer.route(CONFIG_ROUTE + '/<name>', methods=['GET'])
+def tmon_config_get(name):
+    """Read one saved configuration, validated before it is returned."""
+    try:
+        return jsonify(load_named(name))
+    except ValueError as error:
+        return jsonify({'error': str(error)}), 404
+
+
+@flask.flaskServer.route(CONFIG_ROUTE + '/<name>', methods=['POST'])
+def tmon_config_put(name):
+    """Save a configuration document under ``name`` for the current user."""
+    try:
+        saved = save_named(name, request.get_json(silent=True) or {})
+    except ValueError as error:
+        return jsonify({'error': str(error)}), 400
+    return jsonify({'name': saved})
+
+
+@flask.flaskServer.route(CONFIG_ROUTE + '/<name>', methods=['DELETE'])
+def tmon_config_delete(name):
+    """Delete one saved configuration."""
+    try:
+        removed = delete_named(name)
+    except ValueError as error:
+        return jsonify({'error': str(error)}), 400
+    return jsonify({'deleted': removed})
 
 
 if __name__ == '__main__':

@@ -1,3 +1,18 @@
+"""
+Selection helpers for the dashboard.
+
+The first function keeps the two fixed header dropdowns working. The rest carry
+the page filters a user adds through the UI: their compact link form, their
+application to the statements, and the columns that can be filtered.
+"""
+import base64
+import json
+
+FILTER_MODES = ("multi", "single")
+PAGE_FILTER_PARAM = "filter"
+MAX_PAGE_FILTERS = 8
+
+
 def searchValueFromMultiSelector(df, object, search_value,value):
     filtered_df=df
     # Make sure that the set values are in the option list, else they will disappear
@@ -17,3 +32,98 @@ def searchValueFromMultiSelector(df, object, search_value,value):
     # Remove duplicates while preserving order
     unique_options = list({v['value']:v for v in filtered_options}.values())
     return filtered_df, unique_options
+
+
+def filterable_columns(df):
+    """Columns whose values can be offered as filter choices."""
+    if df is None or df.empty:
+        return []
+    return [
+        column for column in df.columns
+        if df[column].dropna().map(
+            lambda value: isinstance(value, (str, int, float, bool))
+        ).any()
+    ]
+
+
+def normalise_filter(spec, df=None):
+    """Validate one filter description, or return None when it is unusable."""
+    if not isinstance(spec, dict):
+        return None
+    column = spec.get("column")
+    mode = spec.get("mode") if spec.get("mode") in FILTER_MODES else "multi"
+    if not column:
+        return None
+    if df is not None and not df.empty and column not in df.columns:
+        return None
+    values = spec.get("values") or []
+    if isinstance(values, str):
+        values = [values]
+    values = [str(value) for value in values if value is not None and value != ""]
+    if df is not None and not df.empty and column in df.columns:
+        # A value the statements no longer contain would narrow the view for no
+        # reason; drop it and let the remaining choices speak for the page.
+        present = {str(value) for value in df[column].dropna().unique()}
+        values = [value for value in values if value in present]
+    if mode == "single":
+        values = values[:1]
+    return {"column": column, "mode": mode, "values": values[:MAX_PAGE_FILTERS]}
+
+
+def apply_page_filters(df, filters):
+    """Narrow the statements with every page filter, in order."""
+    for spec in filters or []:
+        normalised = normalise_filter(spec, df)
+        if normalised is None or not normalised["values"]:
+            continue
+        column = normalised["column"]
+        if column not in df.columns:
+            continue
+        df = df.loc[df[column].astype(str).isin(normalised["values"])]
+    return df
+
+
+def filter_options(df, column):
+    """Distinct choices for a filter, in the order the data names them."""
+    if df is None or df.empty or column not in df.columns:
+        return []
+    values = [
+        value for value in df[column].dropna().unique()
+        if isinstance(value, (str, int, float, bool))
+    ]
+    return [{"label": str(value), "value": str(value)} for value in values]
+
+
+def encode_filter(spec):
+    """One filter as ``mode|column|base64(values)`` for a link or a file."""
+    normalised = normalise_filter(spec)
+    if normalised is None:
+        return None
+    values = json.dumps(normalised["values"], separators=(",", ":"))
+    encoded = base64.b64encode(values.encode("utf-8")).decode("ascii")
+    return "|".join([normalised["mode"], normalised["column"], encoded])
+
+
+def encode_filters(filters):
+    """All filters as one URL value, joined by commas."""
+    encoded = [encode_filter(spec) for spec in filters or []]
+    return ",".join(value for value in encoded if value)
+
+
+def decode_filters(value):
+    """Read the filters a link carries, keeping only valid descriptions."""
+    specs = []
+    for entry in (value or "").split(","):
+        parts = entry.split("|")
+        if len(parts) < 3:
+            continue
+        mode, column, encoded = parts[0], parts[1], "|".join(parts[2:])
+        try:
+            values = json.loads(base64.b64decode(encoded).decode("utf-8"))
+        except (ValueError, UnicodeDecodeError):
+            continue
+        if isinstance(values, list):
+            spec = normalise_filter({"mode": mode, "column": column, "values": values})
+            if spec is not None:
+                specs.append(spec)
+    return specs[:MAX_PAGE_FILTERS]

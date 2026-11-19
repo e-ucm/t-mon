@@ -12,6 +12,8 @@ MODULES = [
     "TMonWidgets.ActivityFilter",
     "TMonWidgets.ChartBuilder",
     "TMonWidgets.MultiSelector",
+    "TMonWidgets.PageConfig",
+    "TMonWidgets.VisualizationCatalog",
     "TMonWidgets.SimvaBrowserWidget",
     "TMonWidgets.TMonWidget",
     "TMonWidgets.UploadWidget",
@@ -22,6 +24,19 @@ MODULES = [
     "vis.xAPISGPlayersProgress",
     "vis.xAPISGVideosSeenSkipped",
     "vis.xAPISGnoDataToFillVisualization",
+    "vis.xAPISGVisualizationData",
+    "vis.xAPISGGamesStartedCompleted",
+    "vis.xAPISGCompletablesProgress",
+    "vis.xAPISGCompletablesScores",
+    "vis.xAPISGCompletablesTimes",
+    "vis.xAPISGCompletableProgressIncreaseDecrease",
+    "vis.xAPISGCorrectIncorrectPerPlayer",
+    "vis.xAPISGCorrectIncorrectPerQuestion",
+    "vis.xAPISGAlternativesSelectedQuestion",
+    "vis.xAPISGItemsInteracted",
+    "vis.xAPISGItemsActionTypeInteracted",
+    "vis.xAPISGAccessedAccessible",
+    "vis.xAPISGMenusSelected",
 ]
 
 
