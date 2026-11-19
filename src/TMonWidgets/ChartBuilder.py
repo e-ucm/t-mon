@@ -9,6 +9,7 @@ and drawn by `GraphTypes`; what is built here is the user's own chart.
 A description is kept as plain data, so the dashboard can hold several of them, redraw
 them whenever the data or the filters change, and carry them in a link.
 """
+import base64
 import math
 import numbers
 
@@ -47,6 +48,32 @@ CREATED_CHARTS_PARAM = "chart"
 # Ceiling on how many charts the dashboard holds at once, so neither a link nor a user
 # can arrive with a list long enough to be unreadable.
 MAX_CREATED_CHARTS = 8
+
+# User-authored wording on a chart. These are data, not i18n keys: they are kept on the
+# spec, carried in links and saved with an ADR 0015 configuration. Absent keys leave the
+# existing derived titles and column labels in place.
+LABEL_KEYS = ("title", "x_label", "y_label")
+MAX_LABEL_LENGTH = 120
+
+
+def _encode_label(value):
+    """Pack one label into a link-safe token without separators a link uses."""
+    text = str(value or "")
+    if not text:
+        return SPEC_EMPTY
+    encoded = base64.urlsafe_b64encode(text.encode("utf-8")).decode("ascii").rstrip("=")
+    return encoded or SPEC_EMPTY
+
+
+def _decode_label(token):
+    """Read a label packed by ``_encode_label``; None when the token is not one."""
+    if not token or token == SPEC_EMPTY:
+        return None
+    try:
+        padded = token + "=" * (-len(token) % 4)
+        return base64.urlsafe_b64decode(padded.encode("ascii")).decode("utf-8")
+    except (ValueError, UnicodeDecodeError):
+        return None
 
 
 def is_scalar(value):
@@ -134,6 +161,7 @@ def normalise_spec(spec, df=None):
     """
     if not isinstance(spec, dict):
         return None
+    original = spec
     chart_type = spec.get("type") if spec.get("type") in CHART_TYPES else "bar"
     aggregation = spec.get("aggregation") if spec.get("aggregation") in AGGREGATIONS else "count"
     x = spec.get("x")
@@ -148,7 +176,14 @@ def normalise_spec(spec, df=None):
             y = COUNT_LABEL
     if not x:
         return None
-    return {"type": chart_type, "x": x, "y": y, "aggregation": aggregation}
+    spec = {"type": chart_type, "x": x, "y": y, "aggregation": aggregation}
+    # Only labels actually written by a user are kept. An absent label must not appear
+    # in the spec, so old links, configs and test expectations keep their short shape.
+    for key in LABEL_KEYS:
+        value = original.get(key)
+        if isinstance(value, str) and value.strip():
+            spec[key] = value.strip()[:MAX_LABEL_LENGTH]
+    return spec
 
 
 def describe(spec):
@@ -159,8 +194,10 @@ def describe(spec):
         spec (dict): The chart description.
 
     Returns:
-        str: The title to put above the figure.
+        str: The user's title when they wrote one, otherwise a derived one.
     """
+    if isinstance(spec, dict) and spec.get("title"):
+        return str(spec["title"])
     x = str(spec.get("x") or "").split(".")[-1]
     y = spec.get("y") or COUNT_LABEL
     if y == COUNT_LABEL:
@@ -236,6 +273,10 @@ def build_chart(df, spec):
         summarised = reduced().reset_index()
         value_column, value_label = y, y.split(".")[-1]
     labels = {x: x.split(".")[-1], value_column: value_label}
+    if spec.get("x_label"):
+        labels[x] = str(spec["x_label"])
+    if spec.get("y_label"):
+        labels[value_column] = str(spec["y_label"])
     if spec["type"] == "pie":
         # A pie reads one column of values against labels and takes no measure of its own.
         figure = px.pie(summarised, names=x, values=value_column, labels=labels)
@@ -257,8 +298,8 @@ def encode_spec(spec):
         spec (dict): The chart description.
 
     Returns:
-        str or None: The description as `type|x|y|aggregation`, or None when there is
-            nothing worth writing down.
+        str or None: The description as `type|x|y|aggregation` plus, when the user wrote
+            labels, three packed label tokens; or None when there is nothing to write.
     """
     if not isinstance(spec, dict):
         return None
@@ -274,6 +315,8 @@ def encode_spec(spec):
         "" if y == COUNT_LABEL else y,
         spec.get("aggregation") or "count",
     ]
+    if any(spec.get(key) for key in LABEL_KEYS):
+        values.extend(_encode_label(spec.get(key)) for key in LABEL_KEYS)
     return SPEC_SEPARATOR.join(SPEC_EMPTY if not value else str(value) for value in values)
 
 
@@ -291,7 +334,7 @@ def decode_specs(value):
     specs = []
     for entry in (value or "").split(","):
         parts = [part if part != SPEC_EMPTY else "" for part in entry.split(SPEC_SEPARATOR)]
-        parts += [""] * (6 - len(parts))
+        parts += [""] * (3 + len(LABEL_KEYS) - len(parts))
         # A description read back is held in the same shape as one just built, so the
         # list the dashboard keeps never carries two ways of saying the same thing. The
         # link stays the short one it is, since encode_spec writes the label back as the
@@ -302,6 +345,10 @@ def decode_specs(value):
             "y": parts[2] or COUNT_LABEL,
             "aggregation": parts[3] or "count",
         }
+        for key, token in zip(LABEL_KEYS, parts[4:]):
+            label = _decode_label(token)
+            if label:
+                spec[key] = label
         if spec["x"]:
             specs.append(spec)
     return specs[:MAX_CREATED_CHARTS]

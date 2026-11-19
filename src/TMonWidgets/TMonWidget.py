@@ -63,6 +63,25 @@ HIDDEN_ACTIVITIES_PARAM = "hidden-activity"
 PAGE_TAB_PREFIX = "page:"
 CREATE_TAB_KEY = "create_tab"
 
+# Edit mode reveals the controls that change a dashboard: removing a tab or a
+# visualisation, adding a tab, and editing a graph with its labels. In view mode the
+# same nodes stay in the layout with display:none, so Dash ids exist on first render.
+NEW_TAB_ADD_ID = "new-tab-add"
+
+
+def edit_control_style(edit_mode):
+    """Visibility shared by the first render and every later callback."""
+    return {'display': 'block'} if edit_mode else {'display': 'none'}
+
+
+def edit_button_style(edit_mode, margin='0'):
+    """Small inline button style for a control that only exists in edit mode."""
+    return {
+        'display': 'inline-block' if edit_mode else 'none',
+        'background': 'none', 'border': 'none', 'cursor': 'pointer',
+        'color': BRAND_PRIMARY, 'fontSize': '14px', 'margin': margin,
+    }
+
 # A button row only earns its place when there is a choice to make, which needs at least
 # two activities: a selection that is a single activity, and a data set that names none,
 # are both views the user cannot narrow.
@@ -742,7 +761,7 @@ def items_for_key(key, pages, charts, filters):
     return list(charts or []), list(filters or [])
 
 
-def render_filter_controls(filters, target, df):
+def render_filter_controls(filters, target, df, edit_mode=True):
     """The row of page filters above a page's visualisations."""
     controls = []
     for index, spec in enumerate(filters or []):
@@ -763,9 +782,14 @@ def render_filter_controls(filters, target, df):
                        'marginRight': '12px'},
             ),
             html.Button('×', id={'type': 'item-remove', 'index': f'filter:{index}'},
-                        n_clicks=0, title=I18n.t('page.delete'),
+                        n_clicks=0, title=I18n.t('edit.remove'),
                         style={'background': 'none', 'border': 'none',
-                               'cursor': 'pointer', 'fontSize': '16px'}),
+                               'cursor': 'pointer', 'fontSize': '16px',
+                               'display': 'inline-block' if edit_mode else 'none'}),
+            html.Button(I18n.t('edit.item'), id={'type': 'item-edit',
+                                               'index': f'filter:{index}'},
+                        n_clicks=0, title=I18n.t('edit.filter'),
+                        style=edit_button_style(edit_mode)),
         ], style={'display': 'inline-block', 'marginBottom': '8px'}))
     return html.Div(controls, style={
         'display': 'flex', 'flexWrap': 'wrap', 'alignItems': 'center',
@@ -773,23 +797,30 @@ def render_filter_controls(filters, target, df):
     }) if controls else html.Div()
 
 
-def render_item(spec, index, target, df, is_filter=False):
-    """One created chart or filter, with its remove button."""
+def render_item(spec, index, target, df, is_filter=False, edit_mode=True):
+    """One created chart or filter, with its remove and edit buttons."""
     label = 'Filter' if is_filter else describe(spec)
+    kind = 'filter' if is_filter else 'chart'
     return html.Div([
         html.Div([
             html.Span(label, style={'fontFamily': INTER_FONT, 'fontSize': 13,
                                     'marginRight': '10px'}),
-            html.Button('Remove', id={'type': 'item-remove',
-                                      'index': f'{"filter" if is_filter else "chart"}:{index}'},
-                        n_clicks=0,
-                        style={'backgroundColor': 'lightgray', 'marginBottom': '5px'}),
+            html.Button(I18n.t('edit.remove'), id={'type': 'item-remove',
+                                                   'index': f'{kind}:{index}'},
+                        n_clicks=0, title=I18n.t('edit.remove'),
+                        style={'backgroundColor': 'lightgray', 'marginBottom': '5px',
+                               'display': 'inline-block' if edit_mode else 'none'}),
+            html.Button(I18n.t('edit.item'), id={'type': 'item-edit',
+                                                 'index': f'{kind}:{index}'},
+                        n_clicks=0, title=I18n.t('edit.graph' if kind == 'chart'
+                                                else 'edit.filter'),
+                        style=edit_button_style(edit_mode, margin='0 0 5px 4px')),
         ]),
         dcc.Graph(figure=build_chart(df, spec)),
     ])
 
 
-def render_add_slot(target):
+def render_add_slot(target, edit_mode=True):
     """The single empty slot that opens the creation popup."""
     return html.Button('+', id={'type': 'item-add-slot', 'index': target},
                        n_clicks=0, title=I18n.t('visual.open'),
@@ -797,24 +828,29 @@ def render_add_slot(target):
                               'border': f'2px dashed {BRAND_PRIMARY}',
                               'background': LIGHT_CARD, 'color': BRAND_PRIMARY,
                               'cursor': 'pointer', 'borderRadius': '8px',
-                              'margin': '10px'})
+                              'margin': '10px',
+                              'display': 'block' if edit_mode else 'none'})
 
 
-def render_page_items(df, charts, filters, target):
+def render_page_items(df, charts, filters, target, edit_mode=True):
     """A page's contents: filter row, charts, then one + slot.
 
     Returned as a flat list so the layout controls can place each chart on the
     grid instead of treating the whole page as one item.
     """
-    items = [render_filter_controls(filters, target, df)]
+    items = [render_filter_controls(filters, target, df, edit_mode)]
     for index, spec in enumerate(charts or []):
-        items.append(render_item(spec, index, target, df))
-    items.append(render_add_slot(target))
+        items.append(render_item(spec, index, target, df, edit_mode=edit_mode))
+    items.append(render_add_slot(target, edit_mode))
     return items
 
 
-def dashboard_tab_children(pages):
-    """Built-in tabs plus the user's named pages, in creation order."""
+def dashboard_tab_children(pages, edit_mode=False):
+    """Built-in tabs plus the user's named pages, in creation order.
+
+    Built-in and reserved tabs have no remove control. A custom page carries one
+    in its label in edit mode, so a tab can be removed from where it is seen.
+    """
     tabs = [
         dcc.Tab(id=f'dashboard-tab-{value}', value=value,
                 label=dashboard_tab_label(label, icon))
@@ -824,11 +860,18 @@ def dashboard_tab_children(pages):
         if not isinstance(page, dict) or not page.get("id"):
             continue
         identifier = str(page["id"])
+        label = dashboard_tab_label(
+            str(page.get("name") or I18n.t('page.unnamed')), 'M12 5v14M5 12h14')
+        if edit_mode:
+            label.children = list(label.children) + [
+                html.Button('×', id={'type': 'tab-remove', 'index': identifier},
+                            n_clicks=0, title=I18n.t('edit.remove_tab'),
+                            style=edit_button_style(True, margin='0 0 0 6px')),
+            ]
         tabs.append(dcc.Tab(
             id={'type': 'custom-dashboard-tab', 'index': identifier},
             value=f"{PAGE_TAB_PREFIX}{identifier}",
-            label=dashboard_tab_label(str(page.get("name") or I18n.t('page.unnamed')),
-                                      'M12 5v14M5 12h14'),
+            label=label,
         ))
     return tabs
 
@@ -1013,6 +1056,10 @@ def _pattern_index(prop_id, suffix):
         # A new selection takes the Create tab's state from the link.
         Input('output-t-mon', 'style'),
         Input('config-command', 'data'),
+        # Edit mode: a confirmed tab removal and the always-visible new tab.
+        Input({'type': 'tab-remove', 'index': dash.dependencies.ALL}, 'n_clicks'),
+        Input('tab-remove-confirm', 'n_clicks'),
+        Input(NEW_TAB_ADD_ID, 'n_clicks'),
     ],
     [
         State('t-mon-tabs', 'value'),
@@ -1032,6 +1079,15 @@ def _pattern_index(prop_id, suffix):
         State('created-charts', 'data'),
         State('page-filters', 'data'),
         State('url-t-mon', 'pathname'),
+        # Which tab or item the edit-mode controls are acting on. Added after the
+        # existing states so old direct callers keep their positional arguments.
+        State('tab-remove-pending', 'data'),
+        State('item-edit-index', 'data'),
+        State('item-title', 'value'),
+        State('item-xlabel', 'value'),
+        State('item-ylabel', 'value'),
+        State('item-y', 'value'),
+        State('item-aggregation', 'value'),
     ]
 )
 def update_page_state(page_add_n, page_rename_n, page_delete_n, item_add_n,
@@ -1040,7 +1096,11 @@ def update_page_state(page_add_n, page_rename_n, page_delete_n, item_add_n,
                       item_kind, item_chart_type, item_column, item_game,
                       item_target, item_mode,
                       chart_type, chart_x, chart_y, chart_aggregation,
-                      pages, charts, filters, pathname):
+                      pages, charts, filters, pathname,
+                      tab_remove_clicks=None, confirm_remove_n=None,
+                      new_tab_n=None, pending_remove=None, item_edit_index=None,
+                      item_title=None, item_xlabel=None, item_ylabel=None,
+                      item_y=None, item_aggregation=None):
     """
     The single writer of the page, chart and filter stores.
 
@@ -1091,13 +1151,27 @@ def update_page_state(page_add_n, page_rename_n, page_delete_n, item_add_n,
         return (pages[:12], charts[:MAX_CREATED_CHARTS],
                 filters[:MAX_PAGE_FILTERS], status, status)
 
+    if ('tab-remove-confirm' in triggered_prop_id
+            and int(confirm_remove_n or 0) > 0 and pending_remove):
+        # Only user-defined pages can be removed: built-in and reserved tabs have
+        # no remove control, and the guard keeps a forged id from deleting them.
+        removed = str(pending_remove)
+        if removed not in (CREATE_TAB_KEY, DefaultDashboard.XAPI_TAB_ID):
+            pages = [page for page in pages if str(page.get('id')) != removed]
+            status = I18n.t('config.status')
+        return (pages[:12], charts[:MAX_CREATED_CHARTS],
+                filters[:MAX_PAGE_FILTERS], status, status)
+
     if 'output-t-mon' in triggered_prop_id and panel_style == {"display": "block"}:
         charts = created_charts_from_url(pathname)
         filters = page_filters_from_url(pathname)
         # The working copies are the ones written back at the end, so a shared
         # link must fill them too rather than being overwritten by stale ones.
         target_charts, target_filters = charts, filters
-    elif 'page-add' in triggered_prop_id and int(page_add_n or 0) > 0:
+    elif ('page-add' in triggered_prop_id and int(page_add_n or 0) > 0
+          or NEW_TAB_ADD_ID in triggered_prop_id and int(new_tab_n or 0) > 0):
+        # The header button and the + always shown in edit mode create the same
+        # empty named page, so there is only one creation path to maintain.
         identifier = new_page_id()
         pages.append({
             'id': identifier,
@@ -1146,6 +1220,8 @@ def update_page_state(page_add_n, page_rename_n, page_delete_n, item_add_n,
     elif ('item-add' in triggered_prop_id and int(item_add_n or 0) > 0
           or 'chart-add' in triggered_prop_id and int(chart_add_n or 0) > 0):
         kind = item_kind or 'generic'
+        labels = {'title': item_title, 'x_label': item_xlabel,
+                  'y_label': item_ylabel}
         if 'chart-add' in triggered_prop_id:
             spec = normalise_spec({
                 'type': chart_type, 'x': chart_x, 'y': chart_y,
@@ -1157,23 +1233,46 @@ def update_page_state(page_add_n, page_rename_n, page_delete_n, item_add_n,
                 'mode': 'multi' if kind == 'filter-multi' else 'single',
             })
         else:
+            # The popup's chosen chart type is the kind itself. The hidden
+            # item-chart-type keeps the legacy creator's choice working.
+            chart_kind = kind if kind in CHART_TYPES else (item_chart_type or 'bar')
             spec = normalise_spec({
-                'type': item_chart_type or 'bar', 'x': item_column,
-                'y': COUNT_LABEL, 'aggregation': 'count',
+                'type': chart_kind, 'x': item_column,
+                'y': item_y or COUNT_LABEL,
+                'aggregation': item_aggregation or 'count',
+                **labels,
             })
         if spec is None:
             status = I18n.t('visual.no_column')
         else:
             is_filter = 'column' in spec and 'mode' in spec
-            current_filters = target_filters if is_filter else target_charts
+            current = target_filters if is_filter else target_charts
             limit = MAX_PAGE_FILTERS if is_filter else MAX_CREATED_CHARTS
-            if len(current_filters) >= limit:
+            edit = item_edit_index if isinstance(item_edit_index, dict) else {}
+            edit_kind, separator, raw_index = str(edit.get('index') or '').partition(':')
+            if separator and edit_kind in ('chart', 'filter'):
+                # Editing replaces the item in place; the cap that applies to an
+                # add does not reject changing one that is already there.
+                try:
+                    index = int(raw_index)
+                except ValueError:
+                    index = -1
+                if 0 <= index < len(current):
+                    current[index] = spec
+                    status = I18n.t('visual.added')
+                else:
+                    status = I18n.t('visual.no_column')
+                if is_filter:
+                    target_filters = current
+                else:
+                    target_charts = current
+            elif len(current) >= limit:
                 status = I18n.t('visual.max_filters' if is_filter else 'visual.max_charts')
             elif is_filter:
-                target_filters = target_filters + [spec]
+                target_filters = current + [spec]
                 status = I18n.t('visual.added')
             else:
-                target_charts = target_charts + [spec]
+                target_charts = current + [spec]
                 status = I18n.t('visual.added')
 
     if key != CREATE_TAB_KEY:
@@ -1258,13 +1357,16 @@ def filterObjectIdDependingTab(df, value, tab):
     # Selected values of the dashboard-definition filters. It is dialogue, not
     # user-page state, so changing one redraws only the definition's graphs.
     Input('definition-filters', 'data'),
+    # Entering or leaving edit mode changes which controls the page renders.
+    Input('edit-mode', 'data'),
 )
 def update_output(tab, user_search_value, user_value, object_search_value, object_value,
                   lrs_data_version=None, hidden_activities=None, created_charts=None,
                   panel_style=None, simlet_name=None, session_name=None,
                   app_path=None, graph_layout='one', graph_rows=3,
                   graph_columns=2, graph_page=1, split_x=2, split_y=2,
-                  page_filters=None, dashboard_pages=None, definition_filter_values=None):
+                  page_filters=None, dashboard_pages=None, definition_filter_values=None,
+                  edit_mode=False):
     ctx = dash.callback_context
     triggered=ctx.triggered
     triggered_prop_id = ctx.triggered[0]['prop_id']
@@ -1289,7 +1391,7 @@ def update_output(tab, user_search_value, user_value, object_search_value, objec
             or 't-mon-tabs' in triggered_prop_id or 'lrs-data-version' in triggered_prop_id
             or 'activity-filter-hidden' in triggered_prop_id or 'created-charts' in triggered_prop_id
             or 'page-filters' in triggered_prop_id or 'dashboard-pages' in triggered_prop_id
-            or 'definition-filters' in triggered_prop_id):
+            or 'definition-filters' in triggered_prop_id or 'edit-mode' in triggered_prop_id):
         if len(TMonWidgets.xapiData) > 0:
             df = pd.json_normalize(TMonWidgets.xapiData)
             df = resolve_actor_name_column(df)
@@ -1366,7 +1468,7 @@ def update_output(tab, user_search_value, user_value, object_search_value, objec
                         "filters leave in the view. Add one with the + button below."
                     ),
                 ] + render_page_items(chart_df, active_charts, active_filters,
-                                      CREATE_TAB_KEY))
+                                      CREATE_TAB_KEY, edit_mode))
             elif tab_def is not None and page_def is not None:
                 tab_content = render_default_page(
                     tab_def, page_def, filtered_df, chart_df, selected)
@@ -1385,12 +1487,12 @@ def update_output(tab, user_search_value, user_value, object_search_value, objec
                         "filters leave in the view. Add one with the + button below."
                     ),
                 ] + render_page_items(chart_df, active_charts, active_filters,
-                                      CREATE_TAB_KEY))
+                                      CREATE_TAB_KEY, edit_mode))
             elif tab.startswith(PAGE_TAB_PREFIX):
                 page = page_by_key(dashboard_pages, tab)
                 name = str((page or {}).get('name') or I18n.t('page.unnamed'))
                 tab_content=html.Div([html.H3(name)] + render_page_items(
-                    chart_df, active_charts, active_filters, tab))
+                    chart_df, active_charts, active_filters, tab, edit_mode))
             else:
                 tab_content = html.Div()
             new_query_params = { 'tab': tab }
@@ -1868,6 +1970,14 @@ def item_modal_layout():
                 html.Span(I18n.t('visual.column'), style={'marginRight': '6px'}),
                 dcc.Dropdown(id='item-column', options=[]),
             ], style={'marginBottom': '10px'}),
+            html.Div(id='item-value-div', children=[
+                html.Span(I18n.t('visual.y'), style={'marginRight': '6px'}),
+                dcc.Dropdown(id='item-y', options=[], style={'marginRight': '8px'}),
+                dcc.Dropdown(id='item-aggregation',
+                             options=[{'label': label, 'value': name}
+                                      for name, label in AGGREGATION_LABELS.items()],
+                             value='count', clearable=False),
+            ], style={'display': 'none', 'marginBottom': '10px'}),
             # Target-based notebook figures offer the relevant activity ids
             # instead of a column. The callback shows this row only for them.
             html.Div(id='item-target-div', children=[
@@ -1883,6 +1993,30 @@ def item_modal_layout():
             dcc.Dropdown(id='item-chart-type', options=[
                 {'label': name, 'value': name} for name in CHART_TYPES
             ], value='bar', style={'display': 'none'}),
+            # User-authored wording lives on the graph spec, not in i18n. These
+            # inputs are shown for charts (creation and editing alike) and hidden
+            # for filters, which have no graph labels.
+            html.Div(id='item-labels-div', children=[
+                html.Div([
+                    html.Span(I18n.t('edit.label.title'),
+                              style={'marginRight': '6px'}),
+                    dcc.Input(id='item-title', type='text',
+                              placeholder=I18n.t('edit.label.title'),
+                              style={'width': '100%', 'marginBottom': '6px'}),
+                ]),
+                html.Div([
+                    html.Span(I18n.t('edit.label.x'), style={'marginRight': '6px'}),
+                    dcc.Input(id='item-xlabel', type='text',
+                              placeholder=I18n.t('edit.label.x'),
+                              style={'width': '100%', 'marginBottom': '6px'}),
+                ]),
+                html.Div([
+                    html.Span(I18n.t('edit.label.y'), style={'marginRight': '6px'}),
+                    dcc.Input(id='item-ylabel', type='text',
+                              placeholder=I18n.t('edit.label.y'),
+                              style={'width': '100%', 'marginBottom': '6px'}),
+                ]),
+            ], style={'display': 'none', 'marginBottom': '10px'}),
             html.Div([
                 html.Button(I18n.t('visual.add'), id='item-add', n_clicks=0,
                             style={'marginRight': '8px'}),
@@ -1913,6 +2047,24 @@ def config_confirm_layout():
     )
 
 
+def tab_remove_confirm_layout():
+    """The confirmation shown before a named tab with content is removed."""
+    return html.Div(
+        id='tab-remove-confirm-modal',
+        style={'display': 'none', 'position': 'fixed', 'top': '30%',
+               'left': '35%', 'width': '30%', 'background': LIGHT_CARD,
+               'border': f'2px solid {BRAND_PRIMARY}', 'borderRadius': '8px',
+               'padding': '20px', 'zIndex': 2000},
+        children=[
+            html.H3(I18n.t('edit.remove_tab'), style={'marginTop': 0}),
+            html.P(I18n.t('edit.confirm_tab')),
+            html.Button(I18n.t('edit.remove'), id='tab-remove-confirm',
+                        n_clicks=0, style={'marginRight': '8px'}),
+            html.Button(I18n.t('visual.cancel'), id='tab-remove-cancel', n_clicks=0),
+        ],
+    )
+
+
 TMonBody=html.Div([
     dcc.Location(id='url-t-mon', refresh=False), # Location component for URL handling
     # Written only when the header language changes; the reload picks up lng.
@@ -1920,6 +2072,11 @@ TMonBody=html.Div([
     html.Div(id='output-t-mon', style={'display': 'none'}, children=[
         dcc.Store(id='activity-filter-hidden', data=[]),
         dcc.Store(id='created-charts', data=[]),
+        # Edit mode and the item/tab being changed. They are transient UI state:
+        # only the mutations they enable are saved in an ADR 0015 configuration.
+        dcc.Store(id='edit-mode', data=False),
+        dcc.Store(id='item-edit-index', data=None),
+        dcc.Store(id='tab-remove-pending', data=None),
         # Named pages and the filters of the open page. The stores have one
         # writer (update_page_state) and many readers, so a chart and the row
         # of filters above it always describe the same view.
@@ -1966,6 +2123,8 @@ TMonBody=html.Div([
             # open one. These controls live in the header so they are reachable
             # whatever visualisation page is being viewed.
             html.Div([
+                html.Button(I18n.t('edit.mode.enable'), id='edit-toggle', n_clicks=0,
+                            style={'marginRight': '8px'}),
                 dcc.Input(id='page-name-input', type='text',
                           placeholder=I18n.t('page.name'),
                           style={'width': '200px', 'marginRight': '6px'}),
@@ -2026,6 +2185,15 @@ TMonBody=html.Div([
                         for value, label, icon in dashboard_tabs()
                     ],
                 ),
+                # The new-tab affordance stays beside the tabs and is always shown
+                # in edit mode, whatever tab is open. The toggle callback owns its
+                # style; it starts hidden so the first render is the view mode.
+                html.Button('+', id=NEW_TAB_ADD_ID, n_clicks=0,
+                            title=I18n.t('edit.new_tab'),
+                            style={'display': 'none', 'width': '100%',
+                                   'border': f'1px dashed {BRAND_PRIMARY}',
+                                   'background': LIGHT_CARD, 'color': BRAND_PRIMARY,
+                                   'fontSize': '18px', 'cursor': 'pointer'}),
             ], id='dashboard-tabs-wrapper', className='dashboard-tabs-full',
                 style={'display': 'flex', 'alignItems': 'flex-start',
                        'flex': '0 0 auto'}),
@@ -2067,6 +2235,7 @@ TMonBody=html.Div([
                 ], style={'margin': '10px 0'}),
                 item_modal_layout(),
                 config_confirm_layout(),
+                tab_remove_confirm_layout(),
                 html.Div([
                     html.Span(I18n.t('graphs.layout'),
                               style={'marginRight': '6px', 'fontSize': 12}),
@@ -2154,11 +2323,57 @@ _MODAL_HIDDEN = {'display': 'none'}
 
 @callback(
     Output('t-mon-tabs', 'children'),
-    Input('dashboard-pages', 'data'),
+    [Input('dashboard-pages', 'data'), Input('edit-mode', 'data')],
 )
-def render_dashboard_tabs(pages):
-    """Rebuild the tab bar when a named page is added, renamed or imported."""
-    return dashboard_tab_children(pages)
+def render_dashboard_tabs(pages, edit_mode):
+    """Rebuild the tab bar when a named page changes or edit mode is toggled."""
+    return dashboard_tab_children(pages, bool(edit_mode))
+
+
+@callback(
+    [
+        Output('edit-mode', 'data'),
+        Output('edit-toggle', 'children'),
+        Output(NEW_TAB_ADD_ID, 'style'),
+    ],
+    [Input('edit-toggle', 'n_clicks')],
+    [State('edit-mode', 'data')],
+)
+def toggle_edit_mode(n_clicks, enabled):
+    """Switch between the clean view and the layout that can be changed."""
+    on = bool(enabled)
+    triggered = dash.callback_context.triggered
+    if (triggered and 'edit-toggle' in triggered[0].get('prop_id', '')
+            and int(n_clicks or 0) > 0):
+        on = not on
+    style = {'display': 'block' if on else 'none', 'width': '100%',
+             'border': f'1px dashed {BRAND_PRIMARY}',
+             'background': LIGHT_CARD, 'color': BRAND_PRIMARY,
+             'fontSize': '18px', 'cursor': 'pointer'}
+    return on, I18n.t('edit.mode.disable' if on else 'edit.mode.enable'), style
+
+
+@callback(
+    [
+        Output('tab-remove-pending', 'data'),
+        Output('tab-remove-confirm-modal', 'style'),
+    ],
+    [
+        Input({'type': 'tab-remove', 'index': dash.dependencies.ALL}, 'n_clicks'),
+        Input('tab-remove-confirm', 'n_clicks'),
+        Input('tab-remove-cancel', 'n_clicks'),
+    ],
+    [State('tab-remove-pending', 'data')],
+)
+def handle_tab_remove_request(remove_clicks, confirm_n, cancel_n, pending):
+    """Ask before removing a tab; the single writer applies a confirmed removal."""
+    triggered = dash.callback_context.triggered
+    prop_id = triggered[0]['prop_id'] if triggered else ''
+    if prop_id.startswith('{') and 'tab-remove' in prop_id and any(remove_clicks or []):
+        return str(_pattern_index(prop_id, '.n_clicks') or ''), _MODAL_VISIBLE
+    if 'tab-remove-confirm' in prop_id or 'tab-remove-cancel' in prop_id:
+        return None, _MODAL_HIDDEN
+    raise PreventUpdate
 
 
 @callback(
@@ -2183,24 +2398,84 @@ def update_definition_filter_values(values, current):
 
 
 @callback(
-    [Output('item-modal', 'style'), Output('item-modal-target', 'data')],
+    [
+        Output('item-modal', 'style'),
+        Output('item-modal-target', 'data'),
+        Output('item-edit-index', 'data'),
+    ],
     [
         Input({'type': 'item-add-slot', 'index': dash.dependencies.ALL}, 'n_clicks'),
         Input('item-cancel', 'n_clicks'),
         Input('item-add', 'n_clicks'),
+        Input({'type': 'item-edit', 'index': dash.dependencies.ALL}, 'n_clicks'),
     ],
     [State('t-mon-tabs', 'value')],
 )
-def toggle_item_modal(slot_clicks, cancel_clicks, add_clicks, tab):
-    """Open the + popup for the page whose slot was clicked; close it after an add."""
+def toggle_item_modal(slot_clicks, cancel_clicks, add_clicks, edit_clicks, tab):
+    """Open the popup for a new or an existing item; close it after Add/Cancel."""
     triggered = dash.callback_context.triggered
     prop_id = triggered[0]['prop_id'] if triggered else ''
     if 'item-add-slot' in prop_id and any(slot_clicks or []):
         target = _pattern_index(prop_id, '.n_clicks')
-        return _MODAL_VISIBLE, str(target) if target else page_key(tab)
+        return _MODAL_VISIBLE, str(target) if target else page_key(tab), None
+    if prop_id.startswith('{') and 'item-edit' in prop_id and any(edit_clicks or []):
+        return _MODAL_VISIBLE, page_key(tab), {
+            'index': _pattern_index(prop_id, '.n_clicks')}
     if 'item-add' in prop_id or 'item-cancel' in prop_id:
-        return _MODAL_HIDDEN, no_update
+        return _MODAL_HIDDEN, no_update, None
     raise PreventUpdate
+
+
+@callback(
+    [
+        Output('item-kind', 'value'),
+        Output('item-column', 'value'),
+        Output('item-chart-type', 'value'),
+        Output('item-title', 'value'),
+        Output('item-xlabel', 'value'),
+        Output('item-ylabel', 'value'),
+        Output('item-y', 'value'),
+        Output('item-aggregation', 'value'),
+    ],
+    [Input('item-edit-index', 'data')],
+    [
+        State('item-modal-target', 'data'),
+        State('created-charts', 'data'),
+        State('page-filters', 'data'),
+        State('dashboard-pages', 'data'),
+    ],
+)
+def prefill_item_modal(edit_index, target, charts, filters, pages):
+    """Fill the popup with the graph and labels being edited, not with defaults."""
+    if not isinstance(edit_index, dict) or not edit_index.get('index'):
+        # A fresh add starts with empty wording, not with the labels of the last
+        # graph that happened to be edited.
+        return None, None, no_update, '', '', '', None, no_update
+    kind, separator, raw_index = str(edit_index['index']).partition(':')
+    if not separator:
+        raise PreventUpdate
+    try:
+        index = int(raw_index)
+    except ValueError:
+        raise PreventUpdate
+    target_charts, target_filters = items_for_key(
+        str(target or CREATE_TAB_KEY), pages, charts, filters)
+    if kind == 'filter':
+        if not (0 <= index < len(target_filters)):
+            raise PreventUpdate
+        spec = target_filters[index]
+        mode = spec.get('mode') if isinstance(spec, dict) else None
+        return ('filter-single' if mode == 'single' else 'filter-multi',
+                spec.get('column') if isinstance(spec, dict) else None,
+                no_update, '', '', '', None, no_update)
+    if not (0 <= index < len(target_charts)):
+        raise PreventUpdate
+    spec = target_charts[index] if isinstance(target_charts[index], dict) else {}
+    chart_type = spec.get('type') if spec.get('type') in CHART_TYPES else 'bar'
+    return (chart_type, spec.get('x'), chart_type,
+            spec.get('title') or '', spec.get('x_label') or '',
+            spec.get('y_label') or '', spec.get('y') or COUNT_LABEL,
+            spec.get('aggregation') or 'count')
 
 
 @callback(
@@ -2215,6 +2490,9 @@ def toggle_item_modal(slot_clicks, cancel_clicks, add_clicks, tab):
         Output('item-column-div', 'style'),
         Output('item-target-div', 'style'),
         Output('item-mode-div', 'style'),
+        Output('item-labels-div', 'style'),
+        Output('item-y', 'options'),
+        Output('item-value-div', 'style'),
     ],
     [
         Input('item-kind', 'value'),
@@ -2230,15 +2508,20 @@ def update_item_modal_fields(kind, lrs_version, panel_style):
     """
     if panel_style != {'display': 'block'} or not TMonWidgets.xapiData:
         return ([], [], [], None, [], None,
-                _MODAL_HIDDEN, _MODAL_HIDDEN, _MODAL_HIDDEN, _MODAL_HIDDEN)
+                _MODAL_HIDDEN, _MODAL_HIDDEN, _MODAL_HIDDEN, _MODAL_HIDDEN,
+                _MODAL_HIDDEN, [], _MODAL_HIDDEN)
     df = pd.json_normalize(TMonWidgets.xapiData)
     df = resolve_actor_name_column(df)
     columns = [{'label': column, 'value': column}
                for column in filterable_columns(df)]
     column_style = (_MODAL_VISIBLE if kind in CHART_TYPES
                     or kind in ('filter-multi', 'filter-single') else _MODAL_HIDDEN)
+    labels_style = _MODAL_VISIBLE if kind in CHART_TYPES else _MODAL_HIDDEN
+    y_options = ([{'label': COUNT_LABEL, 'value': COUNT_LABEL}] + [
+        {'label': column, 'value': column} for column in numeric_columns(df)])
     return ([], columns, [], None, [], None,
-            _MODAL_HIDDEN, column_style, _MODAL_HIDDEN, _MODAL_HIDDEN)
+            _MODAL_HIDDEN, column_style, _MODAL_HIDDEN, _MODAL_HIDDEN,
+            labels_style, y_options, labels_style)
 
 
 @callback(
