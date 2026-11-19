@@ -61,9 +61,10 @@ separate from `PageConfig.FORMAT_VERSION` in ADR 0015: this file defines what a
 dashboard *is* for a deployment, while an ADR 0015 document records the state a
 user has reached while using it.
 
-`TMonWidget` builds its tabs from this document. `DASHBOARD_TABS` and
-`BUILTIN_TAB_VISUALS` stop being the source of the default dashboard and remain
-only as compatibility fallbacks if the definition file cannot be read.
+`TMonWidget` builds its tabs from this document. `DASHBOARD_TABS` remains only as
+a compatibility list of tab ids and icons if the definition file cannot be read;
+the notebook-based `BUILTIN_TAB_VISUALS`, `VisualizationCatalog` and `src/vis/`
+Python package are removed, so no default figure is defined anywhere in code.
 
 ### Document structure
 
@@ -244,10 +245,11 @@ because they define which statements are in the loaded view.
 - ADR 0015 runtime configurations and shared links keep their current format
   and version. They store user state; the default dashboard definition is read
   from the deployed file.
-- Named visual ids from ADR 0013 and ADR 0016 remain valid for existing links and
-  user-created pages. They are no longer the source of default-tab titles.
-- The compatibility fallback keeps the old built-in tabs available if the
-  definition file is missing or invalid, but a clear startup warning is logged.
+- Named visual ids from ADR 0013 and ADR 0016 are retired with their Python
+  builders; only generic chart descriptions remain in links and user pages.
+- The compatibility fallback keeps the old tab ids available if the definition
+  file is missing or invalid, but a clear startup warning is logged. Those tabs
+  have no figures of their own: all default graphs come from the JSON file.
 - New tests must validate the example file, reject unknown graph types, confirm
   the mandatory `xapi_data` tab, confirm that no graph renderer calls `I18n.t()`
   for titles or axes, and cover general/page filter ordering and layout

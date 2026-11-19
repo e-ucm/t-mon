@@ -3,17 +3,19 @@ import importlib
 import pytest
 
 # Every module either application loads, either at import time or on demand: pages,
-# widgets, visualisations and their shared helpers. A module that first fails here
-# would fail the same way on the very server it ships on, so it fails the build too.
+# widgets and their shared helpers. A module that first fails here would fail the
+# same way on the very server it ships on, so it fails the build too.
 MODULES = [
     "LoadProcessStatements",
     "TMonApp",
     "TMonSimvaApp",
     "TMonWidgets.ActivityFilter",
     "TMonWidgets.ChartBuilder",
+    "TMonWidgets.DefaultDashboard",
+    "TMonWidgets.EmptyFigure",
+    "TMonWidgets.GraphTypes",
     "TMonWidgets.MultiSelector",
     "TMonWidgets.PageConfig",
-    "TMonWidgets.VisualizationCatalog",
     "TMonWidgets.SimvaBrowserWidget",
     "TMonWidgets.TMonWidget",
     "TMonWidgets.UploadWidget",
@@ -21,22 +23,6 @@ MODULES = [
     "SimvaBrowser.MinioAdminBrowser",
     "SimvaBrowser.MinioBrowser",
     "SimvaBrowser.SimvaBrowser",
-    "vis.xAPISGPlayersProgress",
-    "vis.xAPISGVideosSeenSkipped",
-    "vis.xAPISGnoDataToFillVisualization",
-    "vis.xAPISGVisualizationData",
-    "vis.xAPISGGamesStartedCompleted",
-    "vis.xAPISGCompletablesProgress",
-    "vis.xAPISGCompletablesScores",
-    "vis.xAPISGCompletablesTimes",
-    "vis.xAPISGCompletableProgressIncreaseDecrease",
-    "vis.xAPISGCorrectIncorrectPerPlayer",
-    "vis.xAPISGCorrectIncorrectPerQuestion",
-    "vis.xAPISGAlternativesSelectedQuestion",
-    "vis.xAPISGItemsInteracted",
-    "vis.xAPISGItemsActionTypeInteracted",
-    "vis.xAPISGAccessedAccessible",
-    "vis.xAPISGMenusSelected",
 ]
 
 

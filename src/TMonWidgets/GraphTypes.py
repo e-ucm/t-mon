@@ -13,7 +13,7 @@ import pandas as pd
 import plotly.express as px
 from dash import dash_table
 
-from vis import xAPISGnoDataToFillVisualization
+from TMonWidgets.EmptyFigure import no_data_figure
 
 # A code-defined measure rather than a column of the statements. It is a data
 # source, not a label; the definition still supplies the human wording.
@@ -41,7 +41,7 @@ class GraphType:
 
 def _placeholder():
     """The shared empty figure used everywhere in T-Mon when data is absent."""
-    return xAPISGnoDataToFillVisualization.noDataToFillVis(10)
+    return no_data_figure(10)
 
 
 def _summary(df, graph):

@@ -1,5 +1,4 @@
 import base64
-import hashlib
 import logging
 import dash
 from dash import html, dash_table, dcc, callback, Output, Input, State, no_update
@@ -40,10 +39,6 @@ from TMonWidgets.MultiSelector import (
     normalise_filter,
     searchValueFromMultiSelector,
 )
-from TMonWidgets.VisualizationCatalog import (
-    GROUPED_VISUALS, VISUALS, build_named_visual, describe_named, game_ids,
-    short_label, target_ids,
-)
 from TMonWidgets.PageConfig import (
     LAYOUT_KEYS,
     build_document,
@@ -54,7 +49,6 @@ from TMonWidgets.PageConfig import (
     delete_named,
     serialize as serialize_config,
 )
-from vis import xAPISGPlayersProgress, xAPISGVideosSeenSkipped
 from urllib.parse import unquote, urlencode
 from datetime import datetime
 import uuid
@@ -1157,11 +1151,6 @@ def update_page_state(page_add_n, page_rename_n, page_delete_n, item_add_n,
                 'type': chart_type, 'x': chart_x, 'y': chart_y,
                 'aggregation': chart_aggregation,
             })
-        elif kind in VISUALS:
-            spec = normalise_spec({
-                'visual': kind, 'game': item_game,
-                'target': item_target, 'mode': item_mode,
-            })
         elif kind in ('filter-multi', 'filter-single'):
             spec = normalise_filter({
                 'column': item_column,
@@ -1381,10 +1370,6 @@ def update_output(tab, user_search_value, user_value, object_search_value, objec
             elif tab_def is not None and page_def is not None:
                 tab_content = render_default_page(
                     tab_def, page_def, filtered_df, chart_df, selected)
-            elif tab in BUILTIN_TAB_VISUALS:
-                # Only reached when the definition file could not be read. The
-                # legacy catalogue renderer then supplies the built-in tabs.
-                tab_content = render_builtin_tab(chart_df, tab)
             elif tab == 'data_tab':
                 # Legacy link to the data tab when running on the fallback tabs.
                 tab_content = render_xapi_data_tab(
@@ -1418,8 +1403,7 @@ def update_output(tab, user_search_value, user_value, object_search_value, objec
                 # stays the short one it is without the parameter.
                 new_query_params[HIDDEN_ACTIVITIES_PARAM]=",".join(hidden_activities)
             if active_charts:
-                # The charts a link carries, in the order they are drawn. Both
-                # generic charts and named visualisations are encoded.
+                # The charts a link carries, in the order they are drawn.
                 encoded = [encode_spec(spec) for spec in active_charts]
                 described = [value for value in encoded if value]
                 if described:
@@ -1681,48 +1665,9 @@ DASHBOARD_TABS = [
     ('create_tab', 'Create', 'M12 5v14M5 12h14'),
 ]
 
-# One renderer serves every built-in tab. Each mapping names the visuals whose
-# source notebooks belong to the tab; their targets are discovered from the
-# loaded statements, so the same figure can also be created on a user page.
-# The first two headings keep their historical wording for existing links and
-# tests; the new ones are translation keys.
-BUILTIN_TAB_VISUALS = {
-    'progress_tab': {
-        'heading': 'Player Progress Throw Serious game',
-        'visuals': ('progress-line', 'progress-origin', 'progress-pie'),
-    },
-    'video_tab': {
-        'heading': 'Video Seen/Skipped',
-        'visuals': ('video-seen-skipped',),
-    },
-    'completable_tab': {
-        'heading_key': 'visual.group.completables',
-        'visuals': ('completable-progress-change', 'completable-progress',
-                    'completable-scores', 'completable-times'),
-    },
-    'alternative_tab': {
-        'heading_key': 'visual.group.alternatives',
-        'visuals': ('correct-incorrect-by-player', 'correct-incorrect-by-question',
-                    'alternatives-selected'),
-    },
-    'interaction_tab': {
-        'heading_key': 'visual.group.interactions',
-        'visuals': ('item-interaction-time', 'item-interaction-heatmap',
-                    'item-interaction-count', 'item-action-type-count'),
-    },
-    'accessible_tab': {
-        'heading_key': 'visual.group.accessibles',
-        'visuals': ('accessible-time', 'accessible-heatmap', 'accessible-count'),
-    },
-    'menu_tab': {
-        'heading_key': 'visual.group.menus',
-        'visuals': ('menu-selection-count',),
-    },
-}
-
-# The deployed JSON file is the source of the default dashboard. The two tables
-# above stay available only when that file is missing or invalid, so a bad
-# deployment is loud but does not leave the application without any tabs.
+# The deployed JSON file is the sole source of the default dashboard's graphs.
+# The tab ids above stay available only when that file is missing or invalid, so
+# a bad deployment is loud but does not leave the application without any tabs.
 try:
     DASHBOARD_DEFINITION = DefaultDashboard.load()
 except DefaultDashboard.DashboardDefinitionError as error:
@@ -1730,73 +1675,6 @@ except DefaultDashboard.DashboardDefinitionError as error:
         "Default dashboard definition could not be loaded; using compatibility tabs: %s",
         error)
     DASHBOARD_DEFINITION = None
-
-# A tab with many games or levels would become a wall of charts. Four targets
-# per tab keep it readable and match the twelve-graph ceiling of a user page.
-MAX_BUILTIN_TARGETS = 4
-MAX_BUILTIN_FIGURES = 12
-
-
-def builtin_graph_id(tab, visual, target):
-    """A stable Dash id for one built-in figure, unique across tabs and targets."""
-    digest = hashlib.sha1(
-        f"{tab}|{visual}|{target or ''}".encode('utf-8')).hexdigest()[:12]
-    return f"builtin-{visual}-{digest}"
-
-
-def _figure_has_no_data(figure):
-    """Whether a builder returned the shared empty figure rather than a chart."""
-    if figure is None or not getattr(figure, 'data', ()):
-        return True
-    return any(
-        'no data' in str(getattr(annotation, 'text', '')).lower()
-        for annotation in (getattr(figure.layout, 'annotations', ()) or ())
-    )
-
-
-def render_builtin_tab(df, tab):
-    """Draw a built-in tab from the catalogue, one titled figure per target."""
-    mapping = BUILTIN_TAB_VISUALS.get(tab)
-    if mapping is None:
-        return html.Div()
-    heading = (I18n.t(mapping['heading_key']) if 'heading_key' in mapping
-               else mapping['heading'])
-    content = [html.H3(heading)]
-    targets_by_kind = {}
-    shown = 0
-    for visual in mapping['visuals']:
-        entry = VISUALS[visual]
-        if entry.target_kind:
-            if entry.target_kind not in targets_by_kind:
-                targets_by_kind[entry.target_kind] = target_ids(df, entry.target_kind)
-            targets = targets_by_kind[entry.target_kind][:MAX_BUILTIN_TARGETS]
-        else:
-            targets = ['']
-        if not targets:
-            targets = ['']
-            empty_tab = True
-        else:
-            empty_tab = False
-        for target in targets:
-            spec = {'visual': visual, 'target': target}
-            if entry.needs_game:
-                spec['game'] = target
-            if entry.modes:
-                spec['mode'] = entry.modes[0]
-            figure = build_named_visual(df, spec)
-            content.append(html.H4(describe_named(spec)))
-            children = []
-            if empty_tab or _figure_has_no_data(figure):
-                children.append(html.Span(I18n.t('figure.no-data'),
-                                          style={'marginRight': '10px'}))
-            children.append(dcc.Graph(
-                id=builtin_graph_id(tab, visual, target), figure=figure))
-            content.append(html.Div(children))
-            shown += 1
-            if shown >= MAX_BUILTIN_FIGURES:
-                return html.Div(content)
-    return html.Div(content)
-
 
 def return_target(pathname):
     """The page one level up from ``pathname``, or None at the studies list."""
@@ -1950,26 +1828,20 @@ def dashboard_tab_label(label, icon_path):
 
 
 def visual_kind_options():
-    """Grouped choices of the + popup: named visuals, generic charts, filters."""
-    groups = [
-        {'label': I18n.t(group), 'options': [
-            {'label': VISUALS[identifier].label, 'value': identifier}
-            for identifier in identifiers
-        ]}
-        for group, identifiers in GROUPED_VISUALS
+    """Grouped choices of the + popup: generic charts and filters."""
+    return [
+        {
+            'label': I18n.t('visual.group.generic'),
+            'options': [{'label': name, 'value': name} for name in CHART_TYPES],
+        },
+        {
+            'label': I18n.t('visual.group.filters'),
+            'options': [
+                {'label': I18n.t('visual.mode.multi'), 'value': 'filter-multi'},
+                {'label': I18n.t('visual.mode.single'), 'value': 'filter-single'},
+            ],
+        },
     ]
-    groups.append({
-        'label': I18n.t('visual.group.generic'),
-        'options': [{'label': name, 'value': name} for name in CHART_TYPES],
-    })
-    groups.append({
-        'label': I18n.t('visual.group.filters'),
-        'options': [
-            {'label': I18n.t('visual.mode.multi'), 'value': 'filter-multi'},
-            {'label': I18n.t('visual.mode.single'), 'value': 'filter-single'},
-        ],
-    })
-    return groups
 
 
 def item_modal_layout():
@@ -2351,40 +2223,22 @@ def toggle_item_modal(slot_clicks, cancel_clicks, add_clicks, tab):
     ],
 )
 def update_item_modal_fields(kind, lrs_version, panel_style):
-    """Offer the games, targets, modes and columns the selected visual needs."""
+    """Offer the columns a generic chart or filter needs.
+
+    The game, target and mode pickers belonged to the removed named-visual
+    catalogue. They stay in the layout with stable ids but are never populated.
+    """
     if panel_style != {'display': 'block'} or not TMonWidgets.xapiData:
         return ([], [], [], None, [], None,
                 _MODAL_HIDDEN, _MODAL_HIDDEN, _MODAL_HIDDEN, _MODAL_HIDDEN)
     df = pd.json_normalize(TMonWidgets.xapiData)
     df = resolve_actor_name_column(df)
-    games = [{'label': game, 'value': game} for game in game_ids(df)]
     columns = [{'label': column, 'value': column}
                for column in filterable_columns(df)]
-
-    entry = VISUALS.get(kind)
-    targets = []
-    target_value = None
-    if entry is not None and entry.target_kind and not entry.needs_game:
-        identifiers = target_ids(df, entry.target_kind)
-        targets = [{'label': short_label(identifier), 'value': identifier}
-                   for identifier in identifiers]
-        target_value = identifiers[0] if identifiers else None
-
-    modes = []
-    mode_value = None
-    if entry is not None and entry.modes:
-        modes = [{'label': I18n.t(f'visual.mode.{mode}'), 'value': mode}
-                 for mode in entry.modes]
-        mode_value = entry.modes[0]
-
-    game_style = _MODAL_VISIBLE if entry is not None and entry.needs_game else _MODAL_HIDDEN
     column_style = (_MODAL_VISIBLE if kind in CHART_TYPES
                     or kind in ('filter-multi', 'filter-single') else _MODAL_HIDDEN)
-    target_style = (_MODAL_VISIBLE if targets or entry is not None and entry.target_kind
-                    and not entry.needs_game else _MODAL_HIDDEN)
-    mode_style = _MODAL_VISIBLE if entry is not None and entry.modes else _MODAL_HIDDEN
-    return (games, columns, targets, target_value, modes, mode_value,
-            game_style, column_style, target_style, mode_style)
+    return ([], columns, [], None, [], None,
+            _MODAL_HIDDEN, column_style, _MODAL_HIDDEN, _MODAL_HIDDEN)
 
 
 @callback(

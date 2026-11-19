@@ -1,17 +1,14 @@
-"""Tests for named visualisation pages, page filters and configuration files."""
-import inspect
+"""Tests for user pages, page filters and configuration documents."""
 import json
 from pathlib import Path
 
 import pandas as pd
-import plotly.graph_objects as go
 import pytest
 from dash import dcc, html
 
-import TMonWidgets
 from TMonWidgets import I18n, TMonWidget
 from TMonWidgets.ChartBuilder import (
-    COUNT_LABEL, build_chart, decode_specs, describe, encode_spec, normalise_spec,
+    COUNT_LABEL, CHART_TYPES, decode_specs, encode_spec, normalise_spec,
 )
 from TMonWidgets.MultiSelector import (
     apply_page_filters, decode_filters, encode_filters, filterable_columns,
@@ -21,10 +18,6 @@ from TMonWidgets.PageConfig import (
     FORMAT_VERSION, build_document, delete_named, import_config, list_saved,
     load_named, parse_document, save_named, serialize,
 )
-from TMonWidgets.VisualizationCatalog import (
-    GROUPED_VISUALS, VISUALS, build_named_visual, describe_named, game_ids,
-)
-from test_vis import ACCESSIBLE, ITEM, LEVEL, MENU, QUESTION, notebook_df
 
 
 GAME = "https://w3id.org/xapi/seriousgames/activities/game-1"
@@ -45,10 +38,13 @@ def progress_df():
             "http://adlnet.gov/expapi/verbs/completed",
         ],
         "result.response": ["0.2", "0.6", "0.1", "0.5", "1", "1"],
-        "result.extensions.x": ["0.2", "0.6", "0.1", "0.5", "1", "1"],
         "timestamp": pd.date_range("2026-01-01", periods=6, freq="min"),
         "object.definition.name": ["level"] * 6,
     })
+
+
+def generic_spec():
+    return normalise_spec({"type": "bar", "x": "actor.name"})
 
 
 def _walk(component):
@@ -61,57 +57,26 @@ def _walk(component):
         yield from _walk(children)
 
 
-# --- named visualisations -------------------------------------------------
+# --- generic chart descriptions -------------------------------------------
 
 
-def test_every_named_visual_builds_a_figure_from_progress_data():
-    df = progress_df()
-    assert game_ids(df) == [GAME]
-    for identifier in VISUALS:
-        figure = build_named_visual(df, {"visual": identifier, "game": GAME})
-        assert isinstance(figure, go.Figure)
+def test_generic_chart_survives_a_link_round_trip():
+    spec = generic_spec()
+    assert encode_spec(spec) == f"bar|actor.name|-|count"
+    assert decode_specs(encode_spec(spec)) == [spec]
 
 
-def test_named_visuals_are_order_independent_and_fall_back_to_a_game():
-    df = progress_df()
-    # No game named: the first serious game in the data is used.
-    figure = build_named_visual(df, {"visual": "progress-line"})
-    assert isinstance(figure, go.Figure)
-    # A second call with a different named visual must still work.
-    assert isinstance(
-        build_named_visual(df, {"visual": "progress-origin", "game": GAME}),
-        go.Figure,
-    )
-
-
-def test_named_visual_without_a_game_shows_the_placeholder():
-    figure = build_named_visual(pd.DataFrame(), {"visual": "progress-line"})
-    assert isinstance(figure, go.Figure)
-
-
-def test_video_visual_is_built_without_a_game():
-    df = progress_df()
-    assert isinstance(
-        build_named_visual(df, {"visual": "video-seen-skipped"}), go.Figure
-    )
-
-
-def test_named_spec_survives_a_link_round_trip():
-    spec = normalise_spec({"visual": "progress-pie", "game": GAME})
-    encoded = encode_spec(spec)
-    assert encoded.startswith("named|")
-    decoded = decode_specs(encoded)
+def test_old_named_links_are_read_as_ordinary_charts():
+    # A first field that is not a chart type falls back to a bar, so a stale
+    # link from the removed named-visual catalogue cannot break a shared URL.
+    decoded = decode_specs("named|progress-pie|-|-|-|count")
     assert len(decoded) == 1
-    assert decoded[0]["visual"] == "progress-pie"
-    assert decoded[0]["game"] == GAME
-    assert "Started and completed" in describe(decoded[0])
+    assert normalise_spec(decoded[0], progress_df())["type"] == "bar"
 
 
-def test_named_visual_config_keeps_its_game_without_data():
-    spec = normalise_spec({"visual": "progress-line", "game": GAME})
-    assert spec["game"] == GAME
-    assert describe_named(spec).endswith(GAME)
-    assert build_chart(None, spec) is not None
+def test_pie_needs_no_measured_value():
+    spec = normalise_spec({"type": "pie", "x": "actor.name"}, progress_df())
+    assert spec["y"] == COUNT_LABEL
 
 
 # --- page filters ---------------------------------------------------------
@@ -149,12 +114,12 @@ def test_invalid_filter_is_dropped():
 def test_config_round_trip_preserves_pages_charts_filters_and_layout(monkeypatch, tmp_path):
     monkeypatch.setenv("TMON_CONFIG_DIR", str(tmp_path))
     document = build_document(
-        charts=[normalise_spec({"visual": "progress-line", "game": GAME})],
+        charts=[generic_spec()],
         filters=[normalise_filter({"column": "actor.name", "mode": "single",
                                    "values": ["a"]})],
         pages=[{
             "id": "p1", "name": "My page",
-            "charts": [normalise_spec({"type": "bar", "x": "actor.name"})],
+            "charts": [generic_spec()],
             "filters": [],
         }],
         layout={"graph-layout": "grid", "graph-rows": 2},
@@ -225,10 +190,9 @@ def test_custom_tabs_are_built_from_named_pages():
 
 
 def test_page_rendering_has_filter_row_charts_and_one_add_slot():
-    df = progress_df()
     items = TMonWidget.render_page_items(
-        df,
-        [normalise_spec({"visual": "video-seen-skipped"})],
+        progress_df(),
+        [generic_spec()],
         [normalise_filter({"column": "actor.name", "mode": "single"})],
         "page:abc",
     )
@@ -240,7 +204,7 @@ def test_page_rendering_has_filter_row_charts_and_one_add_slot():
 
 def test_current_config_contains_everything_that_defines_a_page():
     document = TMonWidget.current_config(
-        [normalise_spec({"visual": "video-seen-skipped"})],
+        [generic_spec()],
         [normalise_filter({"column": "actor.name", "mode": "single"})],
         [{"id": "abc", "name": "My page", "charts": [], "filters": []}],
         {"graph-layout": "one"},
@@ -251,7 +215,8 @@ def test_current_config_contains_everything_that_defines_a_page():
     parsed = parse_document(serialize(document))
     assert parsed["active_tab"] == "page:abc"
     assert parsed["tabs"]["custom"][0]["name"] == "My page"
-    assert parsed["create_tab"]["charts"][0]["visual"] == "video-seen-skipped"
+    assert parsed["create_tab"]["charts"][0]["type"] == "bar"
+    assert parsed["create_tab"]["charts"][0]["x"] == "actor.name"
     assert parsed["create_tab"]["filters"][0]["column"] == "actor.name"
     assert parsed["layout"]["graph-layout"] == "one"
     assert parsed["header"]["actor.name"] == ["a"]
@@ -265,7 +230,7 @@ def test_page_state_loads_charts_and_filters_from_a_link(monkeypatch):
         triggered = [{'prop_id': 'output-t-mon.style'}]
 
     monkeypatch.setattr(dash, 'callback_context', Ctx())
-    spec = normalise_spec({'visual': 'video-seen-skipped'})
+    spec = generic_spec()
     filter_spec = normalise_filter({'column': 'actor.name', 'mode': 'single',
                                     'values': ['a']})
     pathname = 'tab=create_tab&chart=' + encode_spec(spec) + '&filter=' + encode_filters(
@@ -286,7 +251,7 @@ def test_page_state_replaces_and_appends_imported_pages(monkeypatch):
     existing = [{'id': 'one', 'name': 'First', 'charts': [], 'filters': []}]
     imported = [{
         'id': 'one', 'name': 'Imported',
-        'charts': [normalise_spec({'visual': 'video-seen-skipped'})],
+        'charts': [generic_spec()],
         'filters': [normalise_filter({'column': 'actor.name', 'mode': 'single'})],
     }]
     document = build_document(pages=imported)
@@ -315,7 +280,7 @@ def test_dashboard_layout_exposes_page_and_config_controls():
     ids = [getattr(child, "id", None) for child in _walk(TMonWidget.TMonBody)]
     for expected in (
         "dashboard-pages", "page-filters", "page-name-input", "page-add",
-        "page-rename", "item-modal", "item-kind", "item-game", "item-column",
+        "page-rename", "item-modal", "item-kind", "item-column",
         "item-add", "item-cancel", "config-name-input", "config-save",
         "config-load", "config-delete", "config-export", "config-import",
         "config-confirm-modal", "config-confirm-replace", "config-confirm-append",
@@ -341,212 +306,17 @@ def test_new_labels_exist_in_every_language():
             assert I18n.translate(key, language) != key
 
 
-# --- ADR 0016: full notebook catalogue -------------------------------------
-
-
-EXPECTED_VISUAL_IDS = {
-    "progress-line", "progress-origin", "progress-pie", "video-seen-skipped",
-    "completable-progress-change", "completable-progress", "completable-scores",
-    "completable-times", "correct-incorrect-by-player",
-    "correct-incorrect-by-question", "alternatives-selected",
-    "item-interaction-time", "item-interaction-heatmap", "item-interaction-count",
-    "item-action-type-count", "accessible-time", "accessible-heatmap",
-    "accessible-count", "menu-selection-count",
-}
-
-
-def test_catalogue_covers_every_notebook_visual_once():
-    assert set(VISUALS) == EXPECTED_VISUAL_IDS
-    assert len(VISUALS) == 19
-    grouped = [identifier for _, identifiers in GROUPED_VISUALS
-               for identifier in identifiers]
-    assert len(grouped) == len(set(grouped)) == len(VISUALS)
-    assert set(grouped) == set(VISUALS)
-    group_keys = [key for key, _ in GROUPED_VISUALS]
-    assert group_keys[:2] == ["visual.group.progress", "visual.group.videos"]
-    assert set(group_keys[2:]) == {
-        "visual.group.completables", "visual.group.alternatives",
-        "visual.group.interactions", "visual.group.accessibles",
-        "visual.group.menus",
-    }
-
-
-def test_popup_offers_every_catalogue_visual():
+def test_popup_offers_only_generic_charts_and_filters():
     values = []
     for group in TMonWidget.visual_kind_options():
         values.extend(option["value"] for option in group["options"])
-    catalogue_values = [value for value in values if value in VISUALS]
-    assert len(catalogue_values) == len(VISUALS)
-    assert set(catalogue_values) == set(VISUALS)
-
-
-def test_builtin_tabs_map_to_the_whole_catalogue_without_placeholders():
-    expected = {
-        "progress_tab": {"progress-line", "progress-origin", "progress-pie"},
-        "video_tab": {"video-seen-skipped"},
-        "completable_tab": {"completable-progress-change", "completable-progress",
-                            "completable-scores", "completable-times"},
-        "alternative_tab": {"correct-incorrect-by-player",
-                            "correct-incorrect-by-question", "alternatives-selected"},
-        "interaction_tab": {"item-interaction-time", "item-interaction-heatmap",
-                            "item-interaction-count", "item-action-type-count"},
-        "accessible_tab": {"accessible-time", "accessible-heatmap",
-                           "accessible-count"},
-        "menu_tab": {"menu-selection-count"},
-    }
-    mapping = TMonWidget.BUILTIN_TAB_VISUALS
-    assert set(mapping) == set(expected)
-    for tab, visuals in expected.items():
-        assert set(mapping[tab]["visuals"]) == visuals
-    builtin = {visual for item in mapping.values() for visual in item["visuals"]}
-    assert builtin == set(VISUALS)
-    source = inspect.getsource(TMonWidget)
-    for number in range(3, 8):
-        assert f"Tab content {number}" not in source
-
-
-def test_builtin_tabs_render_catalogue_figures_with_unique_ids():
-    df = notebook_df()
-    for tab in TMonWidget.BUILTIN_TAB_VISUALS:
-        content = TMonWidget.render_builtin_tab(df, tab)
-        graphs = [child for child in _walk(content) if isinstance(child, dcc.Graph)]
-        assert graphs, tab
-        assert all(str(graph.id).startswith("builtin-") for graph in graphs)
-        ids = [graph.id for graph in graphs]
-        assert len(ids) == len(set(ids))
-        assert any(graph.figure.data for graph in graphs), tab
-        for graph in graphs:
-            for trace in graph.figure.data:
-                values = getattr(trace, "y", None)
-                if values is not None:
-                    assert list(values) != [5, 10, 6]
-
-
-def test_builtin_tabs_show_no_data_instead_of_fabricated_charts():
-    for tab in ("completable_tab", "alternative_tab", "interaction_tab",
-                "accessible_tab", "menu_tab"):
-        content = TMonWidget.render_builtin_tab(pd.DataFrame(), tab)
-        texts = [child for child in _walk(content) if isinstance(child, str)]
-        assert I18n.t("figure.no-data") in texts, tab
-        graphs = [child for child in _walk(content) if isinstance(child, dcc.Graph)]
-        assert graphs and all(not graph.figure.data for graph in graphs)
-
-
-def test_builtin_tabs_cap_the_number_of_figures():
-    rows = []
-    for index in range(6):
-        identifier = f"game-{index}"
-        for verb in ("initialized", "completed"):
-            rows.append({
-                "actor.name": "p1",
-                "verb.id": f"http://adlnet.gov/expapi/verbs/{verb}",
-                "object.id": identifier,
-                "object.definition.type": SERIOUS,
-                "timestamp": f"2026-01-01T00:{index:02d}:00Z",
-            })
-    df = pd.DataFrame(rows)
-    content = TMonWidget.render_builtin_tab(df, "progress_tab")
-    graphs = [child for child in _walk(content) if isinstance(child, dcc.Graph)]
-    assert len(graphs) == TMonWidget.MAX_BUILTIN_FIGURES
-
-
-def test_target_and_mode_survive_a_link_and_a_config_document():
-    df = notebook_df()
-    spec = normalise_spec({
-        "visual": "completable-progress-change",
-        "target": LEVEL,
-        "mode": "relative",
-    }, df)
-    assert spec["target"] == LEVEL
-    encoded = encode_spec(spec)
-    assert encoded == f"named|completable-progress-change|-|{LEVEL}|relative|count"
-    decoded = decode_specs(encoded)[0]
-    assert decoded["target"] == LEVEL
-    assert decoded["mode"] == "relative"
-    assert normalise_spec(decoded, df) == spec
-    document = parse_document(serialize(build_document(charts=[spec])))
-    assert document["create_tab"]["charts"][0] == spec
-
-
-def test_old_named_links_and_generic_links_still_decode():
-    old_four = decode_specs(f"named|progress-pie|{GAME}|-")[0]
-    old_six = decode_specs(f"named|progress-pie|{GAME}|-|-|count")[0]
-    for spec in (old_four, old_six):
-        assert spec["visual"] == "progress-pie"
-        assert spec["game"] == GAME
-        assert spec["target"] == ""
-        assert spec["mode"] == ""
-    assert decode_specs("bar|actor.name|-|count") == [{
-        "type": "bar", "x": "actor.name", "y": COUNT_LABEL,
-        "aggregation": "count",
-    }]
-
-
-def test_short_legacy_target_resolves_to_the_full_id():
-    spec = normalise_spec({
-        "visual": "correct-incorrect-by-player", "target": "question-1",
-    }, notebook_df())
-    assert spec["target"] == QUESTION
-
-
-def test_popup_shows_targets_and_modes_for_notebook_figures(monkeypatch):
-    monkeypatch.setattr(TMonWidgets, "xapiData", notebook_df().to_dict("records"))
-    result = TMonWidget.update_item_modal_fields(
-        "completable-progress-change", 1, {"display": "block"})
-    games, columns, targets, target_value, modes, mode_value, game_style, \
-        column_style, target_style, mode_style = result
-    assert any(option["value"] == LEVEL for option in targets)
-    assert target_value == LEVEL
-    assert [option["value"] for option in modes] == ["absolute", "relative"]
-    assert mode_value == "absolute"
-    assert target_style == {"display": "block"}
-    assert mode_style == {"display": "block"}
-    assert game_style == {"display": "none"}
-    assert column_style == {"display": "none"}
-
-    progress = TMonWidget.update_item_modal_fields(
-        "progress-line", 1, {"display": "block"})
-    assert progress[6] == {"display": "block"}
-    assert progress[8] == {"display": "none"}
-    assert progress[9] == {"display": "none"}
-
-    generic = TMonWidget.update_item_modal_fields(
-        "bar", 1, {"display": "block"})
-    assert generic[7] == {"display": "block"}
-    assert generic[8] == {"display": "none"}
-    assert generic[9] == {"display": "none"}
-
-
-def test_page_state_writes_target_and_mode_to_the_chart_store(monkeypatch):
-    import dash
-
-    class Ctx:
-        triggered = [{"prop_id": "item-add.n_clicks"}]
-
-    monkeypatch.setattr(dash, "callback_context", Ctx())
-    result = TMonWidget.update_page_state(
-        page_add_n=None, page_rename_n=None, page_delete_n=None, item_add_n=1,
-        item_remove_n=None, filter_values=None, chart_add_n=None,
-        chart_remove_n=None, panel_style=None, config_command=None,
-        tab="create_tab", target="create_tab", page_name=None,
-        item_kind="completable-progress-change", item_chart_type=None,
-        item_column=None, item_game=None, item_target=LEVEL, item_mode="relative",
-        chart_type=None, chart_x=None, chart_y=None, chart_aggregation=None,
-        pages=[], charts=[], filters=[], pathname=None,
-    )
-    charts = result[1]
-    assert len(charts) == 1
-    assert charts[0]["visual"] == "completable-progress-change"
-    assert charts[0]["target"] == LEVEL
-    assert charts[0]["mode"] == "relative"
+    assert set(values) == set(CHART_TYPES) | {'filter-multi', 'filter-single'}
 
 
 def test_notebook_labels_exist_in_every_language():
     locales = Path(I18n.__file__).parent.parent / "locales"
     english = json.loads((locales / "en.json").read_text(encoding="utf-8"))
-    keys = [entry.label_key for entry in VISUALS.values()]
-    keys += [key for key, _ in GROUPED_VISUALS]
-    keys += [
+    keys = [
         "visual.group.generic", "visual.group.filters", "visual.target",
         "visual.option", "visual.mode.absolute", "visual.mode.relative",
     ]

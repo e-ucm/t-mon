@@ -235,14 +235,11 @@ def test_dashboard_tabs_are_vertical_with_svg_icons():
     assert tabs.vertical is True
     assert tabs.value is None
     tab_ids = [tab.id for tab in tabs.children]
-    # ADR 0017: the deployed definition supplies the tabs, with xapi_data always
-    # last. The legacy ids survive in the file, except the data tab that was
-    # replaced by the reserved xapi_data one.
+    # ADR 0017: the deployed JSON definition is the sole source of default tabs.
     expected = {
-        f'dashboard-tab-{value}' for value, _, _ in TMonWidget.DASHBOARD_TABS
-        if value != 'data_tab'
+        f'dashboard-tab-{tab["id"]}'
+        for tab in TMonWidget.DASHBOARD_DEFINITION['tabs']
     }
-    expected.add('dashboard-tab-xapi_data')
     assert set(tab_ids) == expected
     assert tab_ids[-1] == 'dashboard-tab-xapi_data'
     assert 'dashboard-tab-home_tab' in tab_ids

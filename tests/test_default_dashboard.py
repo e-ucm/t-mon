@@ -2,6 +2,7 @@
 import copy
 import inspect
 import json
+from pathlib import Path
 
 import dash
 import pandas as pd
@@ -192,6 +193,18 @@ def test_renderers_do_not_look_up_translation_keys():
         assert "I18n.t" not in source
         assert "figure.title." not in source
         assert "figure.axis." not in source
+
+
+def test_deprecated_figure_wording_is_retired():
+    """ADR 0017 moves figure titles and axis labels into the definition."""
+    root = Path(I18n.__file__).resolve().parent.parent
+    for catalogue in sorted((root / "locales").glob("*.json")):
+        data = json.loads(catalogue.read_text(encoding="utf-8"))
+        retired = [key for key in data
+                   if key.startswith(("figure.title.", "figure.axis."))]
+        assert not retired, f"{catalogue.name} still defines {retired}"
+    # Default graphs live only in the JSON definition, not in Python builders.
+    assert not (root / "vis").exists()
 
 
 # --- graph types -----------------------------------------------------------
