@@ -130,5 +130,6 @@
   "visual.target": "Target",
   "visual.option": "Mode",
   "visual.mode.absolute": "Absolute time",
-  "visual.mode.relative": "Relative time"
+  "visual.mode.relative": "Relative time",
+  "edit.visualisation": "Edit visualisation"
 }

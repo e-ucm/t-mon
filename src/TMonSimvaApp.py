@@ -96,7 +96,7 @@ def switch_mode(tab, pathname, dashboard_style):
     # the visible state has to keep it a flex row.
     visible_tabs = {'display': 'flex', 'flexDirection': 'row'}
     hidden = {'display': 'none'}
-    if dashboard_style == {'display': 'block'}:
+    if isinstance(dashboard_style, dict) and dashboard_style.get('display') == 'block':
         # The dashboard has its own header, sidebar and content; the SIMVA
         # browser and the mode tabs are no longer part of the page.
         return hidden, hidden, hidden
@@ -202,6 +202,14 @@ def tmon_config_delete(name):
         return jsonify({'error': str(error)}), 400
     return jsonify({'deleted': removed})
 
+
+
+app.clientside_callback(
+    "function(n){ if(n){ window.open(window.location.href, '_blank'); } return n || 0; }",
+    Output('new-tab-opened', 'data'),
+    Input('open-dashboard-new-tab', 'n_clicks'),
+    prevent_initial_call=True,
+)
 
 if __name__ == '__main__':
     # Construct the URL

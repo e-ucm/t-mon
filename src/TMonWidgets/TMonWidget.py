@@ -49,6 +49,7 @@ from TMonWidgets.PageConfig import (
     delete_named,
     serialize as serialize_config,
 )
+from TMonWidgets.UserRoles import is_admin
 from urllib.parse import unquote, urlencode
 from datetime import datetime
 import uuid
@@ -162,8 +163,14 @@ def render_definition_filter_controls(filters, df):
     }) if controls else html.Div()
 
 
-def render_default_page(tab, page, df, chart_df, selected):
-    """Draw a tab of the default definition from its own data and wording."""
+def render_default_page(tab, page, df, chart_df, selected, edit_mode=False,
+                        admin=False, overrides=None):
+    """Draw a tab of the default definition from its own data and wording.
+
+    An administrator in edit mode gets an Edit control on every graph the chart
+    builder can redraw. A saved override replaces the figure but never the
+    deployed JSON, so other users keep seeing the definition as written.
+    """
     children = [html.H3(tab['title'])]
     if tab.get('markdown'):
         children.append(dcc.Markdown(tab['markdown'], dangerously_allow_html=False))
@@ -172,10 +179,30 @@ def render_default_page(tab, page, df, chart_df, selected):
     children.append(render_definition_filter_controls(
         definition_filters(tab, page, selected), df))
     for graph in page.get('graphs') or []:
-        children.append(dcc.Graph(
+        key = default_graph_key(tab['id'], page['id'], graph['id'])
+        override = (overrides or {}).get(key)
+        figure = (build_chart(chart_df, override) if override
+                  else GraphTypes.render_graph(chart_df, graph))
+        node = dcc.Graph(
             id=f"default-{tab['id']}-{page['id']}-{graph['id']}",
-            figure=GraphTypes.render_graph(chart_df, graph),
-        ))
+            figure=figure,
+        )
+        if edit_mode and admin and default_graph_spec(graph) is not None:
+            label = describe(override) if override else (
+                graph.get('title') or str(graph.get('id')))
+            node = html.Div([
+                html.Div([
+                    html.Span(label, style={'fontFamily': INTER_FONT,
+                                            'fontSize': 13,
+                                            'marginRight': '10px'}),
+                    html.Button(I18n.t('edit.item'),
+                                id={'type': 'default-graph-edit', 'index': key},
+                                n_clicks=0, title=I18n.t('edit.graph'),
+                                style=edit_button_style(True, margin='0 0 5px 0')),
+                ]),
+                node,
+            ])
+        children.append(node)
     return html.Div(children)
 
 
@@ -623,11 +650,13 @@ def hide_home_tab(pathname):
     [
         Output('t-mon-tabs', 'value'),
         Output("users-multi-dynamic-dropdown", "value"),
-        Output("object-multi-dynamic-dropdown", "value")
+        Output("object-multi-dynamic-dropdown", "value"),
+        Output('config-command', 'data', allow_duplicate=True),
     ],
     Input('output-t-mon', 'style'),
     Input('config-command', 'data'),
-    [State('url-t-mon', 'pathname'), State('url', 'pathname')]
+    [State('url-t-mon', 'pathname'), State('url', 'pathname')],
+    prevent_initial_call=True,
 )
 def update_tab(style, config_command, stateUrl, app_path=None):
     triggered_prop_id = (dash.callback_context.triggered or [{}])[0].get('prop_id', '')
@@ -638,6 +667,7 @@ def update_tab(style, config_command, stateUrl, app_path=None):
             config.get('active_tab') or None,
             list(header.get('actor.name') or []),
             list(header.get('object.id') or []),
+            no_update,
         )
     if style == {"display":"block"} :
         print(f"StateUrl: {stateUrl}")
@@ -649,27 +679,56 @@ def update_tab(style, config_command, stateUrl, app_path=None):
         if index != -1:
             urlValues = stateUrl[index + len("/dashboard/"):]
             dashboard_data=True
+        config_command_value = no_update
         if dashboard_data and urlValues:
-            new_tab=get_value_from_url(urlValues, "tab=")
-            users=get_value_from_url(urlValues, "actor.name=")
-            object=get_value_from_url(urlValues, "object.id=")
+            users = get_value_from_url(urlValues, "actor.name=")
+            obj = get_value_from_url(urlValues, "object.id=")
+            if urlValues == "default":
+                # The default dashboard keeps its tab selected even for a session,
+                # so `/dashboard/default` opens the default dashboard rather than
+                # the session's no-tab view.
+                new_tab = get_value_from_url(urlValues, "tab=") or "home_tab"
+            elif get_value_from_url(urlValues, "tab=") is not None:
+                new_tab = get_value_from_url(urlValues, "tab=")
+            else:
+                # Any other segment names a saved dashboard: load it and apply it.
+                name = urlValues.split("&", 1)[0].strip()
+                try:
+                    parsed = load_named(name)
+                except (ValueError, OSError):
+                    parsed = None
+                if isinstance(parsed, dict):
+                    new_tab = parsed.get("active_tab") or "home_tab"
+                    header = parsed.get("header") or {}
+                    if users is None:
+                        users = ",".join(header.get("actor.name") or [])
+                    if obj is None:
+                        obj = ",".join(header.get("object.id") or [])
+                    config_command_value = {
+                        "action": "replace", "config": parsed,
+                        "nonce": uuid.uuid4().hex,
+                    }
+                else:
+                    new_tab = "home_tab"
         else:
-            new_tab="home_tab"
-            users=None
-            object=None
-        # A session dashboard opens with no tab selected: the page shows the
-        # simlet/session names first and lets the user pick a visualisation.
-        if app_path and '/session/' in app_path and '/dashboard' in app_path:
+            new_tab = "home_tab"
+            users = None
+            obj = None
+        # A session dashboard with no dashboard name in the URL opens with no
+        # tab selected: the page shows the simlet/session names first. An
+        # explicit name (`default` or a saved dashboard) opens that dashboard.
+        if (app_path and '/session/' in app_path and '/dashboard' in app_path
+                and (not urlValues or urlValues == "")):
             tab = None
             user_value = []
             object_value = []
             print(f"Session dashboard: no tab selected ({app_path})")
-            return tab, user_value, object_value
-        tab=new_tab
-        user_value=users.split(",") if users else []
-        object_value=object.split(",") if object else []
+            return tab, user_value, object_value, no_update
+        tab = new_tab
+        user_value = users.split(",") if users else []
+        object_value = obj.split(",") if obj else []
         print(f"Tab: {tab} - URL : {urlValues} - user_value : {user_value} - object_value: {object_value}")
-        return tab, user_value, object_value
+        return tab, user_value, object_value, config_command_value
     else:
         raise PreventUpdate
 
@@ -761,6 +820,70 @@ def items_for_key(key, pages, charts, filters):
     return list(charts or []), list(filters or [])
 
 
+def default_graph_key(tab_id, page_id, graph_id):
+    """A stable key for one graph defined by the default dashboard."""
+    return f"{tab_id}:{page_id}:{graph_id}"
+
+
+def default_graph_spec(graph):
+    """
+    Turn a default-dashboard graph definition into a chart spec.
+
+    Only the types the chart builder can draw are editable through the popup, so
+    a heatmap or a table comes back as None and keeps its definition untouched.
+    """
+    if not isinstance(graph, dict) or graph.get("type") not in CHART_TYPES:
+        return None
+    x = (graph.get("x") or {}).get("data")
+    if not x:
+        return None
+    y = (graph.get("y") or {}).get("data")
+    if not y or y == "count":
+        y = COUNT_LABEL
+    spec = {
+        "type": graph["type"],
+        "x": x,
+        "y": y,
+        "aggregation": (graph.get("aggregation")
+                        or ("count" if y == COUNT_LABEL else "mean")),
+    }
+    for key, value in (("title", graph.get("title")),
+                       ("x_label", (graph.get("x") or {}).get("label")),
+                       ("y_label", (graph.get("y") or {}).get("label"))):
+        if value:
+            spec[key] = str(value)
+    return normalise_spec(spec)
+
+
+def find_default_graph(key, dashboard=None):
+    """Return the graph definition a ``tab:page:graph`` key names."""
+    if dashboard is None:
+        dashboard = DASHBOARD_DEFINITION
+    if dashboard is None:
+        try:
+            dashboard = DefaultDashboard.load()
+        except Exception:  # noqa: BLE001 - a missing definition is not an edit
+            return None
+    tab_id, _, rest = str(key or "").partition(":")
+    page_id, _, graph_id = rest.partition(":")
+    for tab in (dashboard or {}).get("tabs") or []:
+        if str(tab.get("id")) != tab_id:
+            continue
+        for page in tab.get("pages") or []:
+            if str(page.get("id")) != page_id:
+                continue
+            for graph in page.get("graphs") or []:
+                if str(graph.get("id")) == graph_id:
+                    return graph
+    return None
+
+
+def _default_edit_key(edit_index):
+    """The graph key an edit is for, or None when it edits a created chart."""
+    raw = str((edit_index or {}).get("index") or "")
+    return raw[len("default:"):] if raw.startswith("default:") else None
+
+
 def render_filter_controls(filters, target, df, edit_mode=True):
     """The row of page filters above a page's visualisations."""
     controls = []
@@ -791,6 +914,20 @@ def render_filter_controls(filters, target, df, edit_mode=True):
                         n_clicks=0, title=I18n.t('edit.filter'),
                         style=edit_button_style(edit_mode)),
         ], style={'display': 'inline-block', 'marginBottom': '8px'}))
+    if edit_mode:
+        controls = list(controls) + [html.Button('+', id={'type': 'item-add-slot',
+                                                          'index': target},
+                                                  n_clicks=0,
+                                                  title=I18n.t('visual.open'),
+                                                  style={'width': '32px',
+                                                         'height': '32px',
+                                                         'fontSize': '18px',
+                                                         'border': f'2px dashed {BRAND_PRIMARY}',
+                                                         'background': LIGHT_CARD,
+                                                         'color': BRAND_PRIMARY,
+                                                         'cursor': 'pointer',
+                                                         'borderRadius': '6px',
+                                                         'display': 'block'})]
     return html.Div(controls, style={
         'display': 'flex', 'flexWrap': 'wrap', 'alignItems': 'center',
         'gap': '8px', 'marginBottom': '10px',
@@ -876,11 +1013,13 @@ def dashboard_tab_children(pages, edit_mode=False):
     return tabs
 
 
-def current_config(charts, filters, pages, layout, header, hidden, tab):
+def current_config(charts, filters, pages, layout, header, hidden, tab,
+                   default_overrides=None):
     """The document exported or saved from the dashboard's current state."""
     return build_document(
         charts=charts, filters=filters, pages=pages, layout=layout,
         header=header, hidden=hidden, active_tab=tab,
+        default_graph_overrides=default_overrides,
     )
 
 
@@ -1092,13 +1231,16 @@ def _pattern_index(prop_id, suffix):
 )
 def update_page_state(page_add_n, page_rename_n, page_delete_n, item_add_n,
                       item_remove_n, filter_values, chart_add_n, chart_remove_n,
-                      panel_style, config_command, tab, target, page_name,
+                      panel_style, config_command,
+                      # Dash passes every Input before every State. These three
+                      # belong here, with the other Inputs, not after the States.
+                      tab_remove_clicks, confirm_remove_n, new_tab_n,
+                      tab, target, page_name,
                       item_kind, item_chart_type, item_column, item_game,
                       item_target, item_mode,
                       chart_type, chart_x, chart_y, chart_aggregation,
                       pages, charts, filters, pathname,
-                      tab_remove_clicks=None, confirm_remove_n=None,
-                      new_tab_n=None, pending_remove=None, item_edit_index=None,
+                      pending_remove=None, item_edit_index=None,
                       item_title=None, item_xlabel=None, item_ylabel=None,
                       item_y=None, item_aggregation=None):
     """
@@ -1217,8 +1359,11 @@ def update_page_state(page_add_n, page_rename_n, page_delete_n, item_add_n,
         index = _pattern_index(triggered_prop_id, '.n_clicks')
         if isinstance(index, int) and 0 <= index < len(target_charts):
             target_charts = target_charts[:index] + target_charts[index + 1:]
-    elif ('item-add' in triggered_prop_id and int(item_add_n or 0) > 0
-          or 'chart-add' in triggered_prop_id and int(chart_add_n or 0) > 0):
+    elif (('item-add' in triggered_prop_id and int(item_add_n or 0) > 0
+           or 'chart-add' in triggered_prop_id and int(chart_add_n or 0) > 0)
+          and not _default_edit_key(item_edit_index)):
+        # A default graph is edited into the override store, not into the page's
+        # charts, so this writer leaves the stores exactly as they were.
         kind = item_kind or 'generic'
         labels = {'title': item_title, 'x_label': item_xlabel,
                   'y_label': item_ylabel}
@@ -1359,6 +1504,9 @@ def filterObjectIdDependingTab(df, value, tab):
     Input('definition-filters', 'data'),
     # Entering or leaving edit mode changes which controls the page renders.
     Input('edit-mode', 'data'),
+    # An administrator's edits of the default graphs, applied instead of the
+    # definition's own figure without rewriting the deployed JSON file.
+    Input('default-graph-overrides', 'data'),
 )
 def update_output(tab, user_search_value, user_value, object_search_value, object_value,
                   lrs_data_version=None, hidden_activities=None, created_charts=None,
@@ -1366,7 +1514,7 @@ def update_output(tab, user_search_value, user_value, object_search_value, objec
                   app_path=None, graph_layout='one', graph_rows=3,
                   graph_columns=2, graph_page=1, split_x=2, split_y=2,
                   page_filters=None, dashboard_pages=None, definition_filter_values=None,
-                  edit_mode=False):
+                  edit_mode=False, default_overrides=None):
     ctx = dash.callback_context
     triggered=ctx.triggered
     triggered_prop_id = ctx.triggered[0]['prop_id']
@@ -1391,7 +1539,8 @@ def update_output(tab, user_search_value, user_value, object_search_value, objec
             or 't-mon-tabs' in triggered_prop_id or 'lrs-data-version' in triggered_prop_id
             or 'activity-filter-hidden' in triggered_prop_id or 'created-charts' in triggered_prop_id
             or 'page-filters' in triggered_prop_id or 'dashboard-pages' in triggered_prop_id
-            or 'definition-filters' in triggered_prop_id or 'edit-mode' in triggered_prop_id):
+            or 'definition-filters' in triggered_prop_id or 'edit-mode' in triggered_prop_id
+            or 'default-graph-overrides' in triggered_prop_id):
         if len(TMonWidgets.xapiData) > 0:
             df = pd.json_normalize(TMonWidgets.xapiData)
             df = resolve_actor_name_column(df)
@@ -1471,7 +1620,9 @@ def update_output(tab, user_search_value, user_value, object_search_value, objec
                                       CREATE_TAB_KEY, edit_mode))
             elif tab_def is not None and page_def is not None:
                 tab_content = render_default_page(
-                    tab_def, page_def, filtered_df, chart_df, selected)
+                    tab_def, page_def, filtered_df, chart_df, selected,
+                    edit_mode=edit_mode, admin=is_admin(),
+                    overrides=default_overrides)
             elif tab == 'data_tab':
                 # Legacy link to the data tab when running on the fallback tabs.
                 tab_content = render_xapi_data_tab(
@@ -1534,7 +1685,15 @@ def update_output(tab, user_search_value, user_value, object_search_value, objec
             tab_content = arrange_graphs(
                 tab_content, graph_layout, graph_rows, graph_columns, graph_page,
                 split_x, split_y)
-            return (publish_url(new_query_string), user_unique_options,
+            # Changing tabs in edit mode must not churn the URL: publishing a new
+            # query string here would re-run the URL sync and drop the tab the
+            # user just chose, which made the dashboard look stuck on the previous
+            # tab.
+            if 't-mon-tabs' in triggered_prop_id:
+                published_url = no_update
+            else:
+                published_url = publish_url(new_query_string)
+            return (published_url, user_unique_options,
                     object_unique_options, tab_content, x_options, y_options, creator_style)
         else:
             return (publish_url("tab=home_tab"), [], [],
@@ -1910,9 +2069,18 @@ def arrange_graphs(content, layout, rows, columns, page, split_x=2, split_y=2):
     else:
         children.extend(shown)
     if add_slots:
-        # The creation slot is available on every page of the layout, below the
-        # charts it belongs to.
-        children.extend(add_slots)
+        # The creation slot follows the grid: a 1 x 1 layout shows one +, a
+        # 2 x 2 layout fills its empty cells with + slots, so the grid stays
+        # balanced and every cell is actionable. At least one + is always shown.
+        import copy
+        template = add_slots[0]
+        slot_count = max(1, page_size - len(shown))
+        copies = []
+        for _ in range(slot_count):
+            button = copy.deepcopy(template)
+            button.n_clicks = 0
+            copies.append(button)
+        children.extend(copies)
     info = html.Span(
         f"{start + 1}-{start + len(shown)} of {len(graphs)}",
         style={'gridColumn': '1 / -1', 'fontFamily': INTER_FONT,
@@ -1955,8 +2123,10 @@ def item_modal_layout():
                                 'borderRadius': '8px', 'padding': '20px', 'zIndex': 2000,
                                 'boxShadow': '0 4px 16px rgba(0,0,0,0.2)'},
         children=[
-            html.H3(I18n.t('visual.open'), style={'marginTop': 0}),
+            html.H3(I18n.t('visual.open'), id='item-modal-title',
+                    style={'marginTop': 0}),
             dcc.Dropdown(id='item-kind', options=visual_kind_options(),
+                         value='bar',
                          placeholder=I18n.t('visual.open'), clearable=False,
                          style={'marginBottom': '10px'}),
             # The game choice only makes sense for the progress figures, and the
@@ -2028,6 +2198,42 @@ def item_modal_layout():
     )
 
 
+@callback(
+    Output('item-modal-title', 'children'),
+    [Input('item-edit-index', 'data')],
+    [State('item-kind', 'value')],
+)
+def update_item_modal_title(edit_index, kind):
+    """Rename the popup when it edits an existing item instead of adding one."""
+    if not isinstance(edit_index, dict) or not edit_index.get('index'):
+        return I18n.t('visual.open')
+    index = str(edit_index['index'])
+    if index.startswith('filter:') or kind in ('filter-multi', 'filter-single'):
+        return I18n.t('edit.filter')
+    return I18n.t('edit.visualisation')
+
+
+@callback(
+    Output('item-kind', 'options'),
+    [Input('item-edit-index', 'data')],
+)
+def update_item_kind_options(edit_index):
+    """Drop the group labels when editing an existing item.
+
+    The "Generic charts" / "Filters" headings only help when choosing a kind
+    from scratch; an edit already knows what it is editing, so a flat list is
+    clearer and avoids implying a fresh choice.
+    """
+    if isinstance(edit_index, dict) and edit_index.get('index'):
+        options = [{'label': name, 'value': name} for name in CHART_TYPES]
+        options += [
+            {'label': I18n.t('visual.mode.multi'), 'value': 'filter-multi'},
+            {'label': I18n.t('visual.mode.single'), 'value': 'filter-single'},
+        ]
+        return options
+    return visual_kind_options()
+
+
 def config_confirm_layout():
     """The Replace / Append / Cancel choice shown before an import is applied."""
     return html.Div(
@@ -2077,6 +2283,10 @@ TMonBody=html.Div([
         dcc.Store(id='edit-mode', data=False),
         dcc.Store(id='item-edit-index', data=None),
         dcc.Store(id='tab-remove-pending', data=None),
+        # An administrator's overrides of the graphs in the default definition,
+        # keyed by tab:page:graph. The deployed JSON file is never modified.
+        dcc.Store(id='default-graph-overrides', data={}),
+        dcc.Store(id='new-tab-opened', data=0),
         # Named pages and the filters of the open page. The stores have one
         # writer (update_page_state) and many readers, so a chart and the row
         # of filters above it always describe the same view.
@@ -2118,13 +2328,17 @@ TMonBody=html.Div([
                 html.Span(id='activity-filter-info', children='', style={'color': '#555'}),
             ]),
             html.Div(id='activity-filter-div', children=[], style={'margin': '5px 0'}),
+            # The toggle stays visible: it is the boundary between viewing and
+            # changing a dashboard. Everything that mutates pages follows it.
+            html.Div([
+                html.Button(I18n.t('edit.mode.enable'), id='edit-toggle', n_clicks=0),
+                html.Button('Open dashboard in new tab', id='open-dashboard-new-tab',
+                            n_clicks=0, style={'marginLeft': '8px'}),
+            ], style={'margin': '4px 0'}),
             # A page is a named tab with its own charts and filters. The name
             # input feeds New page and Rename page; Delete page removes the
-            # open one. These controls live in the header so they are reachable
-            # whatever visualisation page is being viewed.
+            # open one. They are shown only in edit mode, beside the new-tab +.
             html.Div([
-                html.Button(I18n.t('edit.mode.enable'), id='edit-toggle', n_clicks=0,
-                            style={'marginRight': '8px'}),
                 dcc.Input(id='page-name-input', type='text',
                           placeholder=I18n.t('page.name'),
                           style={'width': '200px', 'marginRight': '6px'}),
@@ -2135,7 +2349,7 @@ TMonBody=html.Div([
                 html.Button(I18n.t('page.delete'),
                             id={'type': 'page-delete', 'index': 'current'},
                             n_clicks=0),
-            ], style={'margin': '4px 0'}),
+            ], id='dashboard-page-controls', style={'display': 'none', 'margin': '4px 0'}),
             # Configuration travels either as a downloaded file or as a named
             # save kept on the server for this user. Upload must ask before it
             # replaces what is on screen, hence the confirm popup below.
@@ -2335,6 +2549,7 @@ def render_dashboard_tabs(pages, edit_mode):
         Output('edit-mode', 'data'),
         Output('edit-toggle', 'children'),
         Output(NEW_TAB_ADD_ID, 'style'),
+        Output('dashboard-page-controls', 'style'),
     ],
     [Input('edit-toggle', 'n_clicks')],
     [State('edit-mode', 'data')],
@@ -2350,7 +2565,9 @@ def toggle_edit_mode(n_clicks, enabled):
              'border': f'1px dashed {BRAND_PRIMARY}',
              'background': LIGHT_CARD, 'color': BRAND_PRIMARY,
              'fontSize': '18px', 'cursor': 'pointer'}
-    return on, I18n.t('edit.mode.disable' if on else 'edit.mode.enable'), style
+    page_style = {'display': 'block' if on else 'none', 'margin': '4px 0'}
+    return (on, I18n.t('edit.mode.disable' if on else 'edit.mode.enable'),
+            style, page_style)
 
 
 @callback(
@@ -2408,10 +2625,13 @@ def update_definition_filter_values(values, current):
         Input('item-cancel', 'n_clicks'),
         Input('item-add', 'n_clicks'),
         Input({'type': 'item-edit', 'index': dash.dependencies.ALL}, 'n_clicks'),
+        Input({'type': 'default-graph-edit', 'index': dash.dependencies.ALL},
+              'n_clicks'),
     ],
     [State('t-mon-tabs', 'value')],
 )
-def toggle_item_modal(slot_clicks, cancel_clicks, add_clicks, edit_clicks, tab):
+def toggle_item_modal(slot_clicks, cancel_clicks, add_clicks, edit_clicks,
+                      default_edit_clicks, tab):
     """Open the popup for a new or an existing item; close it after Add/Cancel."""
     triggered = dash.callback_context.triggered
     prop_id = triggered[0]['prop_id'] if triggered else ''
@@ -2421,6 +2641,12 @@ def toggle_item_modal(slot_clicks, cancel_clicks, add_clicks, edit_clicks, tab):
     if prop_id.startswith('{') and 'item-edit' in prop_id and any(edit_clicks or []):
         return _MODAL_VISIBLE, page_key(tab), {
             'index': _pattern_index(prop_id, '.n_clicks')}
+    if (prop_id.startswith('{') and 'default-graph-edit' in prop_id
+            and any(default_edit_clicks or [])):
+        # The graph key travels in the edit index; the default definition owns
+        # the page, so the created-chart target is left alone.
+        return _MODAL_VISIBLE, no_update, {
+            'index': f"default:{_pattern_index(prop_id, '.n_clicks')}"}
     if 'item-add' in prop_id or 'item-cancel' in prop_id:
         return _MODAL_HIDDEN, no_update, None
     raise PreventUpdate
@@ -2443,14 +2669,31 @@ def toggle_item_modal(slot_clicks, cancel_clicks, add_clicks, edit_clicks, tab):
         State('created-charts', 'data'),
         State('page-filters', 'data'),
         State('dashboard-pages', 'data'),
+        State('default-graph-overrides', 'data'),
     ],
 )
-def prefill_item_modal(edit_index, target, charts, filters, pages):
+def prefill_item_modal(edit_index, target, charts, filters, pages, overrides=None):
     """Fill the popup with the graph and labels being edited, not with defaults."""
     if not isinstance(edit_index, dict) or not edit_index.get('index'):
         # A fresh add starts with empty wording, not with the labels of the last
-        # graph that happened to be edited.
-        return None, None, no_update, '', '', '', None, no_update
+        # graph that happened to be edited. The kind defaults to a bar chart so
+        # the column, value and label inputs are visible the moment the popup
+        # opens instead of waiting for a kind to be picked.
+        return 'bar', None, no_update, '', '', '', None, no_update
+    if str(edit_index['index']).startswith('default:'):
+        key = str(edit_index['index'])[len('default:'):]
+        spec = default_graph_spec(find_default_graph(key))
+        if spec is None:
+            raise PreventUpdate
+        override = (overrides or {}).get(key)
+        if isinstance(override, dict):
+            merged = normalise_spec({**spec, **override})
+            if merged is not None:
+                spec = merged
+        return (spec['type'], spec['x'], spec['type'],
+                spec.get('title') or '', spec.get('x_label') or '',
+                spec.get('y_label') or '', spec.get('y') or COUNT_LABEL,
+                spec.get('aggregation') or 'count')
     kind, separator, raw_index = str(edit_index['index']).partition(':')
     if not separator:
         raise PreventUpdate
@@ -2525,6 +2768,56 @@ def update_item_modal_fields(kind, lrs_version, panel_style):
 
 
 @callback(
+    Output('default-graph-overrides', 'data'),
+    [
+        Input('item-add', 'n_clicks'),
+        Input('config-command', 'data'),
+    ],
+    [
+        State('item-edit-index', 'data'),
+        State('default-graph-overrides', 'data'),
+        State('item-kind', 'value'),
+        State('item-column', 'value'),
+        State('item-y', 'value'),
+        State('item-aggregation', 'value'),
+        State('item-title', 'value'),
+        State('item-xlabel', 'value'),
+        State('item-ylabel', 'value'),
+    ],
+)
+def update_default_graph_overrides(add_n, command, edit_index, overrides,
+                                   kind, column, y, aggregation,
+                                   title, x_label, y_label):
+    """Save an admin's edit of a default graph, and load overrides from a config."""
+    if not is_admin():
+        # Only an administrator may change what the default dashboard shows.
+        raise PreventUpdate
+    triggered = dash.callback_context.triggered
+    prop_id = triggered[0]['prop_id'] if triggered else ''
+    if ('config-command' in prop_id and isinstance(command, dict)
+            and command.get('config')):
+        imported = dict(command['config'].get('default_graph_overrides') or {})
+        if command.get('action') == 'append':
+            merged = dict(overrides or {})
+            merged.update(imported)
+            return merged
+        return imported
+    key = _default_edit_key(edit_index)
+    if 'item-add' not in prop_id or int(add_n or 0) <= 0 or not key:
+        raise PreventUpdate
+    spec = normalise_spec({
+        'type': kind, 'x': column, 'y': y or COUNT_LABEL,
+        'aggregation': aggregation or 'count',
+        'title': title, 'x_label': x_label, 'y_label': y_label,
+    })
+    if spec is None:
+        raise PreventUpdate
+    updated = dict(overrides or {})
+    updated[key] = spec
+    return updated
+
+
+@callback(
     [
         Output('graph-layout', 'value'),
         Output('graph-rows', 'value'),
@@ -2581,13 +2874,15 @@ def apply_config_layout(command):
         State('users-multi-dynamic-dropdown', 'value'),
         State('object-multi-dynamic-dropdown', 'value'),
         State('activity-filter-hidden', 'data'),
+        State('default-graph-overrides', 'data'),
     ],
 )
 def handle_config_actions(export_n, save_n, import_contents, load_n, delete_n,
                           refresh_n, replace_n, append_n, cancel_n, panel_style,
                           name, selected, pending, charts, filters, pages, tab,
                           graph_layout, graph_rows, graph_columns, graph_page,
-                          split_x, split_y, users, objects, hidden):
+                          split_x, split_y, users, objects, hidden,
+                          default_overrides=None):
     """Export, save, load, delete and import a dashboard configuration."""
     triggered = dash.callback_context.triggered
     prop_id = triggered[0]['prop_id'] if triggered else ''
@@ -2605,7 +2900,7 @@ def handle_config_actions(export_n, save_n, import_contents, load_n, delete_n,
                 'graph-split-x': split_x, 'graph-split-y': split_y,
             },
             {'actor.name': users or [], 'object.id': objects or []},
-            hidden or [], tab,
+            hidden or [], tab, default_overrides,
         )
 
     if 'config-export' in prop_id and int(export_n or 0) > 0:

@@ -14,6 +14,7 @@ import plotly.express as px
 from dash import dash_table
 
 from TMonWidgets.EmptyFigure import no_data_figure
+from TMonWidgets.ValueLabels import full_url_map, hover_values, shorten_url_value
 
 # A code-defined measure rather than a column of the statements. It is a data
 # source, not a label; the definition still supplies the human wording.
@@ -59,9 +60,16 @@ def _summary(df, graph):
         return None
 
     data = df.copy()
+    full_x = {}
     if graph["x"].get("date"):
         data[x_column] = pd.to_datetime(data[x_column], errors="coerce", utc=True)
+    else:
+        # An xAPI id is a URL. Show its last segment on the axis instead of the
+        # whole IRI, without changing the statements that filters still use.
+        full_x = full_url_map(data[x_column])
+        data[x_column] = data[x_column].map(shorten_url_value)
     if y_column != COUNT_DATA and aggregation != "count":
+        data[y_column] = data[y_column].map(shorten_url_value)
         data[y_column] = pd.to_numeric(data[y_column], errors="coerce")
     data = data.dropna(subset=[x_column] if aggregation == "count"
                        or y_column == COUNT_DATA else [x_column, y_column])
@@ -69,8 +77,22 @@ def _summary(df, graph):
         return None
     grouped = data.groupby(x_column, dropna=False)
     if aggregation == "count":
-        return grouped.size().rename("value").reset_index()
-    return grouped[y_column].agg(aggregation).rename("value").reset_index()
+        summary = grouped.size().rename("value").reset_index()
+    else:
+        summary = grouped[y_column].agg(aggregation).rename("value").reset_index()
+    summary.attrs["full_x"] = full_x
+    return summary
+
+
+def _with_url_hover(figure, summary, graph, template):
+    """Show the full URL on hover for marks whose axis value was shortened."""
+    full_x = summary.attrs.get("full_x") or {}
+    if full_x:
+        figure.update_traces(
+            customdata=[[full] for full in hover_values(
+                summary[graph["x"]["data"]], full_x)],
+            hovertemplate=template)
+    return figure
 
 
 def _cartesian(df, graph, kind):
@@ -80,7 +102,9 @@ def _cartesian(df, graph, kind):
         return _placeholder()
     draw = {"bar": px.bar, "line": px.line, "scatter": px.scatter}[kind]
     options = {"markers": True} if kind == "line" else {}
-    return draw(summary, x=graph["x"]["data"], y="value", **options)
+    figure = draw(summary, x=graph["x"]["data"], y="value", **options)
+    return _with_url_hover(figure, summary, graph,
+                           "%{customdata[0]}<br>%{y}<extra></extra>")
 
 
 def _bar(df, graph):
@@ -99,7 +123,9 @@ def _pie(df, graph):
     summary = _summary(df, graph)
     if summary is None:
         return _placeholder()
-    return px.pie(summary, names=graph["x"]["data"], values="value")
+    figure = px.pie(summary, names=graph["x"]["data"], values="value")
+    return _with_url_hover(figure, summary, graph,
+                           "%{customdata[0]}<br>%{value}<extra></extra>")
 
 
 def _heatmap(df, graph):
@@ -110,13 +136,25 @@ def _heatmap(df, graph):
         return _placeholder()
     if x_column not in df.columns or y_column not in df.columns:
         return _placeholder()
-    data = df.dropna(subset=[x_column, y_column])
+    data = df.dropna(subset=[x_column, y_column]).copy()
+    full_x = full_url_map(data[x_column])
+    full_y = full_url_map(data[y_column])
+    data[x_column] = data[x_column].map(shorten_url_value)
+    data[y_column] = data[y_column].map(shorten_url_value)
     if data.empty:
         return _placeholder()
     counts = data.groupby([x_column, y_column], dropna=False).size().reset_index(
         name="value")
     matrix = counts.pivot(index=y_column, columns=x_column, values="value").fillna(0)
-    return px.imshow(matrix, aspect="auto", origin="lower")
+    figure = px.imshow(matrix, aspect="auto", origin="lower")
+    if full_x or full_y:
+        # customdata[row][column] = [y value, x value], both as full URLs.
+        figure.update_traces(
+            customdata=[[[full_y.get(row, row), full_x.get(column, column)]
+                         for column in matrix.columns] for row in matrix.index],
+            hovertemplate=("x: %{customdata[1]}<br>y: %{customdata[0]}"
+                           "<br>%{z}<extra></extra>"))
+    return figure
 
 
 def _table(df, graph):

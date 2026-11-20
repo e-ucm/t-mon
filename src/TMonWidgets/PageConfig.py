@@ -19,6 +19,7 @@ from TMonWidgets.MultiSelector import MAX_PAGE_FILTERS, normalise_filter
 
 FORMAT_VERSION = 1
 MAX_PAGES = 12
+MAX_OVERRIDES = 100
 LAYOUT_KEYS = (
     "graph-layout", "graph-rows", "graph-columns", "graph-page",
     "graph-split-x", "graph-split-y",
@@ -26,8 +27,23 @@ LAYOUT_KEYS = (
 SAFE_NAME = re.compile(r"^[A-Za-z0-9._-]{1,80}$")
 
 
+def _clean_overrides(value):
+    """Keep the graph overrides that are still chart specs T-Mon can draw."""
+    if not isinstance(value, dict):
+        return {}
+    overrides = {}
+    for key, spec in list(value.items())[:MAX_OVERRIDES]:
+        if not isinstance(key, str) or not key.strip():
+            continue
+        normalised = normalise_spec(spec)
+        if normalised is not None:
+            overrides[key.strip()[:160]] = normalised
+    return overrides
+
+
 def build_document(charts=None, filters=None, pages=None, layout=None,
-                   header=None, hidden=None, active_tab=None):
+                   header=None, hidden=None, active_tab=None,
+                   default_graph_overrides=None):
     """Build the plain dict that is written to a file or a saved name."""
     return {
         "version": FORMAT_VERSION,
@@ -39,6 +55,10 @@ def build_document(charts=None, filters=None, pages=None, layout=None,
             "charts": list(charts or []),
             "filters": list(filters or []),
         },
+        # An administrator's edits of the default dashboard's graphs. Empty for
+        # a document that never touched them, so old files stay the same shape.
+        "default_graph_overrides": _clean_overrides(
+            default_graph_overrides or {}),
         "header": {
             "actor.name": [str(value) for value in
                            (header or {}).get('actor.name') or []],
@@ -132,6 +152,8 @@ def parse_document(text):
             "charts": _clean_charts(create.get("charts") or []),
             "filters": _clean_filters(create.get("filters") or []),
         },
+        "default_graph_overrides": _clean_overrides(
+            raw.get("default_graph_overrides") or {}),
         "header": {
             "actor.name": [str(value) for value in header.get("actor.name") or []],
             "object.id": [str(value) for value in header.get("object.id") or []],

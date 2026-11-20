@@ -90,7 +90,8 @@ def test_config_documents_keep_labels():
 def test_layout_exposes_edit_mode_controls():
     ids = [getattr(child, 'id', None) for child in _walk(TMonWidget.TMonBody)]
     for expected in (
-        'edit-mode', 'edit-toggle', 'item-edit-index', 'tab-remove-pending',
+        'edit-mode', 'edit-toggle', 'dashboard-page-controls',
+        'item-edit-index', 'tab-remove-pending',
         'new-tab-add', 'item-title', 'item-xlabel', 'item-ylabel', 'item-y',
         'item-aggregation', 'item-labels-div', 'tab-remove-confirm-modal',
         'tab-remove-confirm', 'tab-remove-cancel',
@@ -140,15 +141,36 @@ def test_rendered_items_have_edit_controls_only_in_edit_mode():
 # --- callbacks -------------------------------------------------------------
 
 
+def test_page_state_arguments_follow_dash_input_then_state_order():
+    """Dash calls with every Input first; a State must never land in n_clicks."""
+    import inspect
+
+    params = list(inspect.signature(TMonWidget.update_page_state).parameters)
+    assert params[:13] == [
+        'page_add_n', 'page_rename_n', 'page_delete_n', 'item_add_n',
+        'item_remove_n', 'filter_values', 'chart_add_n', 'chart_remove_n',
+        'panel_style', 'config_command', 'tab_remove_clicks',
+        'confirm_remove_n', 'new_tab_n',
+    ]
+    assert params[13:30] == [
+        'tab', 'target', 'page_name', 'item_kind', 'item_chart_type',
+        'item_column', 'item_game', 'item_target', 'item_mode',
+        'chart_type', 'chart_x', 'chart_y', 'chart_aggregation',
+        'pages', 'charts', 'filters', 'pathname',
+    ]
+
+
 def test_edit_toggle_switches_between_view_and_edit(monkeypatch):
     _ctx(monkeypatch, 'edit-toggle.n_clicks')
-    enabled, label, style = TMonWidget.toggle_edit_mode(1, False)
+    enabled, label, style, page_style = TMonWidget.toggle_edit_mode(1, False)
     assert enabled is True
     assert label == I18n.t('edit.mode.disable')
     assert style['display'] == 'block'
-    enabled, label, style = TMonWidget.toggle_edit_mode(1, True)
+    assert page_style['display'] == 'block'
+    enabled, label, style, page_style = TMonWidget.toggle_edit_mode(1, True)
     assert enabled is False
     assert style['display'] == 'none'
+    assert page_style['display'] == 'none'
 
 
 def test_tab_remove_asks_before_removing(monkeypatch):
@@ -163,7 +185,8 @@ def test_tab_remove_asks_before_removing(monkeypatch):
 
 def test_edit_button_opens_the_popup_for_an_existing_item(monkeypatch):
     _ctx(monkeypatch, '{"index":"chart:0","type":"item-edit"}.n_clicks')
-    style, target, edit = TMonWidget.toggle_item_modal([], 0, 0, [1], 'page:p1')
+    style, target, edit = TMonWidget.toggle_item_modal(
+        [], 0, 0, [1], [], 'page:p1')
     assert style['display'] == 'block'
     assert target == 'page:p1'
     assert edit == {'index': 'chart:0'}
@@ -182,10 +205,10 @@ def test_new_tab_button_creates_an_empty_page(monkeypatch):
     _ctx(monkeypatch, 'new-tab-add.n_clicks')
     pages, charts, filters, _, _ = TMonWidget.update_page_state(
         None, None, None, None, None, None, None, None,
-        {'display': 'block'}, None, 'create_tab', None, 'From the tab',
+        {'display': 'block'}, None, None, None, 1,
+        'create_tab', None, 'From the tab',
         None, None, None, None, None, None,
-        None, None, None, None, [], [], [], None,
-        new_tab_n=1)
+        None, None, None, None, [], [], [], None)
     assert len(pages) == 1
     assert pages[0]['name'] == 'From the tab'
     assert pages[0]['charts'] == []
@@ -199,10 +222,11 @@ def test_confirming_a_tab_removal_deletes_that_page(monkeypatch):
     ]
     result = TMonWidget.update_page_state(
         None, None, None, None, None, None, None, None,
-        {'display': 'block'}, None, 'create_tab', None, None,
+        {'display': 'block'}, None, None, 1, None,
+        'create_tab', None, None,
         None, None, None, None, None, None,
         None, None, None, None, pages, [], [], None,
-        confirm_remove_n=1, pending_remove='p1')
+        pending_remove='p1')
     assert [page['id'] for page in result[0]] == ['p2']
 
 
@@ -211,7 +235,8 @@ def test_editing_a_graph_replaces_the_spec_with_its_labels(monkeypatch):
     original = _spec()
     _, charts, _, _, _ = TMonWidget.update_page_state(
         None, None, None, 1, None, None, None, None,
-        {'display': 'block'}, None, 'create_tab', None, None,
+        {'display': 'block'}, None, None, None, None,
+        'create_tab', None, None,
         'bar', None, 'actor.name', None, None, None,
         None, None, None, None, [], [original], [], None,
         item_edit_index={'index': 'chart:0'},

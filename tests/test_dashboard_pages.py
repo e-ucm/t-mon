@@ -237,7 +237,8 @@ def test_page_state_loads_charts_and_filters_from_a_link(monkeypatch):
         [filter_spec])
     pages, charts, filters, _, _ = TMonWidget.update_page_state(
         None, None, None, None, None, None, None, None,
-        {'display': 'block'}, None, 'create_tab', None, None,
+        {'display': 'block'}, None, None, None, None,
+        'create_tab', None, None,
         None, None, None, None, None, None, None, None, None, None,
         [], [], [], pathname)
     assert pages == []
@@ -263,6 +264,7 @@ def test_page_state_replaces_and_appends_imported_pages(monkeypatch):
     result = TMonWidget.update_page_state(
         None, None, None, None, None, None, None, None,
         {'display': 'block'}, {'action': 'replace', 'config': document},
+        None, None, None,
         'create_tab', None, None, None, None, None, None,
         None, None, None, None, None, None, existing, [], [], None)
     assert [page['id'] for page in result[0]] == ['one']
@@ -270,6 +272,7 @@ def test_page_state_replaces_and_appends_imported_pages(monkeypatch):
     result = TMonWidget.update_page_state(
         None, None, None, None, None, None, None, None,
         {'display': 'block'}, {'action': 'append', 'config': document},
+        None, None, None,
         'create_tab', None, None, None, None, None, None,
         None, None, None, None, None, None, existing, [], [], None)
     assert len(result[0]) == 2

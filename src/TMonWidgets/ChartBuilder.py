@@ -17,6 +17,7 @@ import pandas as pd
 import plotly.express as px
 
 from TMonWidgets.EmptyFigure import no_data_figure
+from TMonWidgets.ValueLabels import full_url_map, hover_values, shorten_url_value
 
 # Chart types offered. A pie reads a single column of values against labels, which is
 # why it is drawn apart from the other three.
@@ -247,9 +248,19 @@ def build_chart(df, spec):
         # Without a value to reduce, the only thing left to count is the statements.
         aggregation = "count"
     data = df.copy()
+    x_full = {}
     if x == TIME_COLUMN:
         data[x] = _as_datetime(data[x])
+    else:
+        x_full = full_url_map(data[x])
+        # Identifiers such as object.id are URLs. Group by their readable last
+        # segment so the x axis does not turn into a column of full IRIs. Values
+        # that are not URLs come back exactly as they were.
+        data[x] = data[x].map(shorten_url_value)
     if not counting:
+        # The same applies to a measured axis when it holds identifiers instead of
+        # numbers; a value that still does not read as a number is dropped below.
+        data[y] = data[y].map(shorten_url_value)
         # A description from a link may name a column that is not a number after all;
         # the values that do not read as one are dropped rather than failing the chart.
         data[y] = pd.to_numeric(data[y], errors="coerce")
@@ -287,6 +298,13 @@ def build_chart(df, spec):
     else:
         figure = px.bar(summarised, x=x, y=value_column, labels=labels)
     figure.update_layout(title=describe(spec))
+    if x_full:
+        # The axis shows the readable last segment; hovering shows the whole URL.
+        figure.update_traces(
+            customdata=[[full] for full in hover_values(summarised[x], x_full)],
+            hovertemplate=("%{customdata[0]}<br>%{value}<extra></extra>"
+                           if spec["type"] == "pie"
+                           else "%{customdata[0]}<br>%{y}<extra></extra>"))
     return figure
 
 

@@ -1,6 +1,6 @@
 from flask import session
 import dash
-from dash import html, dcc, callback
+from dash import html, dcc, callback, no_update
 from dash.dependencies import Input, Output, State
 from dash.exceptions import PreventUpdate
 import json
@@ -493,9 +493,12 @@ def toggle_browser_chrome(path):
 
 
 @callback(
-    Output('browser_div', 'children'),
+    [Output('browser_div', 'children'),
+     Output('output-t-mon', 'style', allow_duplicate=True),
+     Output('url', 'pathname', allow_duplicate=True)],
     Input('main-login', 'children'),
-    [State('url', 'pathname'), State('url', 'search')]
+    [State('url', 'pathname'), State('url', 'search')],
+    prevent_initial_call='initial_duplicate',
 )
 def init_storage(main, pathname, search=''):
     if flask.oidc.user_loggedin:
@@ -565,9 +568,28 @@ def init_storage(main, pathname, search=''):
                 TMonWidgets.accepted_sessions, search, style=panel_style,
                 session_style=panel_style),
         ])
-        return appLayout
+        # A URL that points at an analysable selection (for example
+        # /simlet/1/session/1/dashboard/default) should load the dashboard on
+        # arrival, not wait for a button click.
+        if getattr(browser, 'analysis_ready', False):
+            dashboardpath = '/dashboard/tab=home_tab'
+            if pathname and '/dashboard' in pathname:
+                segment = pathname.split('/dashboard', 1)[1]
+                if segment.strip('/'):
+                    dashboardpath = '/dashboard/' + segment.lstrip('/')
+            analysis_path = pathname.split('/dashboard', 1)[0].rstrip('/') if pathname else ''
+            if not analysis_path:
+                analysis_path = browser.current_path.replace(browser.base_path, '/').rstrip('/')
+            try:
+                outputs = get_analysis_outputs(analysis_path, dashboardpath)
+                tmon_style = outputs[8]
+                url = outputs[9]
+                return appLayout, tmon_style, url
+            except Exception as exc:  # noqa: BLE001 - never break the page load
+                print(f'Auto-analysis on load failed: {exc}')
+        return appLayout, {'display': 'none'}, no_update
     else:
-        return html.Div([
+        return (html.Div([
                 html.H4(I18n.t('browser.connect')),
                 html.H3(id='current-path', style={'display': 'none'}),
                 html.H4(id='current-simlet', style={'display': 'none'}),
@@ -579,7 +601,7 @@ def init_storage(main, pathname, search=''):
                 html.Button(I18n.t('browser.run_analyse'), id='run-analyse', n_clicks=0, style={'display': 'none'}),
                 render_simlet_explorer_panel(),
                 render_simlet_view_panel(),
-            ])
+            ]), {'display': 'none'}, no_update)
 
 def load_uploaded_files(list_of_contents, list_of_names, list_of_dates):
     """

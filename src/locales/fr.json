@@ -130,5 +130,6 @@
   "visual.target": "Cible",
   "visual.option": "Mode",
   "visual.mode.absolute": "Temps absolu",
-  "visual.mode.relative": "Temps relatif"
+  "visual.mode.relative": "Temps relatif",
+  "edit.visualisation": "Modifier la visualisation"
 }

@@ -335,12 +335,20 @@ def test_session_dashboard_has_no_default_tab(monkeypatch):
         type('Ctx', (), {'triggered': [{'prop_id': 'output-t-mon.style'}]})())
     # The URL has no `tab=` parameter, but the session dashboard still must not
     # fall back to HomePage.
-    value, users, objects = TMonWidget.update_tab(
+    # A session URL with no dashboard name keeps the no-tab view.
+    value, users, objects, _ = TMonWidget.update_tab(
+        {'display': 'block'}, None,
+        '/simlet/1/session/11/dashboard/',
+        '/simlet/1/session/11/dashboard/')
+    assert value is None
+    assert users == [] and objects == []
+
+    # An explicit `/dashboard/default` opens the default dashboard instead.
+    value, users, objects, _ = TMonWidget.update_tab(
         {'display': 'block'}, None,
         '/simlet/1/session/11/dashboard/default',
         '/simlet/1/session/11/dashboard/default')
-    assert value is None
-    assert users == [] and objects == []
+    assert value == 'home_tab'
 
 
 def test_upload_dashboard_never_shows_simlet_tiles(monkeypatch):
