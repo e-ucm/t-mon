@@ -204,13 +204,6 @@ def tmon_config_delete(name):
 
 
 
-app.clientside_callback(
-    "function(n){ if(n){ window.open(window.location.href, '_blank'); } return n || 0; }",
-    Output('new-tab-opened', 'data'),
-    Input('open-dashboard-new-tab', 'n_clicks'),
-    prevent_initial_call=True,
-)
-
 if __name__ == '__main__':
     # Construct the URL
     print(f'The app is running at http://0.0.0.0:8050/')

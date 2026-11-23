@@ -30,6 +30,7 @@ from TMonWidgets.ChartBuilder import (
 )
 from TMonWidgets.MultiSelector import (
     MAX_PAGE_FILTERS,
+    MAX_TOTAL_FILTERS,
     PAGE_FILTER_PARAM,
     apply_page_filters,
     decode_filters,
@@ -164,7 +165,7 @@ def render_definition_filter_controls(filters, df):
 
 
 def render_default_page(tab, page, df, chart_df, selected, edit_mode=False,
-                        admin=False, overrides=None):
+                        admin=False, overrides=None, show_filters=True):
     """Draw a tab of the default definition from its own data and wording.
 
     An administrator in edit mode gets an Edit control on every graph the chart
@@ -176,8 +177,9 @@ def render_default_page(tab, page, df, chart_df, selected, edit_mode=False,
         children.append(dcc.Markdown(tab['markdown'], dangerously_allow_html=False))
     if page.get('markdown'):
         children.append(dcc.Markdown(page['markdown'], dangerously_allow_html=False))
-    children.append(render_definition_filter_controls(
-        definition_filters(tab, page, selected), df))
+    if show_filters:
+        children.append(render_definition_filter_controls(
+            definition_filters(tab, page, selected), df))
     for graph in page.get('graphs') or []:
         key = default_graph_key(tab['id'], page['id'], graph['id'])
         override = (overrides or {}).get(key)
@@ -635,18 +637,6 @@ def update_dashboard_title(style, simlet_name, session_name):
 
 
 @callback(
-    Output('dashboard-tab-home_tab', 'style'),
-    Input('url', 'pathname')
-)
-def hide_home_tab(pathname):
-    """The HomePage grid has no place in a session or upload dashboard."""
-    if pathname and '/dashboard' in pathname:
-        if '/session/' in pathname or '/upload' in pathname:
-            return {'display': 'none'}
-    return {'display': 'block'}
-
-
-@callback(
     [
         Output('t-mon-tabs', 'value'),
         Output("users-multi-dynamic-dropdown", "value"),
@@ -884,7 +874,8 @@ def _default_edit_key(edit_index):
     return raw[len("default:"):] if raw.startswith("default:") else None
 
 
-def render_filter_controls(filters, target, df, edit_mode=True):
+def render_filter_controls(filters, target, df, edit_mode=True,
+                           include_add_slot=True):
     """The row of page filters above a page's visualisations."""
     controls = []
     for index, spec in enumerate(filters or []):
@@ -914,7 +905,7 @@ def render_filter_controls(filters, target, df, edit_mode=True):
                         n_clicks=0, title=I18n.t('edit.filter'),
                         style=edit_button_style(edit_mode)),
         ], style={'display': 'inline-block', 'marginBottom': '8px'}))
-    if edit_mode:
+    if edit_mode and include_add_slot:
         controls = list(controls) + [html.Button('+', id={'type': 'item-add-slot',
                                                           'index': target},
                                                   n_clicks=0,
@@ -969,13 +960,16 @@ def render_add_slot(target, edit_mode=True):
                               'display': 'block' if edit_mode else 'none'})
 
 
-def render_page_items(df, charts, filters, target, edit_mode=True):
+def render_page_items(df, charts, filters, target, edit_mode=True,
+                      show_filters=True):
     """A page's contents: filter row, charts, then one + slot.
 
     Returned as a flat list so the layout controls can place each chart on the
-    grid instead of treating the whole page as one item.
+    grid instead of treating the whole page as one item. The filter row is
+    omitted by the app because filters live in the dashboard's top bar.
     """
-    items = [render_filter_controls(filters, target, df, edit_mode)]
+    items = ([render_filter_controls(filters, target, df, edit_mode)]
+             if show_filters else [])
     for index, spec in enumerate(charts or []):
         items.append(render_item(spec, index, target, df, edit_mode=edit_mode))
     items.append(render_add_slot(target, edit_mode))
@@ -983,10 +977,12 @@ def render_page_items(df, charts, filters, target, edit_mode=True):
 
 
 def dashboard_tab_children(pages, edit_mode=False):
-    """Built-in tabs plus the user's named pages, in creation order.
+    """Built-in tabs, the new-tab +, then the user's named pages.
 
-    Built-in and reserved tabs have no remove control. A custom page carries one
-    in its label in edit mode, so a tab can be removed from where it is seen.
+    The + is the last tab entry, after the built-ins and all user pages. It
+    stays in the DOM in view mode
+    so its callback output always has a component to write to; the tab and its
+    button are hidden until edit mode is on.
     """
     tabs = [
         dcc.Tab(id=f'dashboard-tab-{value}', value=value,
@@ -1010,6 +1006,21 @@ def dashboard_tab_children(pages, edit_mode=False):
             value=f"{PAGE_TAB_PREFIX}{identifier}",
             label=label,
         ))
+    # The + is always the last tab, after the built-ins and every user page,
+    # including pages added after the dashboard was first rendered.
+    tabs.append(dcc.Tab(
+        id='new-tab-add-tab',
+        disabled=True,
+        value='__new_tab__',
+        style=edit_control_style(edit_mode),
+        label=html.Button('+', id=NEW_TAB_ADD_ID, n_clicks=0,
+                          title=I18n.t('edit.new_tab'),
+                          style={'display': 'block' if edit_mode else 'none',
+                                 'width': '100%',
+                                 'border': f'1px dashed {BRAND_PRIMARY}',
+                                 'background': LIGHT_CARD, 'color': BRAND_PRIMARY,
+                                 'fontSize': '18px', 'cursor': 'pointer'}),
+    ))
     return tabs
 
 
@@ -1021,23 +1032,6 @@ def current_config(charts, filters, pages, layout, header, hidden, tab,
         header=header, hidden=hidden, active_tab=tab,
         default_graph_overrides=default_overrides,
     )
-
-
-def creator_controls_style(tab):
-    """
-    Return whether the creator row is shown, which is only in its own tab.
-
-    The row stays where it is in the layout so that the choices already made in it
-    survive a change of tab, and it is hidden everywhere else so that it does not sit
-    over the visualisations of the other tabs.
-
-    Args:
-        tab (str): The value of the open tab.
-
-    Returns:
-        dict: The style to show the row with.
-    """
-    return {'display': 'block'} if tab == 'create_tab' else {'display': 'none'}
 
 
 @callback(
@@ -1167,6 +1161,58 @@ def render_activity_filter(hidden, lrs_data_version):
     )
 
 
+@callback(
+    Output('dashboard-filter-bar', 'children'),
+    [
+        Input('t-mon-tabs', 'value'),
+        Input('dashboard-pages', 'data'),
+        Input('page-filters', 'data'),
+        Input('definition-filters', 'data'),
+        Input('activity-filter-hidden', 'data'),
+        Input('lrs-data-version', 'data'),
+        Input('edit-mode', 'data'),
+        Input('output-t-mon', 'style'),
+    ],
+)
+def render_top_filter_bar(tab, pages, filters, selected, hidden, lrs_version,
+                          edit_mode, panel_style):
+    """All filters of the open page, in the dashboard's top bar.
+
+    Definition filters apply to all tabs of the dashboard or to one tab only;
+    user filters belong to the open page. They share one row so a reader can
+    see exactly what narrows the charts, with a filter + at the end in edit
+    mode while the page has fewer than MAX_TOTAL_FILTERS filters.
+    """
+    if not TMonWidgets.xapiData or not tab:
+        return html.Div()
+    df = pd.json_normalize(TMonWidgets.xapiData)
+    df = resolve_actor_name_column(df)
+    df, _ = filter_df_by_activities(df, hidden or [])
+    tab_def, page_def = default_tab_page(tab)
+    definition_specs = definition_filters(tab_def, page_def, selected or {})
+    key = page_key(tab)
+    user_filters = items_for_key(key, pages, [], filters)[1]
+    controls = []
+    if definition_specs:
+        controls.extend(render_definition_filter_controls(
+            definition_specs, df).children)
+    if user_filters:
+        controls.append(render_filter_controls(
+            user_filters, key, df, bool(edit_mode), include_add_slot=False))
+    if edit_mode and (len(definition_specs) + len(user_filters)
+                      < MAX_TOTAL_FILTERS):
+        controls.append(html.Button(
+            '+', id={'type': 'filter-add-slot', 'index': key}, n_clicks=0,
+            title=I18n.t('filter.add'),
+            style={'width': '32px', 'height': '32px', 'fontSize': '18px',
+                   'border': f'2px dashed {BRAND_PRIMARY}',
+                   'background': LIGHT_CARD, 'color': BRAND_PRIMARY,
+                   'cursor': 'pointer', 'borderRadius': '6px'},
+        ))
+    return html.Div(controls, style={'display': 'flex', 'flexWrap': 'wrap',
+                                     'alignItems': 'center', 'gap': '8px'})
+
+
 def _pattern_index(prop_id, suffix):
     """Read the index of the pattern-matching component that triggered a callback."""
     try:
@@ -1181,7 +1227,6 @@ def _pattern_index(prop_id, suffix):
         Output('created-charts', 'data'),
         Output('page-filters', 'data'),
         Output('item-status', 'children'),
-        Output('chart-creator-status', 'children'),
     ],
     [
         Input('page-add', 'n_clicks'),
@@ -1190,8 +1235,6 @@ def _pattern_index(prop_id, suffix):
         Input('item-add', 'n_clicks'),
         Input({'type': 'item-remove', 'index': dash.dependencies.ALL}, 'n_clicks'),
         Input({'type': 'page-filter', 'index': dash.dependencies.ALL}, 'value'),
-        Input('chart-add', 'n_clicks'),
-        Input({'type': 'chart-remove', 'index': dash.dependencies.ALL}, 'n_clicks'),
         # A new selection takes the Create tab's state from the link.
         Input('output-t-mon', 'style'),
         Input('config-command', 'data'),
@@ -1202,7 +1245,7 @@ def _pattern_index(prop_id, suffix):
     ],
     [
         State('t-mon-tabs', 'value'),
-        State('item-modal-target', 'data'),
+        State('edit-floater-target', 'data'),
         State('page-name-input', 'value'),
         State('item-kind', 'value'),
         State('item-chart-type', 'value'),
@@ -1210,10 +1253,6 @@ def _pattern_index(prop_id, suffix):
         State('item-game', 'value'),
         State('item-target', 'value'),
         State('item-mode', 'value'),
-        State('chart-type', 'value'),
-        State('chart-x', 'value'),
-        State('chart-y', 'value'),
-        State('chart-aggregation', 'value'),
         State('dashboard-pages', 'data'),
         State('created-charts', 'data'),
         State('page-filters', 'data'),
@@ -1230,15 +1269,13 @@ def _pattern_index(prop_id, suffix):
     ]
 )
 def update_page_state(page_add_n, page_rename_n, page_delete_n, item_add_n,
-                      item_remove_n, filter_values, chart_add_n, chart_remove_n,
-                      panel_style, config_command,
+                      item_remove_n, filter_values, panel_style, config_command,
                       # Dash passes every Input before every State. These three
                       # belong here, with the other Inputs, not after the States.
                       tab_remove_clicks, confirm_remove_n, new_tab_n,
                       tab, target, page_name,
                       item_kind, item_chart_type, item_column, item_game,
                       item_target, item_mode,
-                      chart_type, chart_x, chart_y, chart_aggregation,
                       pages, charts, filters, pathname,
                       pending_remove=None, item_edit_index=None,
                       item_title=None, item_xlabel=None, item_ylabel=None,
@@ -1355,31 +1392,21 @@ def update_page_state(page_add_n, page_rename_n, page_delete_n, item_add_n,
                                   if isinstance(filter_values, list)
                                   else [filter_values] if filter_values else [])
                 target_filters[index] = normalise_filter(spec) or spec
-    elif 'chart-remove' in triggered_prop_id and chart_remove_n and max(chart_remove_n) > 0:
-        index = _pattern_index(triggered_prop_id, '.n_clicks')
-        if isinstance(index, int) and 0 <= index < len(target_charts):
-            target_charts = target_charts[:index] + target_charts[index + 1:]
-    elif (('item-add' in triggered_prop_id and int(item_add_n or 0) > 0
-           or 'chart-add' in triggered_prop_id and int(chart_add_n or 0) > 0)
+    elif ('item-add' in triggered_prop_id and int(item_add_n or 0) > 0
           and not _default_edit_key(item_edit_index)):
         # A default graph is edited into the override store, not into the page's
         # charts, so this writer leaves the stores exactly as they were.
         kind = item_kind or 'generic'
         labels = {'title': item_title, 'x_label': item_xlabel,
                   'y_label': item_ylabel}
-        if 'chart-add' in triggered_prop_id:
-            spec = normalise_spec({
-                'type': chart_type, 'x': chart_x, 'y': chart_y,
-                'aggregation': chart_aggregation,
-            })
-        elif kind in ('filter-multi', 'filter-single'):
+        if kind in ('filter-multi', 'filter-single'):
             spec = normalise_filter({
                 'column': item_column,
                 'mode': 'multi' if kind == 'filter-multi' else 'single',
             })
         else:
-            # The popup's chosen chart type is the kind itself. The hidden
-            # item-chart-type keeps the legacy creator's choice working.
+            # The floater's chosen chart type is the kind itself. The hidden
+            # item-chart-type keeps the other creation paths working.
             chart_kind = kind if kind in CHART_TYPES else (item_chart_type or 'bar')
             spec = normalise_spec({
                 'type': chart_kind, 'x': item_column,
@@ -1411,6 +1438,11 @@ def update_page_state(page_add_n, page_rename_n, page_delete_n, item_add_n,
                     target_filters = current
                 else:
                     target_charts = current
+            elif is_filter and (len(current) + len(definition_filters(
+                    *default_tab_page(tab), {})) >= MAX_TOTAL_FILTERS):
+                # Definition filters (all-tabs and this-tab) count towards the
+                # same per-page cap as the ones a user adds.
+                status = I18n.t('visual.max_filters')
             elif len(current) >= limit:
                 status = I18n.t('visual.max_filters' if is_filter else 'visual.max_charts')
             elif is_filter:
@@ -1431,7 +1463,7 @@ def update_page_state(page_add_n, page_rename_n, page_delete_n, item_add_n,
     print(f"Pages: {len(pages)} - charts: {len(charts)} - filters: {len(filters)} "
           f"- triggered={triggered_prop_id}")
     return (pages[:12], charts[:MAX_CREATED_CHARTS],
-            filters[:MAX_PAGE_FILTERS], status, status)
+            filters[:MAX_PAGE_FILTERS], status)
 
 
 def filterObjectIdDependingTab(df, value, tab):
@@ -1459,15 +1491,6 @@ def filterObjectIdDependingTab(df, value, tab):
         Output("users-multi-dynamic-dropdown", "options"),
         Output('object-multi-dynamic-dropdown', "options"),
         Output('tabs-content', 'children'),
-        # The axes the creator offers are the columns the data actually has, so they are
-        # published from here, where the frame that names them lives.
-        Output('chart-x', 'options'),
-        Output('chart-y', 'options'),
-        # And the creator shows itself only in the tab it belongs to, so it does not sit
-        # over the other visualisations. Decided here because this is the callback that
-        # knows which tab is open, and the row keeps its place in the layout, which is
-        # what preserves the choices already made in it.
-        Output('chart-creator-controls', 'style'),
      ],
     Input('t-mon-tabs', 'value'),
     Input("users-multi-dynamic-dropdown", "search_value"),
@@ -1525,7 +1548,7 @@ def update_output(tab, user_search_value, user_value, object_search_value, objec
         # activity buttons stay above this panel. A chosen tab must always fall
         # through, including in the upload dashboard.
         content = html.Div(render_homepage_content(), style={'padding': '20px'})
-        return (no_update, [], [], content, [], [], creator_controls_style(tab))
+        return (no_update, [], [], content)
 
     def publish_url(query):
         # An uploaded file is local to this page; writing a relative tab query
@@ -1569,14 +1592,6 @@ def update_output(tab, user_search_value, user_value, object_search_value, objec
                 chart_df = apply_page_filters(filtered_df, active_filters)
             else:
                 chart_df = filtered_df
-            # The creator is offered the axes the data has: any column on the x axis, and
-            # on the y axis only the ones holding a number, since nothing else can be
-            # summed or averaged. Counting statements needs no value at all.
-            x_options=[{'label': column, 'value': column} for column in chartable_columns(df)]
-            y_options=[{'label': COUNT_LABEL, 'value': COUNT_LABEL}] + [
-                {'label': column, 'value': column} for column in numeric_columns(df)
-            ]
-            creator_style=creator_controls_style(tab)
             if len(df) == 0:
                 # Deactivating the last activity empties the view on purpose. Say so
                 # rather than opening a tab of empty charts with no hint why. The link
@@ -1595,9 +1610,6 @@ def update_output(tab, user_search_value, user_value, object_search_value, objec
                             "is nothing to plot. Use the All button above to bring them back."
                         ),
                     ])),
-                    [],
-                    [],
-                    creator_style,
                 )
             if tab == 'home_tab':
                 # The simlet grid lives in the SIMVA browser's studies list,
@@ -1617,12 +1629,13 @@ def update_output(tab, user_search_value, user_value, object_search_value, objec
                         "filters leave in the view. Add one with the + button below."
                     ),
                 ] + render_page_items(chart_df, active_charts, active_filters,
-                                      CREATE_TAB_KEY, edit_mode))
+                                      CREATE_TAB_KEY, edit_mode,
+                                      show_filters=False))
             elif tab_def is not None and page_def is not None:
                 tab_content = render_default_page(
                     tab_def, page_def, filtered_df, chart_df, selected,
                     edit_mode=edit_mode, admin=is_admin(),
-                    overrides=default_overrides)
+                    overrides=default_overrides, show_filters=False)
             elif tab == 'data_tab':
                 # Legacy link to the data tab when running on the fallback tabs.
                 tab_content = render_xapi_data_tab(
@@ -1638,12 +1651,14 @@ def update_output(tab, user_search_value, user_value, object_search_value, objec
                         "filters leave in the view. Add one with the + button below."
                     ),
                 ] + render_page_items(chart_df, active_charts, active_filters,
-                                      CREATE_TAB_KEY, edit_mode))
+                                      CREATE_TAB_KEY, edit_mode,
+                                      show_filters=False))
             elif tab.startswith(PAGE_TAB_PREFIX):
                 page = page_by_key(dashboard_pages, tab)
                 name = str((page or {}).get('name') or I18n.t('page.unnamed'))
                 tab_content=html.Div([html.H3(name)] + render_page_items(
-                    chart_df, active_charts, active_filters, tab, edit_mode))
+                    chart_df, active_charts, active_filters, tab, edit_mode,
+                    show_filters=False))
             else:
                 tab_content = html.Div()
             new_query_params = { 'tab': tab }
@@ -1694,11 +1709,10 @@ def update_output(tab, user_search_value, user_value, object_search_value, objec
             else:
                 published_url = publish_url(new_query_string)
             return (published_url, user_unique_options,
-                    object_unique_options, tab_content, x_options, y_options, creator_style)
+                    object_unique_options, tab_content)
         else:
             return (publish_url("tab=home_tab"), [], [],
-                    html.Div(render_homepage_content()), [], [],
-                    creator_controls_style(tab))
+                    html.Div(render_homepage_content()))
     else:
         raise PreventUpdate
     
@@ -2013,8 +2027,6 @@ def arrange_graphs(content, layout, rows, columns, page, split_x=2, split_y=2):
                 if not _is_graph_item(item) and not _is_add_slot(item)]
     add_slots = [item for item in items if _is_add_slot(item)]
     graphs = [item for item in items if _is_graph_item(item)]
-    if not graphs:
-        return content
 
     try:
         rows_n = min(MAX_GRAPHS_PER_PAGE, max(1, int(rows or 1)))
@@ -2069,18 +2081,37 @@ def arrange_graphs(content, layout, rows, columns, page, split_x=2, split_y=2):
     else:
         children.extend(shown)
     if add_slots:
-        # The creation slot follows the grid: a 1 x 1 layout shows one +, a
-        # 2 x 2 layout fills its empty cells with + slots, so the grid stays
-        # balanced and every cell is actionable. At least one + is always shown.
+        # The creation slots follow the layout: a one-graph layout shows one
+        # large +, a 1 x 2 grid shows two + side by side. An empty new page
+        # fills every cell of its layout with a + so there is something to
+        # click straight away. Each copy gets its own id so Dash can tell
+        # which + was pressed; the page key is kept before the '|' separator.
         import copy
-        template = add_slots[0]
-        slot_count = max(1, page_size - len(shown))
+        template = add_slots[-1]
+        raw_target = str((getattr(template, 'id', None) or {}).get('index', ''))
+        slot_count = page_size if not graphs else max(1, page_size - len(shown))
         copies = []
-        for _ in range(slot_count):
+        for index in range(slot_count):
             button = copy.deepcopy(template)
             button.n_clicks = 0
+            button.id = {'type': 'item-add-slot',
+                         'index': f"{raw_target}|{index}" if slot_count > 1
+                         else raw_target}
+            style = dict(button.style or {})
+            if not graphs:
+                # An empty new page shows its slots even before edit mode.
+                style['display'] = 'block'
+            if not graphs or (columns_n == 1 and slot_count == 1):
+                # A new page, or a single-column layout, gets a full-cell
+                # affordance instead of the small in-grid button.
+                style.update({'width': '100%', 'height': '180px',
+                              'fontSize': '40px'})
+            button.style = style
             copies.append(button)
         children.extend(copies)
+    if not graphs:
+        # An empty page has no "x of y" line to show.
+        return html.Div(children, style=grid)
     info = html.Span(
         f"{start + 1}-{start + len(shown)} of {len(graphs)}",
         style={'gridColumn': '1 / -1', 'fontFamily': INTER_FONT,
@@ -2114,14 +2145,10 @@ def visual_kind_options():
     ]
 
 
-def item_modal_layout():
-    """The popup opened by a page's + slot to add a chart or a filter."""
+def edit_floater_create_panel():
+    """The create/edit form, keeping the ids the mutation callbacks already use."""
     return html.Div(
-        id='item-modal', style={'display': 'none', 'position': 'fixed',
-                                'top': '15%', 'left': '25%', 'width': '50%',
-                                'background': LIGHT_CARD, 'border': f'2px solid {BRAND_PRIMARY}',
-                                'borderRadius': '8px', 'padding': '20px', 'zIndex': 2000,
-                                'boxShadow': '0 4px 16px rgba(0,0,0,0.2)'},
+        id='edit-floater-create', style={'display': 'none'},
         children=[
             html.H3(I18n.t('visual.open'), id='item-modal-title',
                     style={'marginTop': 0}),
@@ -2194,6 +2221,170 @@ def item_modal_layout():
                 html.Span(id='item-status', children='',
                           style={'marginLeft': '10px', 'color': '#555'}),
             ]),
+        ],
+    )
+
+
+def edit_floater_pages_panel():
+    """The Add/edit page panel of the floater (ADR 0024)."""
+    return html.Div(
+        id='edit-floater-pages', style={'display': 'none'},
+        children=[
+            html.H3(I18n.t('edit.pages'), style={'marginTop': 0}),
+            html.Div([
+                html.Span(I18n.t('page.name'), style={'marginRight': '6px'}),
+                dcc.Input(id='page-name-input', type='text',
+                          placeholder=I18n.t('page.name'),
+                          style={'width': '200px', 'marginRight': '6px'}),
+                html.Button(I18n.t('page.add'), id='page-add', n_clicks=0,
+                            style={'marginRight': '4px'}),
+                html.Button(I18n.t('page.rename'), id='page-rename', n_clicks=0,
+                            style={'marginRight': '4px'}),
+                html.Button(I18n.t('page.delete'),
+                            id={'type': 'page-delete', 'index': 'current'},
+                            n_clicks=0),
+            ]),
+        ],
+    )
+
+
+def edit_floater_layout_panel():
+    """The Edit layout panel of the floater (ADR 0024)."""
+    label_style = {'fontSize': 12, 'marginRight': '4px'}
+    return html.Div(
+        id='edit-floater-layout', style={'display': 'none'},
+        children=[
+            html.H3(I18n.t('edit.layout'), style={'marginTop': 0}),
+            html.Div([
+                html.Span(I18n.t('graphs.layout'), style=label_style),
+                dcc.Dropdown(
+                    id='graph-layout', clearable=False, value='one',
+                    options=[{'label': I18n.t(key), 'value': value}
+                             for value, key in GRAPH_LAYOUT_OPTIONS],
+                    style={'width': '150px', 'marginRight': '10px'}),
+                html.Span(I18n.t('graphs.rows'), style=label_style),
+                dcc.Input(id='graph-rows', type='number', min=1,
+                          max=MAX_GRAPHS_PER_PAGE, value=3,
+                          style={'width': '60px', 'marginRight': '10px'}),
+                html.Span(I18n.t('graphs.columns'), style=label_style),
+                dcc.Input(id='graph-columns', type='number', min=1,
+                          max=MAX_GRAPHS_PER_PAGE, value=2,
+                          style={'width': '60px', 'marginRight': '10px'}),
+                html.Span(I18n.t('graphs.page'), style=label_style),
+                dcc.Input(id='graph-page', type='number', min=1, value=1,
+                          style={'width': '60px'}),
+                html.Span(I18n.t('graphs.split_x'), style=label_style),
+                dcc.Input(id='graph-split-x', type='number', min=0,
+                          max=MAX_GRAPHS_PER_PAGE, value=2,
+                          style={'width': '60px', 'marginRight': '10px'}),
+                html.Span(I18n.t('graphs.split_y'), style=label_style),
+                dcc.Input(id='graph-split-y', type='number', min=0,
+                          max=MAX_GRAPHS_PER_PAGE, value=2,
+                          style={'width': '60px'}),
+            ]),
+        ],
+    )
+
+
+def edit_floater_config_panel():
+    """The Get/load/export configuration panel of the floater (ADR 0024)."""
+    return html.Div(
+        id='edit-floater-config', style={'display': 'none'},
+        children=[
+            html.H3(I18n.t('edit.config'), style={'marginTop': 0}),
+            html.Div([
+                dcc.Input(id='config-name-input', type='text',
+                          placeholder=I18n.t('config.name'),
+                          style={'width': '180px', 'marginRight': '6px'}),
+                html.Button(I18n.t('config.save'), id='config-save', n_clicks=0,
+                            style={'marginRight': '4px'}),
+                html.Button(I18n.t('config.load'), id='config-load', n_clicks=0,
+                            style={'marginRight': '4px'}),
+                html.Button(I18n.t('config.delete'), id='config-delete', n_clicks=0,
+                            style={'marginRight': '4px'}),
+                html.Button(I18n.t('config.refresh'), id='config-refresh', n_clicks=0,
+                            style={'marginRight': '4px'}),
+                html.Button(I18n.t('config.export'), id='config-export', n_clicks=0,
+                            style={'marginRight': '4px'}),
+                dcc.Dropdown(id='config-saved-dropdown', options=[], value=None,
+                             placeholder=I18n.t('config.load'),
+                             style={'width': '200px', 'display': 'inline-block',
+                                    'verticalAlign': 'middle', 'marginRight': '6px'}),
+                dcc.Upload(id='config-import', children=I18n.t('config.import'),
+                           accept='.json,application/json',
+                           style={'display': 'inline-block', 'padding': '5px 10px',
+                                  'border': f'1px solid {BRAND_PRIMARY}',
+                                  'borderRadius': '4px', 'cursor': 'pointer'}),
+                html.Span(id='config-status', children='',
+                          style={'marginLeft': '10px', 'color': '#555'}),
+            ]),
+        ],
+    )
+
+
+def edit_floater_layout():
+    """The simva-front floating window: backdrop, centred card and × close.
+
+    The DOM mirrors `partials/iframe.ejs` and the `.iframe_floating` rules of
+    simva-front: a fixed full-viewport container, a `.backdrop`, a `.floater`
+    card (width `calc(100vw - 32px)`, white, rounded, scrollable), the close
+    button in its top-right corner, and the form content with a 48px top
+    padding. Styles are inline because a deployed proxy may not serve
+    `/assets/...` (ADR 0011); the class names keep the structure recognisable
+    (ADR 0024).
+    """
+    return html.Div(
+        id='edit-floater',
+        className='iframe_floating new_element floating',
+        style={'display': 'none', 'position': 'fixed', 'inset': 0,
+               'zIndex': 9999, 'justifyContent': 'center',
+               'alignItems': 'center'},
+        children=[
+            # .backdrop
+            html.Div(className='backdrop', style={
+                'position': 'fixed', 'inset': 0,
+                'background': 'rgba(0,0,0,0.5)', 'zIndex': 0,
+            }),
+            # .floater
+            html.Div(
+                id='edit-floater-card', className='floater',
+                style={'position': 'relative', 'zIndex': 1,
+                       'width': 'calc(100vw - 32px)',
+                       'display': 'flex', 'flexDirection': 'column',
+                       'background': '#fff', 'borderRadius': '8px',
+                       'overflow': 'hidden', 'height': 'auto',
+                       'maxHeight': 'calc(100vh - 32px)'},
+                children=[
+                    # .iframe_floating_close — top-right of the card
+                    html.Button(
+                        '×', id='edit-floater-close', n_clicks=0,
+                        className='iframe_floating_close',
+                        **{'aria-label': 'Close'},
+                        style={'position': 'absolute', 'top': '8px',
+                               'right': '8px', 'zIndex': 10,
+                               'fontSize': '1.4rem', 'lineHeight': 1,
+                               'width': '32px', 'height': '32px',
+                               'display': 'flex', 'alignItems': 'center',
+                               'justifyContent': 'center', 'border': 'none',
+                               'borderRadius': '4px', 'background': 'none',
+                               'cursor': 'pointer', 'color': '#666'},
+                    ),
+                    # .iframe_content — where simva-front injects its forms
+                    html.Div(
+                        id='edit-floater-body', className='iframe_content',
+                        style={'display': 'flex', 'flexDirection': 'column',
+                               'flex': '1 1 auto', 'minHeight': 0,
+                               'overflow': 'auto',
+                               'padding': '48px 20px 20px 20px'},
+                        children=[
+                            edit_floater_create_panel(),
+                            edit_floater_pages_panel(),
+                            edit_floater_layout_panel(),
+                            edit_floater_config_panel(),
+                        ],
+                    ),
+                ],
+            ),
         ],
     )
 
@@ -2275,6 +2466,9 @@ TMonBody=html.Div([
     dcc.Location(id='url-t-mon', refresh=False), # Location component for URL handling
     # Written only when the header language changes; the reload picks up lng.
     dcc.Location(id='i18n-location', refresh=True),
+    # Standalone simva-front-style overlay at the app level: it lives outside
+    # output-t-mon so it is above the whole page, not only the dashboard.
+    edit_floater_layout(),
     html.Div(id='output-t-mon', style={'display': 'none'}, children=[
         dcc.Store(id='activity-filter-hidden', data=[]),
         dcc.Store(id='created-charts', data=[]),
@@ -2286,7 +2480,6 @@ TMonBody=html.Div([
         # An administrator's overrides of the graphs in the default definition,
         # keyed by tab:page:graph. The deployed JSON file is never modified.
         dcc.Store(id='default-graph-overrides', data={}),
-        dcc.Store(id='new-tab-opened', data=0),
         # Named pages and the filters of the open page. The stores have one
         # writer (update_page_state) and many readers, so a chart and the row
         # of filters above it always describe the same view.
@@ -2298,9 +2491,13 @@ TMonBody=html.Div([
         dcc.Store(id='definition-filters',
                   data=(DefaultDashboard.initial_filter_values(DASHBOARD_DEFINITION)
                         if DASHBOARD_DEFINITION else {})),
-        # Which page the creation popup belongs to, and the last import waiting
-        # for the user to choose Replace, Append or Cancel.
-        dcc.Store(id='item-modal-target', data=None),
+        # Which page the floater acts on, which of its panels is open, and the
+        # last import waiting for Replace, Append or Cancel. All transient.
+        dcc.Store(id='edit-floater-target', data=None),
+        dcc.Store(id='edit-floater-mode', data=None),
+        # Which kind the create panel starts with: filter + opens a filter,
+        # every other creation entry point opens a chart.
+        dcc.Store(id='floater-item-kind', data=None),
         dcc.Store(id='config-pending', data=None),
         # A loaded/imported configuration is announced here; callbacks that
         # own a tab, a hidden-activity list, a page or the layout listen to it.
@@ -2328,58 +2525,23 @@ TMonBody=html.Div([
                 html.Span(id='activity-filter-info', children='', style={'color': '#555'}),
             ]),
             html.Div(id='activity-filter-div', children=[], style={'margin': '5px 0'}),
-            # The toggle stays visible: it is the boundary between viewing and
-            # changing a dashboard. Everything that mutates pages follows it.
+            # All filters of the open page — all-tabs, this-tab and page ones —
+            # are drawn in the top bar, with the filter + after them in edit mode.
+            html.Div(id='dashboard-filter-bar', children=[],
+                     style={'display': 'flex', 'flexWrap': 'wrap',
+                            'alignItems': 'center', 'gap': '8px',
+                            'margin': '5px 0'}),
+            # Edit dashboard is the master toggle; the other three buttons open
+            # one panel each of the same floater (ADR 0024).
             html.Div([
                 html.Button(I18n.t('edit.mode.enable'), id='edit-toggle', n_clicks=0),
-                html.Button('Open dashboard in new tab', id='open-dashboard-new-tab',
-                            n_clicks=0, style={'marginLeft': '8px'}),
+                html.Button(I18n.t('edit.pages'), id='edit-pages-button', n_clicks=0,
+                            style={'marginLeft': '6px'}),
+                html.Button(I18n.t('edit.layout'), id='edit-layout-button', n_clicks=0,
+                            style={'marginLeft': '6px'}),
+                html.Button(I18n.t('edit.config'), id='edit-config-button', n_clicks=0,
+                            style={'marginLeft': '6px'}),
             ], style={'margin': '4px 0'}),
-            # A page is a named tab with its own charts and filters. The name
-            # input feeds New page and Rename page; Delete page removes the
-            # open one. They are shown only in edit mode, beside the new-tab +.
-            html.Div([
-                dcc.Input(id='page-name-input', type='text',
-                          placeholder=I18n.t('page.name'),
-                          style={'width': '200px', 'marginRight': '6px'}),
-                html.Button(I18n.t('page.add'), id='page-add', n_clicks=0,
-                            style={'marginRight': '4px'}),
-                html.Button(I18n.t('page.rename'), id='page-rename', n_clicks=0,
-                            style={'marginRight': '4px'}),
-                html.Button(I18n.t('page.delete'),
-                            id={'type': 'page-delete', 'index': 'current'},
-                            n_clicks=0),
-            ], id='dashboard-page-controls', style={'display': 'none', 'margin': '4px 0'}),
-            # Configuration travels either as a downloaded file or as a named
-            # save kept on the server for this user. Upload must ask before it
-            # replaces what is on screen, hence the confirm popup below.
-            html.Div([
-                dcc.Input(id='config-name-input', type='text',
-                          placeholder=I18n.t('config.name'),
-                          style={'width': '180px', 'marginRight': '6px'}),
-                html.Button(I18n.t('config.save'), id='config-save', n_clicks=0,
-                            style={'marginRight': '4px'}),
-                html.Button(I18n.t('config.load'), id='config-load', n_clicks=0,
-                            style={'marginRight': '4px'}),
-                html.Button(I18n.t('config.delete'), id='config-delete', n_clicks=0,
-                            style={'marginRight': '4px'}),
-                html.Button(I18n.t('config.refresh'), id='config-refresh', n_clicks=0,
-                            style={'marginRight': '4px'}),
-                html.Button(I18n.t('config.export'), id='config-export', n_clicks=0,
-                            style={'marginRight': '4px'}),
-                dcc.Dropdown(id='config-saved-dropdown', options=[], value=None,
-                             placeholder=I18n.t('config.load'),
-                             style={'width': '200px', 'display': 'inline-block',
-                                    'verticalAlign': 'middle', 'marginRight': '6px'}),
-                dcc.Upload(id='config-import', children=I18n.t('config.import'),
-                           accept='.json,application/json',
-                           style={'display': 'inline-block', 'padding': '5px 10px',
-                                  'border': f'1px solid {BRAND_PRIMARY}',
-                                  'borderRadius': '4px', 'cursor': 'pointer'}),
-                html.Span(id='config-status', children='',
-                          style={'marginLeft': '10px', 'color': '#555'}),
-            ], style={'margin': '4px 0', 'display': 'flex', 'alignItems': 'center',
-                      'flexWrap': 'wrap'}),
         ], style={'padding': '8px 20px', 'borderBottom': '1px solid #ddd'}),
         # The tab bar is a sidebar for the dashboard; the visualisations sit to
         # its right. The app header and footer stay outside this panel.
@@ -2393,21 +2555,10 @@ TMonBody=html.Div([
                 dcc.Tabs(
                     id='t-mon-tabs', value=None, vertical=True,
                     className='dashboard-tabs',
-                    children=[
-                        dcc.Tab(id=f'dashboard-tab-{value}', value=value,
-                                label=dashboard_tab_label(label, icon))
-                        for value, label, icon in dashboard_tabs()
-                    ],
+                    # Includes the hidden new-tab + at the end of the bar, so
+                    # its callback output exists on the first render.
+                    children=dashboard_tab_children([]),
                 ),
-                # The new-tab affordance stays beside the tabs and is always shown
-                # in edit mode, whatever tab is open. The toggle callback owns its
-                # style; it starts hidden so the first render is the view mode.
-                html.Button('+', id=NEW_TAB_ADD_ID, n_clicks=0,
-                            title=I18n.t('edit.new_tab'),
-                            style={'display': 'none', 'width': '100%',
-                                   'border': f'1px dashed {BRAND_PRIMARY}',
-                                   'background': LIGHT_CARD, 'color': BRAND_PRIMARY,
-                                   'fontSize': '18px', 'cursor': 'pointer'}),
             ], id='dashboard-tabs-wrapper', className='dashboard-tabs-full',
                 style={'display': 'flex', 'alignItems': 'flex-start',
                        'flex': '0 0 auto'}),
@@ -2415,76 +2566,10 @@ TMonBody=html.Div([
                 # Loader/upload log, including the file name and date, belongs
                 # beside the visualisations rather than above the tab bar.
                 html.Div(id='content', children=[]),
-                html.Div(id='chart-creator-controls', children=[
-                    html.Span('Create a visualisation: ', style={'marginRight': '10px'}),
-                    dcc.Dropdown(
-                        id='chart-type',
-                        options=[{'label': chart_type, 'value': chart_type}
-                                 for chart_type in CHART_TYPES],
-                        value='bar', clearable=False,
-                        style={'display': 'inline-block', 'width': '110px',
-                               'marginRight': '10px'}
-                    ),
-                    dcc.Dropdown(
-                        id='chart-x', options=[], placeholder='on the x axis',
-                        style={'display': 'inline-block', 'width': '230px',
-                               'marginRight': '10px'}
-                    ),
-                    dcc.Dropdown(
-                        id='chart-y', options=[], value=COUNT_LABEL, clearable=False,
-                        style={'display': 'inline-block', 'width': '230px',
-                               'marginRight': '10px'}
-                    ),
-                    dcc.Dropdown(
-                        id='chart-aggregation',
-                        options=[{'label': label, 'value': name}
-                                 for name, label in AGGREGATION_LABELS.items()],
-                        value='count', clearable=False,
-                        style={'display': 'inline-block', 'width': '170px',
-                               'marginRight': '10px'}
-                    ),
-                    html.Button('Add chart', id='chart-add', n_clicks=0),
-                    html.Span(id='chart-creator-status', children='',
-                              style={'marginLeft': '10px', 'color': '#555'}),
-                ], style={'margin': '10px 0'}),
-                item_modal_layout(),
+                # Creation, titles, pages, layout and configuration are all in
+                # the floater window; only confirmations stay inline (ADR 0024).
                 config_confirm_layout(),
                 tab_remove_confirm_layout(),
-                html.Div([
-                    html.Span(I18n.t('graphs.layout'),
-                              style={'marginRight': '6px', 'fontSize': 12}),
-                    dcc.Dropdown(
-                        id='graph-layout', clearable=False, value='one',
-                        options=[{'label': I18n.t(key), 'value': value}
-                                 for value, key in GRAPH_LAYOUT_OPTIONS],
-                        style={'width': '150px', 'marginRight': '10px'}),
-                    html.Span(I18n.t('graphs.rows'), style={'marginRight': '4px',
-                                                            'fontSize': 12}),
-                    dcc.Input(id='graph-rows', type='number', min=1,
-                              max=MAX_GRAPHS_PER_PAGE, value=3,
-                              style={'width': '60px', 'marginRight': '10px'}),
-                    html.Span(I18n.t('graphs.columns'),
-                              style={'marginRight': '4px', 'fontSize': 12}),
-                    dcc.Input(id='graph-columns', type='number', min=1,
-                              max=MAX_GRAPHS_PER_PAGE, value=2,
-                              style={'width': '60px', 'marginRight': '10px'}),
-                    html.Span(I18n.t('graphs.page'), style={'marginRight': '4px',
-                                                            'fontSize': 12}),
-                    dcc.Input(id='graph-page', type='number', min=1, value=1,
-                              style={'width': '60px'}),
-                    html.Span(I18n.t('graphs.split_x'),
-                              style={'marginLeft': '10px', 'marginRight': '4px',
-                                     'fontSize': 12}),
-                    dcc.Input(id='graph-split-x', type='number', min=0,
-                              max=MAX_GRAPHS_PER_PAGE, value=2,
-                              style={'width': '60px', 'marginRight': '10px'}),
-                    html.Span(I18n.t('graphs.split_y'),
-                              style={'marginRight': '4px', 'fontSize': 12}),
-                    dcc.Input(id='graph-split-y', type='number', min=0,
-                              max=MAX_GRAPHS_PER_PAGE, value=2,
-                              style={'width': '60px'}),
-                ], style={'display': 'flex', 'alignItems': 'center',
-                          'gap': '2px', 'margin': '6px 0'}),
                 html.Div(id="tabs-content"),
             ], style={'flex': '1 1 auto', 'minWidth': 0, 'padding': '10px 20px'}),
         ], style={'display': 'flex', 'alignItems': 'flex-start'}),
@@ -2533,6 +2618,16 @@ TMonFooter=html.Div([
 # callbacks write the same Output property.
 _MODAL_VISIBLE = {'display': 'block'}
 _MODAL_HIDDEN = {'display': 'none'}
+# A Dash style callback replaces the whole style dict, so the floater's
+# overlay properties must be written back on every show/hide, not just once in
+# the initial layout — otherwise it drops out of fixed positioning and lands
+# in the document flow at the top of the page.
+_FLOATER_OVERLAY = {
+    'position': 'fixed', 'inset': 0, 'zIndex': 9999,
+    'justifyContent': 'center', 'alignItems': 'center',
+}
+_FLOATER_VISIBLE = {**_FLOATER_OVERLAY, 'display': 'flex'}
+_FLOATER_HIDDEN = {**_FLOATER_OVERLAY, 'display': 'none'}
 
 
 @callback(
@@ -2546,28 +2641,18 @@ def render_dashboard_tabs(pages, edit_mode):
 
 @callback(
     [
-        Output('edit-mode', 'data'),
-        Output('edit-toggle', 'children'),
-        Output(NEW_TAB_ADD_ID, 'style'),
-        Output('dashboard-page-controls', 'style'),
+        Output('edit-floater-create', 'style'),
+        Output('edit-floater-pages', 'style'),
+        Output('edit-floater-layout', 'style'),
+        Output('edit-floater-config', 'style'),
     ],
-    [Input('edit-toggle', 'n_clicks')],
-    [State('edit-mode', 'data')],
+    [Input('edit-floater-mode', 'data')],
 )
-def toggle_edit_mode(n_clicks, enabled):
-    """Switch between the clean view and the layout that can be changed."""
-    on = bool(enabled)
-    triggered = dash.callback_context.triggered
-    if (triggered and 'edit-toggle' in triggered[0].get('prop_id', '')
-            and int(n_clicks or 0) > 0):
-        on = not on
-    style = {'display': 'block' if on else 'none', 'width': '100%',
-             'border': f'1px dashed {BRAND_PRIMARY}',
-             'background': LIGHT_CARD, 'color': BRAND_PRIMARY,
-             'fontSize': '18px', 'cursor': 'pointer'}
-    page_style = {'display': 'block' if on else 'none', 'margin': '4px 0'}
-    return (on, I18n.t('edit.mode.disable' if on else 'edit.mode.enable'),
-            style, page_style)
+def render_edit_floater_panels(mode):
+    """Show only the panel the floater was opened for (ADR 0024)."""
+    panels = ('create', 'pages', 'layout', 'config')
+    return tuple(_MODAL_VISIBLE if mode == panel else _MODAL_HIDDEN
+                 for panel in panels)
 
 
 @callback(
@@ -2616,39 +2701,104 @@ def update_definition_filter_values(values, current):
 
 @callback(
     [
-        Output('item-modal', 'style'),
-        Output('item-modal-target', 'data'),
+        # One state machine owns edit mode and the floater, so no two callbacks
+        # write the same output (ADR 0024).
+        Output('edit-mode', 'data'),
+        Output('edit-toggle', 'children'),
+        Output(NEW_TAB_ADD_ID, 'style'),
+        Output('edit-floater', 'style'),
+        Output('edit-floater-mode', 'data'),
+        Output('edit-floater-target', 'data'),
         Output('item-edit-index', 'data'),
+        Output('floater-item-kind', 'data'),
     ],
     [
+        Input('edit-toggle', 'n_clicks'),
+        Input('edit-floater-close', 'n_clicks'),
+        Input('edit-pages-button', 'n_clicks'),
+        Input('edit-layout-button', 'n_clicks'),
+        Input('edit-config-button', 'n_clicks'),
         Input({'type': 'item-add-slot', 'index': dash.dependencies.ALL}, 'n_clicks'),
+        Input({'type': 'filter-add-slot', 'index': dash.dependencies.ALL}, 'n_clicks'),
         Input('item-cancel', 'n_clicks'),
         Input('item-add', 'n_clicks'),
         Input({'type': 'item-edit', 'index': dash.dependencies.ALL}, 'n_clicks'),
         Input({'type': 'default-graph-edit', 'index': dash.dependencies.ALL},
               'n_clicks'),
     ],
-    [State('t-mon-tabs', 'value')],
+    [State('edit-mode', 'data'), State('t-mon-tabs', 'value')],
 )
-def toggle_item_modal(slot_clicks, cancel_clicks, add_clicks, edit_clicks,
-                      default_edit_clicks, tab):
-    """Open the popup for a new or an existing item; close it after Add/Cancel."""
+def toggle_edit_floater(edit_n, close_n, pages_n, layout_n, config_n,
+                        slot_clicks, filter_clicks, cancel_n, add_n, edit_clicks,
+                        default_edit_clicks, enabled, tab):
+    """Edit mode and the floater are controlled separately here.
+
+    The Edit button only toggles edit mode. The section buttons open their
+    panels; a + slot or an item's Edit opens creation, and the top bar's filter
+    + opens the same create panel with a filter preselected. The floater's ×
+    and the panel's Cancel only close the window (ADR 0024).
+    """
     triggered = dash.callback_context.triggered
-    prop_id = triggered[0]['prop_id'] if triggered else ''
+    prop_ids = [entry.get('prop_id', '') or '' for entry in triggered]
+    prop_id = prop_ids[0] if prop_ids else ''
+    on = bool(enabled)
+
+    def tab_style(active):
+        return {'display': 'block' if active else 'none', 'width': '100%',
+                'border': f'1px dashed {BRAND_PRIMARY}',
+                'background': LIGHT_CARD, 'color': BRAND_PRIMARY,
+                'fontSize': '18px', 'cursor': 'pointer'}
+
+    def open_panel(mode, kind=None):
+        return (True, I18n.t('edit.mode.disable'), tab_style(True),
+                _FLOATER_VISIBLE, mode, no_update, None, kind)
+
+    if 'edit-toggle' in prop_id:
+        if int(edit_n or 0) <= 0:
+            raise PreventUpdate
+        on = not on
+        return (on,
+                I18n.t('edit.mode.disable' if on else 'edit.mode.enable'),
+                tab_style(on), _FLOATER_HIDDEN, None, no_update, None, None)
+    closing = ((any('edit-floater-close' in item for item in prop_ids)
+                and int(close_n or 0) > 0)
+               or (any('item-cancel' in item for item in prop_ids)
+                   and int(cancel_n or 0) > 0))
+    if closing:
+        return (on, no_update, no_update, _FLOATER_HIDDEN, None,
+                no_update, None, no_update)
+    if 'edit-pages-button' in prop_id and int(pages_n or 0) > 0:
+        return open_panel('pages')
+    if 'edit-layout-button' in prop_id and int(layout_n or 0) > 0:
+        return open_panel('layout')
+    if 'edit-config-button' in prop_id and int(config_n or 0) > 0:
+        return open_panel('config')
+    if not on:
+        raise PreventUpdate
+    if ('filter-add-slot' in prop_id and filter_clicks
+            and any(filter_clicks or [])):
+        # The top-bar filter + preselects a multi-select filter.
+        raw_target = _pattern_index(prop_id, '.n_clicks')
+        return (on, no_update, no_update, _FLOATER_VISIBLE, 'create',
+                str(raw_target) if raw_target else page_key(tab), None,
+                'filter-multi')
     if 'item-add-slot' in prop_id and any(slot_clicks or []):
-        target = _pattern_index(prop_id, '.n_clicks')
-        return _MODAL_VISIBLE, str(target) if target else page_key(tab), None
+        raw_target = _pattern_index(prop_id, '.n_clicks')
+        target = str(raw_target).rsplit('|', 1)[0] if raw_target else ''
+        return (on, no_update, no_update, _FLOATER_VISIBLE, 'create',
+                target or page_key(tab), None, None)
     if prop_id.startswith('{') and 'item-edit' in prop_id and any(edit_clicks or []):
-        return _MODAL_VISIBLE, page_key(tab), {
-            'index': _pattern_index(prop_id, '.n_clicks')}
+        return (on, no_update, no_update, _FLOATER_VISIBLE, 'create',
+                page_key(tab), {'index': _pattern_index(prop_id, '.n_clicks')},
+                None)
     if (prop_id.startswith('{') and 'default-graph-edit' in prop_id
             and any(default_edit_clicks or [])):
-        # The graph key travels in the edit index; the default definition owns
-        # the page, so the created-chart target is left alone.
-        return _MODAL_VISIBLE, no_update, {
-            'index': f"default:{_pattern_index(prop_id, '.n_clicks')}"}
-    if 'item-add' in prop_id or 'item-cancel' in prop_id:
-        return _MODAL_HIDDEN, no_update, None
+        return (on, no_update, no_update, _FLOATER_VISIBLE, 'create', no_update,
+                {'index': f"default:{_pattern_index(prop_id, '.n_clicks')}"},
+                None)
+    if 'item-add' in prop_id:
+        return (on, no_update, no_update, _FLOATER_VISIBLE, 'create',
+                no_update, None, no_update)
     raise PreventUpdate
 
 
@@ -2663,23 +2813,23 @@ def toggle_item_modal(slot_clicks, cancel_clicks, add_clicks, edit_clicks,
         Output('item-y', 'value'),
         Output('item-aggregation', 'value'),
     ],
-    [Input('item-edit-index', 'data')],
+    [Input('item-edit-index', 'data'), Input('floater-item-kind', 'data')],
     [
-        State('item-modal-target', 'data'),
+        State('edit-floater-target', 'data'),
         State('created-charts', 'data'),
         State('page-filters', 'data'),
         State('dashboard-pages', 'data'),
         State('default-graph-overrides', 'data'),
     ],
 )
-def prefill_item_modal(edit_index, target, charts, filters, pages, overrides=None):
+def prefill_item_modal(edit_index, floater_kind, target, charts, filters, pages,
+                       overrides=None):
     """Fill the popup with the graph and labels being edited, not with defaults."""
     if not isinstance(edit_index, dict) or not edit_index.get('index'):
-        # A fresh add starts with empty wording, not with the labels of the last
-        # graph that happened to be edited. The kind defaults to a bar chart so
-        # the column, value and label inputs are visible the moment the popup
-        # opens instead of waiting for a kind to be picked.
-        return 'bar', None, no_update, '', '', '', None, no_update
+        # A fresh add starts with empty wording. The top-bar filter + chooses a
+        # filter kind; every other entry point starts with a bar chart so the
+        # column, value and label inputs are visible immediately.
+        return floater_kind or 'bar', None, no_update, '', '', '', None, no_update
     if str(edit_index['index']).startswith('default:'):
         key = str(edit_index['index'])[len('default:'):]
         spec = default_graph_spec(find_default_graph(key))

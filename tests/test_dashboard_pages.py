@@ -235,11 +235,11 @@ def test_page_state_loads_charts_and_filters_from_a_link(monkeypatch):
                                     'values': ['a']})
     pathname = 'tab=create_tab&chart=' + encode_spec(spec) + '&filter=' + encode_filters(
         [filter_spec])
-    pages, charts, filters, _, _ = TMonWidget.update_page_state(
-        None, None, None, None, None, None, None, None,
+    pages, charts, filters, _ = TMonWidget.update_page_state(
+        None, None, None, None, None, None,
         {'display': 'block'}, None, None, None, None,
         'create_tab', None, None,
-        None, None, None, None, None, None, None, None, None, None,
+        None, None, None, None, None, None,
         [], [], [], pathname)
     assert pages == []
     assert charts == [spec]
@@ -262,19 +262,19 @@ def test_page_state_replaces_and_appends_imported_pages(monkeypatch):
 
     monkeypatch.setattr(dash, 'callback_context', Ctx())
     result = TMonWidget.update_page_state(
-        None, None, None, None, None, None, None, None,
+        None, None, None, None, None, None,
         {'display': 'block'}, {'action': 'replace', 'config': document},
         None, None, None,
-        'create_tab', None, None, None, None, None, None,
-        None, None, None, None, None, None, existing, [], [], None)
+        'create_tab', None, None, None, None, None, None, None, None,
+        existing, [], [], None)
     assert [page['id'] for page in result[0]] == ['one']
 
     result = TMonWidget.update_page_state(
-        None, None, None, None, None, None, None, None,
+        None, None, None, None, None, None,
         {'display': 'block'}, {'action': 'append', 'config': document},
         None, None, None,
-        'create_tab', None, None, None, None, None, None,
-        None, None, None, None, None, None, existing, [], [], None)
+        'create_tab', None, None, None, None, None, None, None, None,
+        existing, [], [], None)
     assert len(result[0]) == 2
     assert result[0][0]['id'] != result[0][1]['id']
 
@@ -283,8 +283,14 @@ def test_dashboard_layout_exposes_page_and_config_controls():
     ids = [getattr(child, "id", None) for child in _walk(TMonWidget.TMonBody)]
     for expected in (
         "dashboard-pages", "page-filters", "page-name-input", "page-add",
-        "page-rename", "item-modal", "item-kind", "item-column",
-        "item-add", "item-cancel", "config-name-input", "config-save",
+        "page-rename", "edit-floater", "edit-floater-mode",
+        "edit-floater-create", "edit-floater-pages", "edit-floater-layout",
+        "edit-floater-config",
+        "item-kind", "item-column",
+        "item-add", "item-cancel", "edit-floater-close",
+        "graph-layout", "graph-rows", "graph-columns", "graph-page",
+        "graph-split-x", "graph-split-y",
+        "config-name-input", "config-save",
         "config-load", "config-delete", "config-export", "config-import",
         "config-confirm-modal", "config-confirm-replace", "config-confirm-append",
         "config-confirm-cancel", "config-download", "config-command",

@@ -1,8 +1,10 @@
 """Tests for ADR 0018: edit mode for tabs and visualisations."""
+import dash
 import pandas as pd
 import pytest
 from dash import dcc, html
 
+import TMonWidgets
 from TMonWidgets import I18n, TMonWidget
 from TMonWidgets.ChartBuilder import (
     COUNT_LABEL, build_chart, decode_specs, describe, encode_spec, normalise_spec,
@@ -90,8 +92,11 @@ def test_config_documents_keep_labels():
 def test_layout_exposes_edit_mode_controls():
     ids = [getattr(child, 'id', None) for child in _walk(TMonWidget.TMonBody)]
     for expected in (
-        'edit-mode', 'edit-toggle', 'dashboard-page-controls',
-        'item-edit-index', 'tab-remove-pending',
+        'edit-mode', 'edit-toggle', 'edit-floater', 'edit-floater-mode',
+        'edit-floater-target', 'edit-floater-create', 'edit-floater-pages',
+        'edit-floater-layout', 'edit-floater-config',
+        'edit-pages-button', 'edit-layout-button', 'edit-config-button',
+        'edit-floater-close', 'item-edit-index', 'tab-remove-pending',
         'new-tab-add', 'item-title', 'item-xlabel', 'item-ylabel', 'item-y',
         'item-aggregation', 'item-labels-div', 'tab-remove-confirm-modal',
         'tab-remove-confirm', 'tab-remove-cancel',
@@ -108,6 +113,9 @@ def test_new_tab_is_shown_in_edit_mode_and_custom_tabs_get_remove():
     assert not any(isinstance(i, dict) and i.get('type') == 'tab-remove' for i in ids_view)
     assert any(isinstance(i, dict) and i.get('type') == 'tab-remove'
                and i.get('index') == 'p1' for i in ids_edit)
+    # The new-tab + stays last, after the page that was just added.
+    assert edit[-1].value == '__new_tab__'
+    assert view[-1].value == '__new_tab__'
     # Built-in tabs are never removable, in either mode.
     builtin = [tab for tab in edit if getattr(tab, 'value', '') != 'page:p1']
     builtin_ids = [getattr(node, 'id', None) for tab in builtin for node in _walk(tab)]
@@ -146,31 +154,125 @@ def test_page_state_arguments_follow_dash_input_then_state_order():
     import inspect
 
     params = list(inspect.signature(TMonWidget.update_page_state).parameters)
-    assert params[:13] == [
+    assert params[:11] == [
         'page_add_n', 'page_rename_n', 'page_delete_n', 'item_add_n',
-        'item_remove_n', 'filter_values', 'chart_add_n', 'chart_remove_n',
-        'panel_style', 'config_command', 'tab_remove_clicks',
-        'confirm_remove_n', 'new_tab_n',
+        'item_remove_n', 'filter_values', 'panel_style', 'config_command',
+        'tab_remove_clicks', 'confirm_remove_n', 'new_tab_n',
     ]
-    assert params[13:30] == [
+    assert params[11:24] == [
         'tab', 'target', 'page_name', 'item_kind', 'item_chart_type',
         'item_column', 'item_game', 'item_target', 'item_mode',
-        'chart_type', 'chart_x', 'chart_y', 'chart_aggregation',
         'pages', 'charts', 'filters', 'pathname',
     ]
 
 
-def test_edit_toggle_switches_between_view_and_edit(monkeypatch):
+def test_edit_toggle_only_switches_edit_mode(monkeypatch):
     _ctx(monkeypatch, 'edit-toggle.n_clicks')
-    enabled, label, style, page_style = TMonWidget.toggle_edit_mode(1, False)
+    result = TMonWidget.toggle_edit_floater(
+        1, 0, 0, 0, 0, [], [], 0, 0, [], [], False, None)
+    enabled, label, tab_style, floater_style, mode, target, edit, kind = result
     assert enabled is True
     assert label == I18n.t('edit.mode.disable')
-    assert style['display'] == 'block'
-    assert page_style['display'] == 'block'
-    enabled, label, style, page_style = TMonWidget.toggle_edit_mode(1, True)
+    assert tab_style['display'] == 'block'
+    # Edit reveals the other controls; it does NOT open the floater.
+    assert floater_style['display'] == 'none'
+    assert mode is None
+    assert edit is None
+
+    result = TMonWidget.toggle_edit_floater(
+        1, 0, 0, 0, 0, [], [], 0, 0, [], [], True, None)
+    enabled, label, tab_style, floater_style, mode, target, edit, kind = result
     assert enabled is False
-    assert style['display'] == 'none'
-    assert page_style['display'] == 'none'
+    assert label == I18n.t('edit.mode.enable')
+    assert tab_style['display'] == 'none'
+    assert floater_style['display'] == 'none'
+    assert mode is None
+
+
+def test_close_only_closes_the_floater(monkeypatch):
+    _ctx(monkeypatch, 'edit-floater-close.n_clicks')
+    result = TMonWidget.toggle_edit_floater(
+        0, 1, 0, 0, 0, [], [], 0, 0, [], [], True, None)
+    assert result[0] is True  # still in edit mode; Edit/Done exits it
+    assert result[3]['display'] == 'none'
+    assert result[3]['position'] == 'fixed'
+    assert result[4] is None
+
+
+def test_section_buttons_open_their_own_panel(monkeypatch):
+    for button, values, expected in (
+        ('edit-pages-button.n_clicks', (1, 0, 0), 'pages'),
+        ('edit-layout-button.n_clicks', (0, 1, 0), 'layout'),
+        ('edit-config-button.n_clicks', (0, 0, 1), 'config'),
+    ):
+        _ctx(monkeypatch, button)
+        result = TMonWidget.toggle_edit_floater(
+            0, 0, *values, [], [], 0, 0, [], [], False, None)
+        assert result[0] is True
+        assert result[2]['display'] == 'block'
+        assert result[3]['display'] == 'flex'
+        assert result[3]['position'] == 'fixed'
+        assert result[4] == expected
+
+
+def test_cancel_closes_the_floater(monkeypatch):
+    _ctx(monkeypatch, 'item-cancel.n_clicks')
+    result = TMonWidget.toggle_edit_floater(
+        0, 0, 0, 0, 0, [], [], 1, 0, [], [], True, None)
+    assert result[0] is True  # still in edit mode
+    assert result[3]['display'] == 'none'
+    assert result[3]['position'] == 'fixed'
+    assert result[4] is None
+
+
+def test_close_wins_even_when_another_input_triggered_too(monkeypatch):
+    class Ctx:
+        triggered = [
+            {'prop_id': '{"index":"page:p1","type":"item-add-slot"}.n_clicks'},
+            {'prop_id': 'edit-floater-close.n_clicks'},
+        ]
+
+    monkeypatch.setattr(dash, 'callback_context', Ctx())
+    result = TMonWidget.toggle_edit_floater(
+        0, 1, 0, 0, 0, [1], [], 0, 0, [], [], True, None)
+    assert result[3]['display'] == 'none'
+    assert result[4] is None
+
+
+def test_floater_shows_only_the_panel_for_its_mode():
+    for mode in ('create', 'pages', 'layout', 'config'):
+        styles = TMonWidget.render_edit_floater_panels(mode)
+        assert len(styles) == 4
+        assert styles[('create', 'pages', 'layout', 'config').index(mode)]['display'] == 'block'
+        assert all(s['display'] == 'none' for i, s in enumerate(styles)
+                   if i != ('create', 'pages', 'layout', 'config').index(mode))
+
+
+def test_each_section_panel_holds_its_controls():
+    def find(component, id):
+        for node in _walk(component):
+            node_id = getattr(node, 'id', None)
+            if node_id == id or (isinstance(node_id, dict)
+                                 and (node_id.get('index') == id
+                                      or node_id.get('type') == id)):
+                return node
+        return None
+
+    panels = {
+        'edit-floater-pages': ('page-name-input', 'page-add', 'page-rename',
+                               'page-delete'),
+        'edit-floater-layout': ('graph-layout', 'graph-rows', 'graph-columns',
+                                'graph-page', 'graph-split-x', 'graph-split-y'),
+        'edit-floater-config': ('config-name-input', 'config-save', 'config-load',
+                                'config-export', 'config-import'),
+    }
+    for panel_id, controls in panels.items():
+        panel = find(TMonWidget.TMonBody, panel_id)
+        assert panel is not None, panel_id
+        assert panel.style['display'] == 'none'
+        for control in controls:
+            assert find(panel, control) is not None, control
+
 
 
 def test_tab_remove_asks_before_removing(monkeypatch):
@@ -183,19 +285,100 @@ def test_tab_remove_asks_before_removing(monkeypatch):
         None, {'display': 'none'})
 
 
-def test_edit_button_opens_the_popup_for_an_existing_item(monkeypatch):
+def test_edit_button_opens_the_floater_create_panel_for_an_existing_item(monkeypatch):
     _ctx(monkeypatch, '{"index":"chart:0","type":"item-edit"}.n_clicks')
-    style, target, edit = TMonWidget.toggle_item_modal(
-        [], 0, 0, [1], [], 'page:p1')
-    assert style['display'] == 'block'
-    assert target == 'page:p1'
-    assert edit == {'index': 'chart:0'}
+    result = TMonWidget.toggle_edit_floater(
+        0, 0, 0, 0, 0, [], [], 0, 0, [1], [], True, 'page:p1')
+    assert result[3]['display'] == 'flex'
+    assert result[4] == 'create'
+    assert result[5] == 'page:p1'
+    assert result[6] == {'index': 'chart:0'}
+
+
+def test_add_slot_switches_the_floater_to_create_mode(monkeypatch):
+    _ctx(monkeypatch, '{"index":"page:p1","type":"item-add-slot"}.n_clicks')
+    result = TMonWidget.toggle_edit_floater(
+        0, 0, 0, 0, 0, [1], [], 0, 0, [], [], True, 'page:p1')
+    assert result[4] == 'create'
+    assert result[5] == 'page:p1'
+    assert result[6] is None
+
+
+def test_layout_slot_click_targets_its_page(monkeypatch):
+    _ctx(monkeypatch,
+         '{"index":"page:p1|1","type":"item-add-slot"}.n_clicks')
+    result = TMonWidget.toggle_edit_floater(
+        0, 0, 0, 0, 0, [1], [], 0, 0, [], [], True, None)
+    assert result[4] == 'create'
+    assert result[5] == 'page:p1'
+    assert result[6] is None
+
+
+def test_top_bar_shows_all_filters_and_the_filter_add_slot(monkeypatch):
+    from TMonWidgets.MultiSelector import normalise_filter
+
+    monkeypatch.setattr(TMonWidgets, 'xapiData', [
+        {'actor': {'name': 'a'}, 'object': {'id': 'x'},
+         'verb': {'id': 'http://example.com/verb'}},
+    ])
+    pages = [{'id': 'p1', 'name': 'Page', 'charts': [], 'filters': []}]
+    filters = [normalise_filter({'column': 'actor.name', 'mode': 'single'})]
+    bar = TMonWidget.render_top_filter_bar(
+        'progress_tab', pages, filters, {}, [], None, True, {'display': 'block'})
+    ids = [getattr(node, 'id', None) for node in _walk(bar)]
+    assert {'type': 'definition-filter', 'index': 'player'} in ids
+    assert {'type': 'page-filter', 'index': 'create_tab:0'} in ids
+    assert {'type': 'filter-add-slot', 'index': 'create_tab'} in ids
+
+
+def test_filter_add_slot_is_hidden_at_the_total_limit(monkeypatch):
+    from TMonWidgets.MultiSelector import MAX_TOTAL_FILTERS, normalise_filter
+
+    monkeypatch.setattr(TMonWidgets, 'xapiData', [
+        {'actor': {'name': 'a'}, 'object': {'id': 'x'},
+         'verb': {'id': 'http://example.com/verb'}},
+    ])
+    # The Create tab has the two dashboard-wide filters; add enough to pass 6.
+    filters = [normalise_filter({'column': 'actor.name', 'mode': 'single'})
+               for _ in range(MAX_TOTAL_FILTERS)]
+    bar = TMonWidget.render_top_filter_bar(
+        'create_tab', [], filters, {}, [], None, True, {'display': 'block'})
+    ids = [getattr(node, 'id', None) for node in _walk(bar)]
+    assert not any(isinstance(i, dict) and i.get('type') == 'filter-add-slot'
+                   for i in ids)
+
+
+def test_add_filter_is_rejected_at_the_total_limit(monkeypatch):
+    from TMonWidgets.MultiSelector import normalise_filter
+
+    _ctx(monkeypatch, 'item-add.n_clicks')
+    # progress_tab has 3 definition filters; 3 user filters reach the cap of 6.
+    filters = [normalise_filter({'column': 'actor.name', 'mode': 'single'})
+               for _ in range(3)]
+    result = TMonWidget.update_page_state(
+        None, None, None, 1, None, None, {'display': 'block'}, None,
+        None, None, None, 'progress_tab', None, None,
+        'filter-multi', None, 'actor.name', None, None, None,
+        [], [], filters, None)
+    assert len(result[2]) == 3
+    assert result[3] == I18n.t('visual.max_filters')
+
+
+def test_filter_add_slot_opens_create_panel_with_a_filter(monkeypatch):
+    _ctx(monkeypatch,
+         '{"index":"create_tab","type":"filter-add-slot"}.n_clicks')
+    result = TMonWidget.toggle_edit_floater(
+        0, 0, 0, 0, 0, [], [1], 0, 0, [], [], True, 'create_tab')
+    assert result[4] == 'create'
+    assert result[5] == 'create_tab'
+    assert result[6] is None
+    assert result[7] == 'filter-multi'
 
 
 def test_popup_is_prefilled_with_the_graph_and_its_labels():
     spec = _spec(title='Title', x_label='X', y_label='Y')
     result = TMonWidget.prefill_item_modal(
-        {'index': 'chart:0'}, 'create_tab', [spec], [], [])
+        {'index': 'chart:0'}, None, 'create_tab', [spec], [], [])
     assert result[0] == 'bar'
     assert result[1] == 'actor.name'
     assert result[3:6] == ('Title', 'X', 'Y')
@@ -203,12 +386,12 @@ def test_popup_is_prefilled_with_the_graph_and_its_labels():
 
 def test_new_tab_button_creates_an_empty_page(monkeypatch):
     _ctx(monkeypatch, 'new-tab-add.n_clicks')
-    pages, charts, filters, _, _ = TMonWidget.update_page_state(
-        None, None, None, None, None, None, None, None,
+    pages, charts, filters, _ = TMonWidget.update_page_state(
+        None, None, None, None, None, None,
         {'display': 'block'}, None, None, None, 1,
         'create_tab', None, 'From the tab',
         None, None, None, None, None, None,
-        None, None, None, None, [], [], [], None)
+        [], [], [], None)
     assert len(pages) == 1
     assert pages[0]['name'] == 'From the tab'
     assert pages[0]['charts'] == []
@@ -221,11 +404,11 @@ def test_confirming_a_tab_removal_deletes_that_page(monkeypatch):
         {'id': 'p2', 'name': 'Second', 'charts': [], 'filters': []},
     ]
     result = TMonWidget.update_page_state(
-        None, None, None, None, None, None, None, None,
+        None, None, None, None, None, None,
         {'display': 'block'}, None, None, 1, None,
         'create_tab', None, None,
         None, None, None, None, None, None,
-        None, None, None, None, pages, [], [], None,
+        pages, [], [], None,
         pending_remove='p1')
     assert [page['id'] for page in result[0]] == ['p2']
 
@@ -233,12 +416,12 @@ def test_confirming_a_tab_removal_deletes_that_page(monkeypatch):
 def test_editing_a_graph_replaces_the_spec_with_its_labels(monkeypatch):
     _ctx(monkeypatch, 'item-add.n_clicks')
     original = _spec()
-    _, charts, _, _, _ = TMonWidget.update_page_state(
-        None, None, None, 1, None, None, None, None,
+    _, charts, _, _ = TMonWidget.update_page_state(
+        None, None, None, 1, None, None,
         {'display': 'block'}, None, None, None, None,
         'create_tab', None, None,
         'bar', None, 'actor.name', None, None, None,
-        None, None, None, None, [], [original], [], None,
+        [], [original], [], None,
         item_edit_index={'index': 'chart:0'},
         item_title='Edited title', item_xlabel='Player', item_ylabel='Count',
         item_y=COUNT_LABEL, item_aggregation='count')
@@ -256,6 +439,7 @@ def test_edit_mode_labels_exist_in_every_language():
         'edit.mode.enable', 'edit.mode.disable', 'edit.remove', 'edit.item',
         'edit.graph', 'edit.filter', 'edit.new_tab', 'edit.remove_tab',
         'edit.confirm_tab', 'edit.label.title', 'edit.label.x', 'edit.label.y',
+        'edit.mode.manage', 'edit.pages', 'edit.layout', 'edit.config',
         'visual.y',
     ]
     for language in ('en', 'es', 'fr'):

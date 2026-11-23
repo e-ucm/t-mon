@@ -77,9 +77,10 @@
   "visual.added": "Added.",
   "visual.no_column": "Pick a column first.",
   "visual.max_charts": "This page holds at most 8 charts.",
-  "visual.max_filters": "This page holds at most 8 filters.",
+  "visual.max_filters": "This page holds at most 6 filters.",
   "visual.y": "Value (y axis)",
   "edit.mode.enable": "Edit",
+  "edit.mode.manage": "Edit dashboard",
   "edit.mode.disable": "Done",
   "edit.remove": "Remove",
   "edit.item": "Edit",
@@ -131,5 +132,9 @@
   "visual.option": "Mode",
   "visual.mode.absolute": "Absolute time",
   "visual.mode.relative": "Relative time",
-  "edit.visualisation": "Edit visualisation"
+  "edit.visualisation": "Edit visualisation",
+  "edit.pages": "Add/edit page",
+  "edit.layout": "Edit layout",
+  "edit.config": "Configuration",
+  "filter.add": "Add a filter"
 }

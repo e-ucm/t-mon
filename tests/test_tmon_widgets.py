@@ -240,10 +240,14 @@ def test_dashboard_tabs_are_vertical_with_svg_icons():
         f'dashboard-tab-{tab["id"]}'
         for tab in TMonWidget.DASHBOARD_DEFINITION['tabs']
     }
+    expected.add('new-tab-add-tab')
     assert set(tab_ids) == expected
-    assert tab_ids[-1] == 'dashboard-tab-xapi_data'
+    assert tab_ids[-2] == 'dashboard-tab-xapi_data'
+    assert tab_ids[-1] == 'new-tab-add-tab'
     assert 'dashboard-tab-home_tab' in tab_ids
     for tab in tabs.children:
+        if tab.id == 'new-tab-add-tab':
+            continue
         icon, name = tab.label.children
         assert isinstance(icon, html.Img)
         assert icon.src.startswith('data:image/svg+xml;base64,')
@@ -287,6 +291,38 @@ def test_graph_layout_modes():
     assert horizontal.style['gridTemplateColumns'] == 'repeat(2, minmax(0, 1fr))'
 
 
+def _empty_page_content():
+    return html.Div([html.H3('My page')]
+                    + TMonWidget.render_page_items(pd.DataFrame(), [], [],
+                                                   'page:p1', False))
+
+
+def _slots(grid):
+    return [child for child in grid.children
+            if isinstance(child, html.Button)
+            and isinstance(getattr(child, 'id', None), dict)
+            and child.id.get('type') == 'item-add-slot']
+
+
+def test_empty_page_shows_one_big_slot_for_one_layout():
+    grid = TMonWidget.arrange_graphs(_empty_page_content(), 'one', 3, 2, 1)
+    slots = _slots(grid)
+    assert len(slots) == 1
+    assert slots[0].style['display'] == 'block'
+    assert slots[0].style['width'] == '100%'
+    assert slots[0].style['height'] == '180px'
+
+
+def test_empty_page_shows_one_slot_per_layout_cell():
+    grid = TMonWidget.arrange_graphs(_empty_page_content(), 'grid', 1, 2, 1)
+    slots = _slots(grid)
+    assert len(slots) == 2
+    assert grid.style['gridTemplateColumns'] == 'repeat(2, minmax(0, 1fr))'
+    # Unique ids: Dash must be able to tell which + was clicked.
+    assert slots[0].id['index'] == 'page:p1|0'
+    assert slots[1].id['index'] == 'page:p1|1'
+
+
 def test_live_updates_live_in_the_footer_and_only_for_simva():
     footer_ids = [getattr(child, 'id', None)
                   for child in _walk(TMonWidget.TMonFooter)]
@@ -320,12 +356,13 @@ def test_dashboard_tabs_toggle_collapses_to_icons_only():
     assert TMonWidget.toggle_dashboard_tabs(2) == ('dashboard-tabs-full', '◀')
 
 
-def test_home_tab_is_hidden_only_in_a_session_dashboard():
-    assert TMonWidget.hide_home_tab('/simlet/1/session/11/dashboard/default') == {
-        'display': 'none'}
-    assert TMonWidget.hide_home_tab('/simlet/1') == {'display': 'block'}
-    assert TMonWidget.hide_home_tab('/dashboard/upload') == {'display': 'none'}
-    assert TMonWidget.hide_home_tab(None) == {'display': 'block'}
+def test_home_tab_is_always_present_in_the_tab_bar():
+    for pages in ([], [{'id': 'mine', 'name': 'Mine'}]):
+        for edit_mode in (False, True):
+            tabs = TMonWidget.dashboard_tab_children(pages, edit_mode)
+            home = [tab for tab in tabs if tab.value == 'home_tab']
+            assert len(home) == 1
+            assert 'HomePage' in str(home[0].label)
 
 
 def test_session_dashboard_has_no_default_tab(monkeypatch):
@@ -441,7 +478,7 @@ def test_dashboard_layout_puts_content_to_the_right_of_the_tabs():
     content = find(body, 'dashboard-content')
     assert find(content, 'tabs-content') is not None
     assert find(content, 'content') is not None
-    assert find(content, 'chart-creator-controls') is not None
+    assert find(body, 'edit-floater') is not None
     # The sidebar and the content are siblings under one flex row.
     row = next(c for c in _walk(body)
                if isinstance(c, html.Div)

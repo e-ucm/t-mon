@@ -77,9 +77,10 @@
   "visual.added": "Añadido.",
   "visual.no_column": "Selecciona una columna primero.",
   "visual.max_charts": "Esta página admite como máximo 8 gráficos.",
-  "visual.max_filters": "Esta página admite como máximo 8 filtros.",
+  "visual.max_filters": "Esta página admite como máximo 6 filtros.",
   "visual.y": "Valor (eje y)",
   "edit.mode.enable": "Editar",
+  "edit.mode.manage": "Editar panel",
   "edit.mode.disable": "Listo",
   "edit.remove": "Eliminar",
   "edit.item": "Editar",
@@ -131,5 +132,9 @@
   "visual.option": "Modo",
   "visual.mode.absolute": "Tiempo absoluto",
   "visual.mode.relative": "Tiempo relativo",
-  "edit.visualisation": "Editar visualización"
+  "edit.visualisation": "Editar visualización",
+  "edit.pages": "Añadir/editar página",
+  "edit.layout": "Editar disposición",
+  "edit.config": "Configuración",
+  "filter.add": "Añadir filtro"
 }

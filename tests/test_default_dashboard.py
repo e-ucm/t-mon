@@ -332,8 +332,9 @@ def test_definition_filter_choice_is_saved(monkeypatch):
 def test_named_pages_are_appended_after_the_definition_tabs():
     pages = [{"id": "mine", "name": "Mine", "charts": [], "filters": []}]
     ids = [tab.value for tab in TMonWidget.dashboard_tab_children(pages)]
-    assert ids[-2] == DefaultDashboard.XAPI_TAB_ID
-    assert ids[-1] == "page:mine"
+    assert ids[-3] == DefaultDashboard.XAPI_TAB_ID
+    assert ids[-2] == "page:mine"
+    assert ids[-1] == "__new_tab__"
 
 
 def test_legacy_tabs_remain_the_fallback():

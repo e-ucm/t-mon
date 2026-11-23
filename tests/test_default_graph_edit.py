@@ -137,18 +137,19 @@ def test_an_override_replaces_the_figure_but_not_the_definition():
 # --- popup ---------------------------------------------------------------
 
 
-def test_edit_button_opens_the_popup_for_a_default_graph(monkeypatch):
+def test_edit_button_opens_the_floater_for_a_default_graph(monkeypatch):
     _ctx(monkeypatch,
          json.dumps({'index': KEY, 'type': 'default-graph-edit'}) + '.n_clicks')
-    style, target, edit = TMonWidget.toggle_item_modal(
-        [], 0, 0, [], [1], 'progress_tab')
-    assert style['display'] == 'block'
-    assert edit == {'index': f'default:{KEY}'}
+    result = TMonWidget.toggle_edit_floater(
+        0, 0, 0, 0, 0, [], [], 0, 0, [], [1], True, 'progress_tab')
+    assert result[3]['display'] == 'flex'
+    assert result[4] == 'create'
+    assert result[6] == {'index': f'default:{KEY}'}
 
 
 def test_prefill_reads_the_definition_and_any_override():
     result = TMonWidget.prefill_item_modal(
-        {'index': f'default:{KEY}'}, None, [], [], [], {})
+        {'index': f'default:{KEY}'}, None, None, [], [], [], {})
     assert result[0] == 'bar'
     assert result[1] == 'actor.name'
     assert result[3:6] == ('Statements by player', 'Player', 'Statements')
@@ -158,7 +159,7 @@ def test_prefill_reads_the_definition_and_any_override():
     override = normalise_spec({**TMonWidget.default_graph_spec(GRAPH),
                                'title': 'Saved edit', 'x': 'actor.name'})
     result = TMonWidget.prefill_item_modal(
-        {'index': f'default:{KEY}'}, None, [], [], [], {KEY: override})
+        {'index': f'default:{KEY}'}, None, None, [], [], [], {KEY: override})
     assert result[3] == 'Saved edit'
 
 
@@ -200,12 +201,12 @@ def test_a_non_admin_cannot_write_an_override(monkeypatch):
 
 def test_editing_a_default_graph_does_not_add_a_page_chart(monkeypatch):
     _ctx(monkeypatch, 'item-add.n_clicks')
-    _, charts, _, _, _ = TMonWidget.update_page_state(
-        None, None, None, 1, None, None, None, None,
+    _, charts, _, _ = TMonWidget.update_page_state(
+        None, None, None, 1, None, None,
         {'display': 'block'}, None, None, None, None,
         'progress_tab', None, None,
         'bar', None, 'actor.name', None, None, None,
-        None, None, None, None, [], [], [], None,
+        [], [], [], None,
         item_edit_index={'index': f'default:{KEY}'})
     assert charts == []
 

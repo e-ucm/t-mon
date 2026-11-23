@@ -11,6 +11,9 @@ import json
 FILTER_MODES = ("multi", "single")
 PAGE_FILTER_PARAM = "filter"
 MAX_PAGE_FILTERS = 8
+# Total filters a page may show: definition (all-tabs + this-tab) filters plus
+# the ones the user adds to the page (ADR 0024).
+MAX_TOTAL_FILTERS = 6
 
 
 def searchValueFromMultiSelector(df, object, search_value,value):
