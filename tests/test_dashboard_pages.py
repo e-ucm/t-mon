@@ -284,7 +284,7 @@ def test_dashboard_layout_exposes_page_and_config_controls():
     for expected in (
         "dashboard-pages", "page-filters", "page-name-input", "page-add",
         "page-rename", "edit-floater", "edit-floater-mode",
-        "edit-floater-create", "edit-floater-pages", "edit-floater-layout",
+        "edit-floater-create", "edit-floater-pages", "edit-floater-layout-section",
         "edit-floater-config",
         "item-kind", "item-column",
         "item-add", "item-cancel", "edit-floater-close",

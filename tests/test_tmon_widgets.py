@@ -313,6 +313,15 @@ def test_empty_page_shows_one_big_slot_for_one_layout():
     assert slots[0].style['height'] == '180px'
 
 
+def test_title_spans_the_grid_above_a_four_slot_layout():
+    grid = TMonWidget.arrange_graphs(_empty_page_content(), 'grid', 2, 2, 1)
+    title = grid.children[0]
+    assert getattr(title, 'children', None) == 'My page'
+    assert title.style['gridColumn'] == '1 / -1'
+    assert len(_slots(grid)) == 4
+    assert grid.style['gridTemplateColumns'] == 'repeat(2, minmax(0, 1fr))'
+
+
 def test_empty_page_shows_one_slot_per_layout_cell():
     grid = TMonWidget.arrange_graphs(_empty_page_content(), 'grid', 1, 2, 1)
     slots = _slots(grid)

@@ -35,7 +35,7 @@ def _ctx(monkeypatch, prop_id):
 
     monkeypatch.setattr(
         dash, 'callback_context',
-        type('Ctx', (), {'triggered': [{'prop_id': prop_id}]})())
+        type('Ctx', (), {'triggered': [{'prop_id': prop_id, 'value': 1}]})())
 
 
 def _chart_df():
@@ -141,7 +141,7 @@ def test_edit_button_opens_the_floater_for_a_default_graph(monkeypatch):
     _ctx(monkeypatch,
          json.dumps({'index': KEY, 'type': 'default-graph-edit'}) + '.n_clicks')
     result = TMonWidget.toggle_edit_floater(
-        0, 0, 0, 0, 0, [], [], 0, 0, [], [1], True, 'progress_tab')
+        0, 0, 0, 0, 0, [], [], 0, 0, [], [1], 0, 'progress_tab', True)
     assert result[3]['display'] == 'flex'
     assert result[4] == 'create'
     assert result[6] == {'index': f'default:{KEY}'}

@@ -32,11 +32,11 @@ def _spec(**labels):
     return normalise_spec(data)
 
 
-def _ctx(monkeypatch, prop_id):
+def _ctx(monkeypatch, prop_id, value=1):
     import dash
 
     class Ctx:
-        triggered = [{'prop_id': prop_id}]
+        triggered = [{'prop_id': prop_id, 'value': value}]
 
     monkeypatch.setattr(dash, 'callback_context', Ctx())
 
@@ -94,7 +94,7 @@ def test_layout_exposes_edit_mode_controls():
     for expected in (
         'edit-mode', 'edit-toggle', 'edit-floater', 'edit-floater-mode',
         'edit-floater-target', 'edit-floater-create', 'edit-floater-pages',
-        'edit-floater-layout', 'edit-floater-config',
+        'edit-floater-layout-section', 'edit-floater-config',
         'edit-pages-button', 'edit-layout-button', 'edit-config-button',
         'edit-floater-close', 'item-edit-index', 'tab-remove-pending',
         'new-tab-add', 'item-title', 'item-xlabel', 'item-ylabel', 'item-y',
@@ -169,7 +169,7 @@ def test_page_state_arguments_follow_dash_input_then_state_order():
 def test_edit_toggle_only_switches_edit_mode(monkeypatch):
     _ctx(monkeypatch, 'edit-toggle.n_clicks')
     result = TMonWidget.toggle_edit_floater(
-        1, 0, 0, 0, 0, [], [], 0, 0, [], [], False, None)
+        1, 0, 0, 0, 0, [], [], 0, 0, [], [], 0, None, False)
     enabled, label, tab_style, floater_style, mode, target, edit, kind = result
     assert enabled is True
     assert label == I18n.t('edit.mode.disable')
@@ -180,7 +180,7 @@ def test_edit_toggle_only_switches_edit_mode(monkeypatch):
     assert edit is None
 
     result = TMonWidget.toggle_edit_floater(
-        1, 0, 0, 0, 0, [], [], 0, 0, [], [], True, None)
+        1, 0, 0, 0, 0, [], [], 0, 0, [], [], 0, None, True)
     enabled, label, tab_style, floater_style, mode, target, edit, kind = result
     assert enabled is False
     assert label == I18n.t('edit.mode.enable')
@@ -192,7 +192,7 @@ def test_edit_toggle_only_switches_edit_mode(monkeypatch):
 def test_close_only_closes_the_floater(monkeypatch):
     _ctx(monkeypatch, 'edit-floater-close.n_clicks')
     result = TMonWidget.toggle_edit_floater(
-        0, 1, 0, 0, 0, [], [], 0, 0, [], [], True, None)
+        0, 1, 0, 0, 0, [], [], 0, 0, [], [], 0, None, True)
     assert result[0] is True  # still in edit mode; Edit/Done exits it
     assert result[3]['display'] == 'none'
     assert result[3]['position'] == 'fixed'
@@ -202,12 +202,12 @@ def test_close_only_closes_the_floater(monkeypatch):
 def test_section_buttons_open_their_own_panel(monkeypatch):
     for button, values, expected in (
         ('edit-pages-button.n_clicks', (1, 0, 0), 'pages'),
-        ('edit-layout-button.n_clicks', (0, 1, 0), 'layout'),
+        ('edit-layout-button.n_clicks', (0, 1, 0), 'pages'),
         ('edit-config-button.n_clicks', (0, 0, 1), 'config'),
     ):
         _ctx(monkeypatch, button)
         result = TMonWidget.toggle_edit_floater(
-            0, 0, *values, [], [], 0, 0, [], [], False, None)
+            0, 0, *values, [], [], 0, 0, [], [], 0, None, False)
         assert result[0] is True
         assert result[2]['display'] == 'block'
         assert result[3]['display'] == 'flex'
@@ -215,10 +215,44 @@ def test_section_buttons_open_their_own_panel(monkeypatch):
         assert result[4] == expected
 
 
+def test_new_tab_opens_the_combined_page_panel(monkeypatch):
+    _ctx(monkeypatch, 'new-tab-add.n_clicks')
+    result = TMonWidget.toggle_edit_floater(
+        0, 0, 0, 0, 0, [], [], 0, 0, [], [], 1, None, True)
+    assert result[3]['display'] == 'flex'
+    assert result[4] == 'pages'
+
+
+def test_new_slots_appearing_do_not_open_the_create_panel(monkeypatch):
+    # Rendering a new page adds new + slots to an ALL input. A stale click on
+    # another slot must not make Dash think one of the new ones was pressed.
+    class Ctx:
+        triggered = [{
+            'prop_id': '{"index":"page:new|0","type":"item-add-slot"}.n_clicks',
+            'value': 0,
+        }]
+
+    from dash.exceptions import PreventUpdate
+
+    monkeypatch.setattr(dash, 'callback_context', Ctx())
+    with pytest.raises(PreventUpdate):
+        TMonWidget.toggle_edit_floater(
+            0, 0, 0, 0, 0, [1, 0], [], 0, 0, [], [], 0, 'page:new', True)
+
+
+def test_switching_tabs_does_not_show_the_floater(monkeypatch):
+    _ctx(monkeypatch, 't-mon-tabs.value')
+    result = TMonWidget.toggle_edit_floater(
+        0, 0, 0, 0, 0, [], [], 0, 0, [], [], 0, 'page:p2', True)
+    assert result[0] is True  # edit mode unchanged
+    assert result[3]['display'] == 'none'
+    assert result[4] is None
+
+
 def test_cancel_closes_the_floater(monkeypatch):
     _ctx(monkeypatch, 'item-cancel.n_clicks')
     result = TMonWidget.toggle_edit_floater(
-        0, 0, 0, 0, 0, [], [], 1, 0, [], [], True, None)
+        0, 0, 0, 0, 0, [], [], 1, 0, [], [], 0, None, True)
     assert result[0] is True  # still in edit mode
     assert result[3]['display'] == 'none'
     assert result[3]['position'] == 'fixed'
@@ -234,18 +268,19 @@ def test_close_wins_even_when_another_input_triggered_too(monkeypatch):
 
     monkeypatch.setattr(dash, 'callback_context', Ctx())
     result = TMonWidget.toggle_edit_floater(
-        0, 1, 0, 0, 0, [1], [], 0, 0, [], [], True, None)
+        0, 1, 0, 0, 0, [1], [], 0, 0, [], [], 0, None, True)
     assert result[3]['display'] == 'none'
     assert result[4] is None
 
 
 def test_floater_shows_only_the_panel_for_its_mode():
-    for mode in ('create', 'pages', 'layout', 'config'):
+    for mode, active in (('create', 'create'), ('pages', 'pages'),
+                         ('layout', 'pages'), ('config', 'config')):
         styles = TMonWidget.render_edit_floater_panels(mode)
-        assert len(styles) == 4
-        assert styles[('create', 'pages', 'layout', 'config').index(mode)]['display'] == 'block'
+        assert len(styles) == 3
+        assert styles[('create', 'pages', 'config').index(active)]['display'] == 'block'
         assert all(s['display'] == 'none' for i, s in enumerate(styles)
-                   if i != ('create', 'pages', 'layout', 'config').index(mode))
+                   if i != ('create', 'pages', 'config').index(active))
 
 
 def test_each_section_panel_holds_its_controls():
@@ -261,7 +296,7 @@ def test_each_section_panel_holds_its_controls():
     panels = {
         'edit-floater-pages': ('page-name-input', 'page-add', 'page-rename',
                                'page-delete'),
-        'edit-floater-layout': ('graph-layout', 'graph-rows', 'graph-columns',
+        'edit-floater-layout-section': ('graph-layout', 'graph-rows', 'graph-columns',
                                 'graph-page', 'graph-split-x', 'graph-split-y'),
         'edit-floater-config': ('config-name-input', 'config-save', 'config-load',
                                 'config-export', 'config-import'),
@@ -269,7 +304,8 @@ def test_each_section_panel_holds_its_controls():
     for panel_id, controls in panels.items():
         panel = find(TMonWidget.TMonBody, panel_id)
         assert panel is not None, panel_id
-        assert panel.style['display'] == 'none'
+        if panel_id != 'edit-floater-layout-section':
+            assert panel.style['display'] == 'none'
         for control in controls:
             assert find(panel, control) is not None, control
 
@@ -288,7 +324,7 @@ def test_tab_remove_asks_before_removing(monkeypatch):
 def test_edit_button_opens_the_floater_create_panel_for_an_existing_item(monkeypatch):
     _ctx(monkeypatch, '{"index":"chart:0","type":"item-edit"}.n_clicks')
     result = TMonWidget.toggle_edit_floater(
-        0, 0, 0, 0, 0, [], [], 0, 0, [1], [], True, 'page:p1')
+        0, 0, 0, 0, 0, [], [], 0, 0, [1], [], 0, 'page:p1', True)
     assert result[3]['display'] == 'flex'
     assert result[4] == 'create'
     assert result[5] == 'page:p1'
@@ -298,7 +334,7 @@ def test_edit_button_opens_the_floater_create_panel_for_an_existing_item(monkeyp
 def test_add_slot_switches_the_floater_to_create_mode(monkeypatch):
     _ctx(monkeypatch, '{"index":"page:p1","type":"item-add-slot"}.n_clicks')
     result = TMonWidget.toggle_edit_floater(
-        0, 0, 0, 0, 0, [1], [], 0, 0, [], [], True, 'page:p1')
+        0, 0, 0, 0, 0, [1], [], 0, 0, [], [], 0, 'page:p1', True)
     assert result[4] == 'create'
     assert result[5] == 'page:p1'
     assert result[6] is None
@@ -308,7 +344,7 @@ def test_layout_slot_click_targets_its_page(monkeypatch):
     _ctx(monkeypatch,
          '{"index":"page:p1|1","type":"item-add-slot"}.n_clicks')
     result = TMonWidget.toggle_edit_floater(
-        0, 0, 0, 0, 0, [1], [], 0, 0, [], [], True, None)
+        0, 0, 0, 0, 0, [1], [], 0, 0, [], [], 0, None, True)
     assert result[4] == 'create'
     assert result[5] == 'page:p1'
     assert result[6] is None
@@ -368,7 +404,7 @@ def test_filter_add_slot_opens_create_panel_with_a_filter(monkeypatch):
     _ctx(monkeypatch,
          '{"index":"create_tab","type":"filter-add-slot"}.n_clicks')
     result = TMonWidget.toggle_edit_floater(
-        0, 0, 0, 0, 0, [], [1], 0, 0, [], [], True, 'create_tab')
+        0, 0, 0, 0, 0, [], [1], 0, 0, [], [], 0, 'create_tab', True)
     assert result[4] == 'create'
     assert result[5] == 'create_tab'
     assert result[6] is None

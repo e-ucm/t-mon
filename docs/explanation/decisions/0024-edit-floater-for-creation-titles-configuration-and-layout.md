@@ -83,8 +83,7 @@ Its content is four sibling panels, one shown at a time:
 | Panel | Mode | Contents |
 |---|---|---|
 | `edit-floater-create` | `create` | Add/edit a visualisation or filter, with title and axis labels |
-| `edit-floater-pages` | `pages` | `page-name-input`, New / Rename / Delete page |
-| `edit-floater-layout` | `layout` | Layout, rows, columns, page and split controls |
+| `edit-floater-pages` | `pages` (also `layout`) | Page title with New / Rename / Delete, **and** layout, rows, columns, page and split controls |
 | `edit-floater-config` | `config` | Save / load / export / delete / refresh / import |
 
 The floater is driven by three transient stores:
@@ -103,6 +102,9 @@ The entry points are:
   edit controls. It always closes the floater; it never opens it.
 - **Add/edit page**, **Edit layout**, **Configuration** buttons in the header →
   switch edit mode on if needed and open the matching panel.
+- The new-tab `+` opens the combined page panel so a new page is named and laid
+  out at creation time. Merely switching to an existing tab closes the floater
+  instead of opening it.
 - A `+` slot, a per-item **Edit** button or a default-graph **Edit** button →
   open the `create` panel for that target, pre-filled with the item being edited
   (ADR 0018, ADR 0021).
@@ -132,15 +134,14 @@ the floater's create panel, reached with a `+` slot in edit mode.
 
 ### The three configuration panels
 
-- **Pages:** `page-name-input` with New page / Rename page / Delete page, moved
-  out of the header's `dashboard-page-controls` (ADR 0015); the tab-bar `+` for
-  a new tab stays in the sidebar as a second entry point (ADR 0018).
-- **Layout:** `graph-layout`, `graph-rows`, `graph-columns`, `graph-page`,
-  `graph-split-x` and `graph-split-y`, moved out of the always-visible row in
-  the dashboard content. Changing one still flows into `update_output` and
-  `arrange_graphs`, is restored by `apply_config_layout` on import, and is saved
-  under the `layout` key of an ADR 0015 document. Layout is therefore configured
-  in the same floater as the rest of the dashboard.
+- **Page title and layout, together:** `page-name-input` with New page /
+  Rename page / Delete page (moved out of the header's `dashboard-page-controls`,
+  ADR 0015) and `graph-layout`, `graph-rows`, `graph-columns`, `graph-page`,
+  `graph-split-x`, `graph-split-y` (moved out of the always-visible content row)
+  share one panel. Both the new-tab `+` and the **Edit page** / **Edit layout**
+  buttons open it. Layout changes still flow into `update_output` and
+  `arrange_graphs`, are restored by `apply_config_layout` on import, and are
+  saved under the `layout` key of an ADR 0015 document.
 - **Configuration:** `config-name-input`, save / load / export / delete /
   refresh, `config-saved-dropdown`, `config-import` and `config-status` (ADR
   0015), moved out of the header row.
@@ -156,8 +157,8 @@ confirmations of a destructive action, not configuration forms.
   Its Edit branch only changes edit mode and closes the window; its close
   branch only hides the window; its three section-button branches set edit mode
   on and choose a panel.
-- `render_edit_floater_panels` writes the four panels' styles from
-  `edit-floater-mode`, showing exactly one.
+- `render_edit_floater_panels` writes the three panels' styles from
+  `edit-floater-mode`, showing exactly one; `layout` is an alias for `pages`.
 - `update_page_state`, `update_default_graph_overrides`, `handle_config_actions`
   and `apply_config_layout` are unchanged apart from reading the same ids in
   their new location. The legacy chart-creator inputs and output are dropped.

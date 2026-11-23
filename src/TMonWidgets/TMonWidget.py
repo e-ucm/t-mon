@@ -2067,8 +2067,12 @@ def arrange_graphs(content, layout, rows, columns, page, split_x=2, split_y=2):
     }
     children = list(headings) if page_n == 1 else []
     for item in children:
-        if hasattr(item, 'style'):
-            item.style = dict(item.style or {}, gridColumn='1 / -1')
+        if isinstance(item, str):
+            continue
+        # Dash components have no `style` attribute at all until one is set,
+        # so the title (a plain H3) must be given one here to span the grid.
+        item.style = dict(getattr(item, 'style', None) or {},
+                          gridColumn='1 / -1')
     if layout == 'split':
         # One graph stack per column: x in the first, y in the others.
         first_count = min(first, len(shown))
@@ -2226,7 +2230,13 @@ def edit_floater_create_panel():
 
 
 def edit_floater_pages_panel():
-    """The Add/edit page panel of the floater (ADR 0024)."""
+    """Page title and layout together, used on create and on Edit page.
+
+    The page name (title) and the graph layout are one panel: a new page is
+    created with the same controls used to rename and rearrange an existing one
+    (ADR 0024).
+    """
+    label_style = {'fontSize': 12, 'marginRight': '4px'}
     return html.Div(
         id='edit-floater-pages', style={'display': 'none'},
         children=[
@@ -2243,44 +2253,38 @@ def edit_floater_pages_panel():
                 html.Button(I18n.t('page.delete'),
                             id={'type': 'page-delete', 'index': 'current'},
                             n_clicks=0),
-            ]),
-        ],
-    )
-
-
-def edit_floater_layout_panel():
-    """The Edit layout panel of the floater (ADR 0024)."""
-    label_style = {'fontSize': 12, 'marginRight': '4px'}
-    return html.Div(
-        id='edit-floater-layout', style={'display': 'none'},
-        children=[
-            html.H3(I18n.t('edit.layout'), style={'marginTop': 0}),
-            html.Div([
-                html.Span(I18n.t('graphs.layout'), style=label_style),
-                dcc.Dropdown(
-                    id='graph-layout', clearable=False, value='one',
-                    options=[{'label': I18n.t(key), 'value': value}
-                             for value, key in GRAPH_LAYOUT_OPTIONS],
-                    style={'width': '150px', 'marginRight': '10px'}),
-                html.Span(I18n.t('graphs.rows'), style=label_style),
-                dcc.Input(id='graph-rows', type='number', min=1,
-                          max=MAX_GRAPHS_PER_PAGE, value=3,
-                          style={'width': '60px', 'marginRight': '10px'}),
-                html.Span(I18n.t('graphs.columns'), style=label_style),
-                dcc.Input(id='graph-columns', type='number', min=1,
-                          max=MAX_GRAPHS_PER_PAGE, value=2,
-                          style={'width': '60px', 'marginRight': '10px'}),
-                html.Span(I18n.t('graphs.page'), style=label_style),
-                dcc.Input(id='graph-page', type='number', min=1, value=1,
-                          style={'width': '60px'}),
-                html.Span(I18n.t('graphs.split_x'), style=label_style),
-                dcc.Input(id='graph-split-x', type='number', min=0,
-                          max=MAX_GRAPHS_PER_PAGE, value=2,
-                          style={'width': '60px', 'marginRight': '10px'}),
-                html.Span(I18n.t('graphs.split_y'), style=label_style),
-                dcc.Input(id='graph-split-y', type='number', min=0,
-                          max=MAX_GRAPHS_PER_PAGE, value=2,
-                          style={'width': '60px'}),
+            ], style={'marginBottom': '12px',
+                      'borderBottom': f'1px solid {BRAND_SOFT}',
+                      'paddingBottom': '10px'}),
+            html.Div(id='edit-floater-layout-section', children=[
+                html.H3(I18n.t('edit.layout'), style={'marginTop': 0}),
+                html.Div([
+                    html.Span(I18n.t('graphs.layout'), style=label_style),
+                    dcc.Dropdown(
+                        id='graph-layout', clearable=False, value='one',
+                        options=[{'label': I18n.t(key), 'value': value}
+                                 for value, key in GRAPH_LAYOUT_OPTIONS],
+                        style={'width': '150px', 'marginRight': '10px'}),
+                    html.Span(I18n.t('graphs.rows'), style=label_style),
+                    dcc.Input(id='graph-rows', type='number', min=1,
+                              max=MAX_GRAPHS_PER_PAGE, value=3,
+                              style={'width': '60px', 'marginRight': '10px'}),
+                    html.Span(I18n.t('graphs.columns'), style=label_style),
+                    dcc.Input(id='graph-columns', type='number', min=1,
+                              max=MAX_GRAPHS_PER_PAGE, value=2,
+                              style={'width': '60px', 'marginRight': '10px'}),
+                    html.Span(I18n.t('graphs.page'), style=label_style),
+                    dcc.Input(id='graph-page', type='number', min=1, value=1,
+                              style={'width': '60px'}),
+                    html.Span(I18n.t('graphs.split_x'), style=label_style),
+                    dcc.Input(id='graph-split-x', type='number', min=0,
+                              max=MAX_GRAPHS_PER_PAGE, value=2,
+                              style={'width': '60px', 'marginRight': '10px'}),
+                    html.Span(I18n.t('graphs.split_y'), style=label_style),
+                    dcc.Input(id='graph-split-y', type='number', min=0,
+                              max=MAX_GRAPHS_PER_PAGE, value=2,
+                              style={'width': '60px'}),
+                ]),
             ]),
         ],
     )
@@ -2379,7 +2383,6 @@ def edit_floater_layout():
                         children=[
                             edit_floater_create_panel(),
                             edit_floater_pages_panel(),
-                            edit_floater_layout_panel(),
                             edit_floater_config_panel(),
                         ],
                     ),
@@ -2643,15 +2646,19 @@ def render_dashboard_tabs(pages, edit_mode):
     [
         Output('edit-floater-create', 'style'),
         Output('edit-floater-pages', 'style'),
-        Output('edit-floater-layout', 'style'),
         Output('edit-floater-config', 'style'),
     ],
     [Input('edit-floater-mode', 'data')],
 )
 def render_edit_floater_panels(mode):
-    """Show only the panel the floater was opened for (ADR 0024)."""
-    panels = ('create', 'pages', 'layout', 'config')
-    return tuple(_MODAL_VISIBLE if mode == panel else _MODAL_HIDDEN
+    """Show only the panel the floater was opened for (ADR 0024).
+
+    Page title and layout share one panel; 'layout' is an alias for it so the
+    Edit layout button opens the same controls.
+    """
+    active = 'pages' if mode == 'layout' else mode
+    panels = ('create', 'pages', 'config')
+    return tuple(_MODAL_VISIBLE if active == panel else _MODAL_HIDDEN
                  for panel in panels)
 
 
@@ -2725,12 +2732,14 @@ def update_definition_filter_values(values, current):
         Input({'type': 'item-edit', 'index': dash.dependencies.ALL}, 'n_clicks'),
         Input({'type': 'default-graph-edit', 'index': dash.dependencies.ALL},
               'n_clicks'),
+        Input(NEW_TAB_ADD_ID, 'n_clicks'),
+        Input('t-mon-tabs', 'value'),
     ],
-    [State('edit-mode', 'data'), State('t-mon-tabs', 'value')],
+    [State('edit-mode', 'data')],
 )
 def toggle_edit_floater(edit_n, close_n, pages_n, layout_n, config_n,
                         slot_clicks, filter_clicks, cancel_n, add_n, edit_clicks,
-                        default_edit_clicks, enabled, tab):
+                        default_edit_clicks, new_tab_n, tab, enabled):
     """Edit mode and the floater are controlled separately here.
 
     The Edit button only toggles edit mode. The section buttons open their
@@ -2743,6 +2752,31 @@ def toggle_edit_floater(edit_n, close_n, pages_n, layout_n, config_n,
     prop_id = prop_ids[0] if prop_ids else ''
     on = bool(enabled)
 
+    def clicked(fragment):
+        return any(fragment in item for item in prop_ids)
+
+    def trigger_prop(fragment):
+        """The prop id of the specific input that fired, for pattern indices."""
+        for entry in triggered:
+            if fragment in (entry.get('prop_id') or ''):
+                return entry.get('prop_id') or ''
+        return prop_id
+
+    def clicked_n(fragment):
+        """True only when that component was actually clicked.
+
+        A pattern-matching ALL input also fires when new components appear (a
+        new page renders new + slots). Checking `any(n_clicks)` from older
+        clicks would then open the wrong panel, so use the triggered value.
+        """
+        for entry in triggered:
+            if fragment in (entry.get('prop_id') or ''):
+                try:
+                    return int(entry.get('value') or 0) > 0
+                except (TypeError, ValueError):
+                    return False
+        return False
+
     def tab_style(active):
         return {'display': 'block' if active else 'none', 'width': '100%',
                 'border': f'1px dashed {BRAND_PRIMARY}',
@@ -2753,50 +2787,54 @@ def toggle_edit_floater(edit_n, close_n, pages_n, layout_n, config_n,
         return (True, I18n.t('edit.mode.disable'), tab_style(True),
                 _FLOATER_VISIBLE, mode, no_update, None, kind)
 
-    if 'edit-toggle' in prop_id:
+    def close_panel():
+        return (on, no_update, no_update, _FLOATER_HIDDEN, None,
+                no_update, None, no_update)
+
+    if clicked('edit-toggle.n_clicks'):
         if int(edit_n or 0) <= 0:
             raise PreventUpdate
         on = not on
         return (on,
                 I18n.t('edit.mode.disable' if on else 'edit.mode.enable'),
                 tab_style(on), _FLOATER_HIDDEN, None, no_update, None, None)
-    closing = ((any('edit-floater-close' in item for item in prop_ids)
-                and int(close_n or 0) > 0)
-               or (any('item-cancel' in item for item in prop_ids)
-                   and int(cancel_n or 0) > 0))
-    if closing:
-        return (on, no_update, no_update, _FLOATER_HIDDEN, None,
-                no_update, None, no_update)
-    if 'edit-pages-button' in prop_id and int(pages_n or 0) > 0:
+    if (clicked('edit-floater-close.n_clicks') and int(close_n or 0) > 0
+            or clicked('item-cancel.n_clicks') and int(cancel_n or 0) > 0):
+        return close_panel()
+    if clicked(NEW_TAB_ADD_ID + '.n_clicks') and int(new_tab_n or 0) > 0:
+        # Creating a page opens the combined title + layout panel.
         return open_panel('pages')
-    if 'edit-layout-button' in prop_id and int(layout_n or 0) > 0:
-        return open_panel('layout')
-    if 'edit-config-button' in prop_id and int(config_n or 0) > 0:
+    if clicked('t-mon-tabs.value'):
+        # Visiting a tab never opens the floater.
+        return close_panel()
+    if clicked('edit-pages-button.n_clicks') and int(pages_n or 0) > 0:
+        return open_panel('pages')
+    if clicked('edit-layout-button.n_clicks') and int(layout_n or 0) > 0:
+        return open_panel('pages')
+    if clicked('edit-config-button.n_clicks') and int(config_n or 0) > 0:
         return open_panel('config')
     if not on:
         raise PreventUpdate
-    if ('filter-add-slot' in prop_id and filter_clicks
-            and any(filter_clicks or [])):
-        # The top-bar filter + preselects a multi-select filter.
-        raw_target = _pattern_index(prop_id, '.n_clicks')
+    if clicked('filter-add-slot') and clicked_n('filter-add-slot'):
+        raw_target = _pattern_index(trigger_prop('filter-add-slot'), '.n_clicks')
         return (on, no_update, no_update, _FLOATER_VISIBLE, 'create',
                 str(raw_target) if raw_target else page_key(tab), None,
                 'filter-multi')
-    if 'item-add-slot' in prop_id and any(slot_clicks or []):
-        raw_target = _pattern_index(prop_id, '.n_clicks')
+    if clicked('item-add-slot') and clicked_n('item-add-slot'):
+        raw_target = _pattern_index(trigger_prop('item-add-slot'), '.n_clicks')
         target = str(raw_target).rsplit('|', 1)[0] if raw_target else ''
         return (on, no_update, no_update, _FLOATER_VISIBLE, 'create',
                 target or page_key(tab), None, None)
-    if prop_id.startswith('{') and 'item-edit' in prop_id and any(edit_clicks or []):
+    if clicked('item-edit') and clicked_n('item-edit'):
         return (on, no_update, no_update, _FLOATER_VISIBLE, 'create',
-                page_key(tab), {'index': _pattern_index(prop_id, '.n_clicks')},
+                page_key(tab),
+                {'index': _pattern_index(trigger_prop('item-edit'), '.n_clicks')},
                 None)
-    if (prop_id.startswith('{') and 'default-graph-edit' in prop_id
-            and any(default_edit_clicks or [])):
+    if clicked('default-graph-edit') and clicked_n('default-graph-edit'):
         return (on, no_update, no_update, _FLOATER_VISIBLE, 'create', no_update,
-                {'index': f"default:{_pattern_index(prop_id, '.n_clicks')}"},
+                {'index': f"default:{_pattern_index(trigger_prop('default-graph-edit'), '.n_clicks')}"},
                 None)
-    if 'item-add' in prop_id:
+    if clicked('item-add.n_clicks') and int(add_n or 0) > 0:
         return (on, no_update, no_update, _FLOATER_VISIBLE, 'create',
                 no_update, None, no_update)
     raise PreventUpdate
