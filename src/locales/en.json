@@ -46,7 +46,7 @@
   "header.account": "Account",
   "sessions.view_dashboard": "View dashboard",
   "dashboard.no_tab_selected": "no tab selected, select one tab.",
-  "navigation.return": "\u2190 Return",
+  "navigation.return": "← Return",
   "graphs.layout": "Graphs:",
   "graphs.one": "One",
   "graphs.vertical": "Vertical",
@@ -145,5 +145,14 @@
   "filter.mode.multi": "Multi",
   "dashboard.save": "Save",
   "dashboard.new": "New",
-  "dashboard.tooltip": "Manage dashboards and save current view"
+  "dashboard.tooltip": "Manage dashboards and save current view",
+  "dashboard.select": "Select dashboard",
+  "dashboard.share": "Share",
+  "dashboard.compare": "Compare",
+  "dashboard.read_only": "Read only",
+  "dashboard.no_dashboards": "No dashboards available",
+  "dashboard.open": "Open dashboard",
+  "dashboard.name": "Dashboard name",
+  "dashboard.create": "Create",
+  "dashboard.saved": "Dashboard saved"
 }

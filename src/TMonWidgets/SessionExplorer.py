@@ -202,7 +202,7 @@ def _format_date(value):
     return '-'
 
 
-def render_session_cards(page):
+def render_session_cards(page, simlet_id=None):
     """
     Render session cards like the SimVA Sessions tab, without activities.
 
@@ -247,48 +247,37 @@ def render_session_cards(page):
                                       'completeParticipants', default=[]) or []
 
         cards.append(html.Div([
-            html.Button(
+            html.Div([
                 html.Div([
-                    html.Div([
-                        html.Div(name, style=style(15, '#1e1e1e', '600',
-                                                 {'flex': '1 1 auto'})),
-                        html.Div(label, style=style(11, '#1e1e1e', '600', {
-                            'backgroundColor': color, 'borderRadius': '25px',
-                            'padding': '2px 12px', 'textAlign': 'center',
-                            'width': '100px'})),
-                    ], style={'display': 'flex', 'alignItems': 'center'}),
-                    html.Div(description, style=style(12, '#3c6d7a', extra={
-                        'whiteSpace': 'normal', 'margin': '4px 0'})),
-                    html.Div(f"{I18n.t('info.created_at')}: "
-                             f"{_format_date(_session_value(session, 'createdAt'))}",
-                             style=style(11, '#3c6d7a')),
-                    html.Div([
-                        html.Span(f"{I18n.t('activities.title')}: "
-                                  f"{len(activities) if hasattr(activities, '__len__') else 0}",
-                                  style={'marginRight': '18px'}),
-                        html.Span(f"{I18n.t('participants.title')}: "
-                                  f"{len(participants) if hasattr(participants, '__len__') else 0}"),
-                    ], style=style(11, '#3c6d7a')),
-                    html.Div(tags or [html.Span(I18n.t('info.tags.no_tags'),
-                                               style=style(11, '#3c6d7a'))],
-                             style={'marginTop': '6px'}),
-                ], style={'backgroundColor': '#fcfcfc',
-                          'border': '1px solid rgba(0,0,0,0.1)',
-                          'borderRadius': '8px', 'padding': '12px',
-                          'textAlign': 'left', 'boxShadow': '0 1px 3px rgba(0,0,0,.3)'}),
-                id={'type': 'folder-button', 'index': f'{session_id}/'},
-                n_clicks=0,
-                style={'display': 'block', 'width': '100%', 'cursor': 'pointer',
-                       'background': 'none', 'border': 'none', 'padding': '0'},
-            ),
-            # Shortcut to the same whole-session analysis as the "Complete
-            # session" (Analysis) folder entry.
-            html.Button(I18n.t('sessions.view_dashboard'),
-                        id={'type': 'session-dashboard-button',
-                            'index': str(session_id)},
-                        n_clicks=0,
-                        style={'marginTop': '-8px', 'marginBottom': '10px',
-                               'padding': '4px 12px', 'cursor': 'pointer'}),
+                    html.Div(name, style=style(15, '#1e1e1e', '600',
+                                             {'flex': '1 1 auto'})),
+                    html.Div(label, style=style(11, '#1e1e1e', '600', {
+                        'backgroundColor': color, 'borderRadius': '25px',
+                        'padding': '2px 12px', 'textAlign': 'center',
+                        'width': '100px'})),
+                ], style={'display': 'flex', 'alignItems': 'center'}),
+                html.Div(description, style=style(12, '#3c6d7a', extra={
+                    'whiteSpace': 'normal', 'margin': '4px 0'})),
+                html.Div(f"{I18n.t('info.created_at')}: "
+                         f"{_format_date(_session_value(session, 'createdAt'))}",
+                         style=style(11, '#3c6d7a')),
+                html.Div([
+                    html.Span(f"{I18n.t('activities.title')}: "
+                              f"{len(activities) if hasattr(activities, '__len__') else 0}",
+                              style={'marginRight': '18px'}),
+                    html.Span(f"{I18n.t('participants.title')}: "
+                              f"{len(participants) if hasattr(participants, '__len__') else 0}"),
+                ], style=style(11, '#3c6d7a')),
+                html.Div(tags or [html.Span(I18n.t('info.tags.no_tags'),
+                                           style=style(11, '#3c6d7a'))],
+                         style={'marginTop': '6px'}),
+            ], style={'backgroundColor': '#fcfcfc',
+                      'border': '1px solid rgba(0,0,0,0.1)',
+                      'borderRadius': '8px', 'padding': '12px',
+                      'textAlign': 'left', 'boxShadow': '0 1px 3px rgba(0,0,0,.3)'}),
+            # Multidashboard tiles for this session (ADR 0025).
+            __import__('TMonWidgets').TMonWidget.render_dashboard_tiles(
+                ['default'], simlet_id=simlet_id, session_id=session_id),
         ]))
     return html.Div(cards, style={'padding': '10px 20px'})
 
@@ -412,4 +401,9 @@ def update_session_explorer(path, main, status, search, sort, tags, limit,
     # Writing the store re-runs this callback once; leave it untouched then so
     # the chain stops instead of resetting the page.
     state_out = no_update if skip == (state or {}).get('skip', 0) else {'skip': skip}
-    return {'display': 'block'}, render_session_cards(page), info, state_out
+    simlet_id = None
+    if isinstance(path, str):
+        parts = [part for part in path.strip('/').split('/') if part]
+        if parts:
+            simlet_id = parts[-1]
+    return {'display': 'block'}, render_session_cards(page, simlet_id=simlet_id), info, state_out

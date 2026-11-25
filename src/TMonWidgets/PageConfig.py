@@ -208,24 +208,31 @@ def user_key():
     return "shared"
 
 
-def _user_dir():
+def _user_dir(simlet_id=None, session_id=None):
+    if simlet_id is not None:
+        base = Path('/mnt/tmon-dashboards') / 'simlets' / str(simlet_id)
+        if session_id is None:
+            base = base / 'general'
+        else:
+            base = base / 'sessions' / str(session_id)
+        return base / 'users' / user_key()
     return config_root() / user_key()
 
 
-def list_saved():
+def list_saved(simlet_id=None, session_id=None):
     """Names of configurations saved for the current user."""
-    directory = _user_dir()
+    directory = _user_dir(simlet_id=simlet_id, session_id=session_id)
     if not directory.is_dir():
         return []
     return sorted(path.stem for path in directory.glob("*.json"))
 
 
-def save_named(name, document):
+def save_named(name, document, simlet_id=None, session_id=None):
     """Atomically save a validated document under ``name``."""
     safe = sanitise_name(name)
     if safe is None:
         raise ValueError("Use a name of letters, numbers, dot, dash or underscore.")
-    directory = _user_dir()
+    directory = _user_dir(simlet_id=simlet_id, session_id=session_id)
     directory.mkdir(parents=True, exist_ok=True)
     target = directory / f"{safe}.json"
     temporary = target.with_suffix(".json.tmp")
@@ -234,23 +241,23 @@ def save_named(name, document):
     return safe
 
 
-def load_named(name):
+def load_named(name, simlet_id=None, session_id=None):
     """Read a saved document, validating it before it is returned."""
     safe = sanitise_name(name)
     if safe is None:
         raise ValueError("Invalid configuration name.")
-    source = _user_dir() / f"{safe}.json"
+    source = _user_dir(simlet_id=simlet_id, session_id=session_id) / f"{safe}.json"
     if not source.is_file():
         raise ValueError(f"No saved configuration named {safe}.")
     return parse_document(source.read_text(encoding="utf-8"))
 
 
-def delete_named(name):
+def delete_named(name, simlet_id=None, session_id=None):
     """Remove a saved configuration. Returns True when one was removed."""
     safe = sanitise_name(name)
     if safe is None:
         raise ValueError("Invalid configuration name.")
-    source = _user_dir() / f"{safe}.json"
+    source = _user_dir(simlet_id=simlet_id, session_id=session_id) / f"{safe}.json"
     if not source.is_file():
         return False
     source.unlink()

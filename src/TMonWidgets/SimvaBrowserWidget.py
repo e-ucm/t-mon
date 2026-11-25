@@ -7,6 +7,7 @@ import json
 import TMonWidgets
 from TMonWidgets.TMonWidget import (
     HEADER_NAV_BUTTON_STYLE, TEXT_SECONDARY, render_simlet_tiles,
+    get_value_from_url,
 )
 from TMonWidgets.SimletExplorer import parse_simlet_query, render_simlet_controls
 from TMonWidgets.SessionExplorer import (
@@ -431,6 +432,17 @@ def render_simlet_view_panel(sessions=None, search='', style=None, session_style
     The simlet name stays above the tabs; the session and activity headings and
     the ``..`` button are replaced by the tabs at this level.
     """
+    import TMonWidgets
+    simlet_id = None
+    session_id = None
+    if sessions:
+        first = sessions[0] if isinstance(sessions, list) else None
+        if isinstance(first, dict):
+            simlet_id = first.get('simlet_id') or first.get('simlet')
+            session_id = None
+    dashboard_tiles = TMonWidgets.TMonWidget.render_dashboard_tiles(
+        ['default'] + list(TMonWidgets.TMonWidget.list_saved(simlet_id, None)),
+        simlet_id=simlet_id, session_id=session_id)
     return html.Div([
         dcc.Tabs(id='simlet-view-tabs', value='sessions', children=[
             dcc.Tab(label=I18n.t('sessions.general_tab'), value='general', children=[
@@ -438,6 +450,7 @@ def render_simlet_view_panel(sessions=None, search='', style=None, session_style
                     I18n.t('sessions.placeholder'),
                     style={'padding': '20px', 'fontFamily': 'Inter',
                            'color': TEXT_SECONDARY}),
+                dashboard_tiles,
             ]),
             dcc.Tab(label=I18n.t('sessions.sessions_tab'), value='sessions', children=[
                 render_session_explorer_panel(sessions, search, style=session_style),

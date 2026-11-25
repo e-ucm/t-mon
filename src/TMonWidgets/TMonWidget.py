@@ -597,6 +597,125 @@ def render_simlet_tiles(studies):
 
     return html.Div(tiles, style={'padding': '20px'})
 
+def _dashboard_name(dashboard):
+    """Read a display name from a string or a config document."""
+    if isinstance(dashboard, str):
+        return dashboard
+    if isinstance(dashboard, dict):
+        for key in ("name", "title", "dashboard", "id"):
+            value = dashboard.get(key)
+            if value:
+                return str(value)
+    return str(dashboard)
+
+
+def render_dashboard_tiles(dashboards, simlet_id=None, session_id=None):
+    """
+    Render a grid of dashboard tiles using TMON.figcraft design tokens.
+
+    Each tile links to the dashboard named by the entry, so a session can
+    expose several dashboards side by side (ADR 0025).
+
+    Args:
+        dashboards (list): Dashboard names or configuration documents.
+        simlet_id: Optional simlet id used to build the dashboard URL.
+        session_id: Optional session id used to build the dashboard URL.
+
+    Returns:
+        html.Div: A grid of dashboard tiles.
+    """
+    if not dashboards:
+        return html.Div(I18n.t('dashboard.no_dashboards'),
+                        style={'fontFamily': INTER_FONT, 'padding': '20px'})
+
+    tiles = []
+    for i, dashboard in enumerate(dashboards):
+        name = _dashboard_name(dashboard)
+        if simlet_id is not None and session_id is not None:
+            href = f"/simlet/{simlet_id}/session/{session_id}/dashboard/{name}"
+        elif simlet_id is not None:
+            href = f"/simlet/{simlet_id}/dashboard/{name}"
+        else:
+            href = f"/dashboard/{name}"
+
+        tile = html.A(
+            html.Div([
+                html.Div(
+                    name,
+                    style={
+                        'fontFamily': INTER_FONT,
+                        'fontSize': 14,
+                        'fontWeight': '500',
+                        'color': DARK_BACKGROUND,
+                        'padding': '12px',
+                        'height': '44px',
+                        'boxSizing': 'border-box',
+                        'display': 'flex',
+                        'alignItems': 'center',
+                        'whiteSpace': 'nowrap',
+                        'overflow': 'hidden',
+                        'textOverflow': 'ellipsis',
+                        'borderBottom': '1px solid rgba(0,0,0,0.1)',
+                    }
+                ),
+                html.Div(
+                    I18n.t('dashboard.open'),
+                    style={
+                        'fontFamily': INTER_FONT,
+                        'fontSize': 12,
+                        'color': TEXT_SECONDARY,
+                        'padding': '8px 12px',
+                    }
+                ),
+            ],
+                style={
+                    'backgroundColor': LIGHT_CARD,
+                    'border': '1px solid rgba(0,0,0,0.1)',
+                    'borderRadius': 8,
+                    'width': f'{SIMLET_TILE_WIDTH}px',
+                    'height': '120px',
+                    'boxSizing': 'border-box',
+                    'margin': f'{SIMLET_TILE_MARGIN}px',
+                    'display': 'inline-block',
+                    'verticalAlign': 'top',
+                }
+            ),
+            href=href,
+            style={'textDecoration': 'none', 'color': 'inherit'},
+        )
+        tiles.append(tile)
+
+        if (i + 1) % 4 == 0 and i < len(dashboards) - 1:
+            tiles.append(html.Div(style={'clear': 'both'}))
+
+    # [+] tile to create a new dashboard (ADR 0025).
+    tiles.append(html.Button(
+        '+',
+        id={'type': 'dashboard-add', 'index': 'new'},
+        n_clicks=0,
+        title=I18n.t('dashboard.new'),
+        style={
+            'width': f'{SIMLET_TILE_WIDTH}px',
+            'height': '120px',
+            'margin': f'{SIMLET_TILE_MARGIN}px',
+            'backgroundColor': LIGHT_CARD,
+            'border': f'2px dashed {BRAND_PRIMARY}',
+            'borderRadius': 8,
+            'fontSize': 32,
+            'color': BRAND_PRIMARY,
+            'cursor': 'pointer',
+            'display': 'inline-block',
+            'verticalAlign': 'top',
+        }))
+
+    return html.Div(tiles, style={'padding': '20px'})
+
+
+# Aliases used by different callers.
+render_dashboard_cards = render_dashboard_tiles
+render_dashboards = render_dashboard_tiles
+
+
 @callback(
     Output('content', 'style'),
     Input('t-mon-tabs', 'value')
@@ -721,6 +840,95 @@ def update_tab(style, config_command, stateUrl, app_path=None):
         return tab, user_value, object_value, config_command_value
     else:
         raise PreventUpdate
+
+
+@callback(
+    Output('dashboard-create-modal', 'style'),
+    [Input({'type': 'dashboard-add', 'index': dash.dependencies.ALL}, 'n_clicks'),
+     Input('dashboard-create-cancel', 'n_clicks'),
+     Input('dashboard-create-submit', 'n_clicks')],
+    [State('dashboard-create-name', 'value'),
+     State('url-t-mon', 'pathname')],
+    prevent_initial_call=True,
+)
+def handle_dashboard_create_modal(add_clicks, cancel_n, submit_n, name, pathname):
+    triggered = (dash.callback_context.triggered or [{}])[0].get('prop_id', '')
+    hidden = {'display': 'none', 'position': 'fixed', 'inset': 0,
+              'zIndex': 10000, 'justifyContent': 'center',
+              'alignItems': 'center', 'backgroundColor': 'rgba(0,0,0,0.4)'}
+    visible = {'display': 'flex', 'position': 'fixed', 'inset': 0,
+               'zIndex': 10000, 'justifyContent': 'center',
+               'alignItems': 'center', 'backgroundColor': 'rgba(0,0,0,0.4)'}
+    if 'dashboard-create-submit' in triggered:
+        if submit_n and name:
+            simlet_id = None
+            session_id = None
+            if pathname and '/simlet/' in pathname:
+                parts = pathname.strip('/').split('/')
+                if len(parts) >= 2 and parts[0] == 'simlet':
+                    simlet_id = parts[1]
+                    if len(parts) >= 4 and parts[2] == 'session':
+                        session_id = parts[3]
+            try:
+                save_named(str(name).strip(), build_document(),
+                           simlet_id=simlet_id, session_id=session_id)
+            except Exception:
+                pass
+        return hidden
+    if 'dashboard-create-cancel' in triggered:
+        return hidden
+    if any(int(click or 0) > 0 for click in (add_clicks or [])):
+        return visible
+    raise PreventUpdate
+
+
+
+@callback(
+    Output('dashboard-manager-tooltip', 'children'),
+    Input('save-dashboard-button', 'n_clicks'),
+    [State('dashboard-selector', 'value'),
+     State('dashboard-pages', 'data'),
+     State('page-filters', 'data'),
+     State('created-charts', 'data'),
+     State('definition-filters', 'data'),
+     State('activity-filter-hidden', 'data'),
+     State('t-mon-tabs', 'value'),
+     State('users-multi-dynamic-dropdown', 'value'),
+     State('object-multi-dynamic-dropdown', 'value'),
+     State('graph-layout', 'value'),
+     State('graph-rows', 'value'),
+     State('graph-columns', 'value'),
+     State('graph-page', 'value'),
+     State('graph-split-x', 'value'),
+     State('graph-split-y', 'value'),
+     State('url-t-mon', 'pathname')],
+    prevent_initial_call=True,
+)
+def save_current_dashboard(n_clicks, name, pages, page_filters, charts, def_filters,
+                           hidden, tab, users, objs, layout, rows, cols, page, sx, sy,
+                           pathname):
+    if not n_clicks:
+        raise PreventUpdate
+    name = (name or 'default').strip() or 'default'
+    document = current_config(
+        charts or [], page_filters or [], pages or [],
+        {'graph-layout': layout, 'graph-rows': rows, 'graph-columns': cols,
+         'graph-page': page, 'graph-split-x': sx, 'graph-split-y': sy},
+        {'actor.name': users or [], 'object.id': objs or []},
+        hidden or [], tab)
+    simlet_id = None
+    session_id = None
+    if pathname and '/simlet/' in pathname:
+        parts = pathname.strip('/').split('/')
+        if len(parts) >= 2 and parts[0] == 'simlet':
+            simlet_id = parts[1]
+            if len(parts) >= 4 and parts[2] == 'session':
+                session_id = parts[3]
+    try:
+        save_named(name, document, simlet_id=simlet_id, session_id=session_id)
+        return I18n.t('dashboard.saved')
+    except Exception as error:
+        return str(error)
 
 
 # Make studies available to the dashboard
@@ -2465,6 +2673,30 @@ def tab_remove_confirm_layout():
     )
 
 
+# Floater for creating a new named dashboard (ADR 0025).
+def dashboard_create_modal_layout():
+    return html.Div(
+        html.Div([
+            html.H3(I18n.t('dashboard.new'), style={'fontFamily': INTER_FONT}),
+            dcc.Input(id='dashboard-create-name', type='text',
+                      placeholder=I18n.t('dashboard.name'),
+                      style={'width': '100%', 'margin': '8px 0'}),
+            html.Div([
+                html.Button(I18n.t('dashboard.create'),
+                            id='dashboard-create-submit', n_clicks=0,
+                            style={'marginRight': '8px'}),
+                html.Button(I18n.t('visual.cancel'),
+                            id='dashboard-create-cancel', n_clicks=0),
+            ], style={'marginTop': '8px'}),
+        ], style={'backgroundColor': '#fff', 'padding': '16px',
+                 'borderRadius': '8px', 'width': '320px'}),
+        id='dashboard-create-modal',
+        style={'display': 'none', 'position': 'fixed', 'inset': 0,
+               'zIndex': 10000, 'justifyContent': 'center',
+               'alignItems': 'center', 'backgroundColor': 'rgba(0,0,0,0.4)'},
+    )
+
+
 TMonBody=html.Div([
     dcc.Location(id='url-t-mon', refresh=False), # Location component for URL handling
     # Written only when the header language changes; the reload picks up lng.
@@ -2472,6 +2704,7 @@ TMonBody=html.Div([
     # Standalone simva-front-style overlay at the app level: it lives outside
     # output-t-mon so it is above the whole page, not only the dashboard.
     edit_floater_layout(),
+    dashboard_create_modal_layout(),
     html.Div(id='output-t-mon', style={'display': 'none'}, children=[
         dcc.Store(id='activity-filter-hidden', data=[]),
         dcc.Store(id='created-charts', data=[]),
@@ -2534,16 +2767,43 @@ TMonBody=html.Div([
                      style={'display': 'flex', 'flexWrap': 'wrap',
                             'alignItems': 'center', 'gap': '8px',
                             'margin': '5px 0'}),
-            # Edit dashboard is the master toggle; the other three buttons open
-            # Dashboard management buttons (ADR 0026)
-            html.Div(id='dashboard-manager', style={'marginLeft': '12px', 'display': 'flex', 'alignItems': 'center', 'gap': '8px'}, children=[
-                html.Button(I18n.t('dashboard.save'), id='save-dashboard-button', n_clicks=0,
-                           style={'background': 'none', 'border': 'none', 'color': BRAND_PRIMARY, 'cursor': 'pointer', 'fontSize': '13px'}),
-                html.Button(I18n.t('dashboard.new'), id='new-dashboard-button', n_clicks=0,
-                           style={'background': 'none', 'border': 'none', 'color': BRAND_PRIMARY, 'cursor': 'pointer', 'fontSize': '13px'}),
-                dcc.Tooltip(id='dashboard-manager-tooltip',
-                           children=I18n.t('dashboard.tooltip')),
-            ]),            html.Div([
+            # Dashboard management (ADR 0025/0026): select, save, create, share
+            # and compare sessions. Styled as a compact tool row on the right.
+            html.Div(id='dashboard-manager',
+                     style={'display': 'flex', 'alignItems': 'center',
+                            'gap': '8px', 'marginLeft': 'auto',
+                            'flexWrap': 'wrap'},
+                     children=[
+                         dcc.Dropdown(id='dashboard-selector', options=[],
+                                     placeholder=I18n.t('dashboard.select'),
+                                     style={'width': '200px'}),
+                         html.Button(I18n.t('dashboard.save'),
+                                     id='save-dashboard-button', n_clicks=0,
+                                     style={'background': 'none', 'border': 'none',
+                                            'color': BRAND_PRIMARY, 'cursor': 'pointer',
+                                            'fontSize': '13px'}),
+                         html.Button(I18n.t('dashboard.new'),
+                                     id='new-dashboard-button', n_clicks=0,
+                                     style={'background': 'none', 'border': 'none',
+                                            'color': BRAND_PRIMARY, 'cursor': 'pointer',
+                                            'fontSize': '13px'}),
+                         html.Button(I18n.t('dashboard.share'),
+                                     id='dashboard-share-button', n_clicks=0,
+                                     style={'background': 'none', 'border': 'none',
+                                            'color': BRAND_PRIMARY, 'cursor': 'pointer',
+                                            'fontSize': '13px'}),
+                         html.Button(I18n.t('dashboard.compare'),
+                                     id='dashboard-compare-toggle', n_clicks=0,
+                                     style={'background': 'none', 'border': 'none',
+                                            'color': BRAND_PRIMARY, 'cursor': 'pointer',
+                                            'fontSize': '13px'}),
+                         html.Span(id='dashboard-read-only',
+                                   children='',
+                                   style={'color': TEXT_SECONDARY, 'fontSize': 12}),
+                         dcc.Tooltip(id='dashboard-manager-tooltip',
+                                     children=I18n.t('dashboard.tooltip')),
+                     ]),
+            html.Div([
                 html.Button(I18n.t('edit.mode.enable'), id='edit-toggle', n_clicks=0),
                 html.Button(I18n.t('edit.pages'), id='edit-pages-button', n_clicks=0,
                             style={'marginLeft': '6px'}),
