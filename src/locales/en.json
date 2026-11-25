@@ -46,7 +46,7 @@
   "header.account": "Account",
   "sessions.view_dashboard": "View dashboard",
   "dashboard.no_tab_selected": "no tab selected, select one tab.",
-  "navigation.return": "← Return",
+  "navigation.return": "\u2190 Return",
   "graphs.layout": "Graphs:",
   "graphs.one": "One",
   "graphs.vertical": "Vertical",
@@ -136,5 +136,14 @@
   "edit.pages": "Add/edit page",
   "edit.layout": "Edit layout",
   "edit.config": "Configuration",
-  "filter.add": "Add a filter"
+  "filter.add": "Add a filter",
+  "share.dashboard": "Share",
+  "share.tooltip": "Share this dashboard as read-only with other teachers",
+  "share.link_generated": "Link generated: {url}",
+  "filter.mode": "Filter mode",
+  "filter.mode.single": "Single",
+  "filter.mode.multi": "Multi",
+  "dashboard.save": "Save",
+  "dashboard.new": "New",
+  "dashboard.tooltip": "Manage dashboards and save current view"
 }

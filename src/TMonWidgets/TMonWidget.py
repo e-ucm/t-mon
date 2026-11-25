@@ -2535,8 +2535,15 @@ TMonBody=html.Div([
                             'alignItems': 'center', 'gap': '8px',
                             'margin': '5px 0'}),
             # Edit dashboard is the master toggle; the other three buttons open
-            # one panel each of the same floater (ADR 0024).
-            html.Div([
+            # Dashboard management buttons (ADR 0026)
+            html.Div(id='dashboard-manager', style={'marginLeft': '12px', 'display': 'flex', 'alignItems': 'center', 'gap': '8px'}, children=[
+                html.Button(I18n.t('dashboard.save'), id='save-dashboard-button', n_clicks=0,
+                           style={'background': 'none', 'border': 'none', 'color': BRAND_PRIMARY, 'cursor': 'pointer', 'fontSize': '13px'}),
+                html.Button(I18n.t('dashboard.new'), id='new-dashboard-button', n_clicks=0,
+                           style={'background': 'none', 'border': 'none', 'color': BRAND_PRIMARY, 'cursor': 'pointer', 'fontSize': '13px'}),
+                dcc.Tooltip(id='dashboard-manager-tooltip',
+                           children=I18n.t('dashboard.tooltip')),
+            ]),            html.Div([
                 html.Button(I18n.t('edit.mode.enable'), id='edit-toggle', n_clicks=0),
                 html.Button(I18n.t('edit.pages'), id='edit-pages-button', n_clicks=0,
                             style={'marginLeft': '6px'}),

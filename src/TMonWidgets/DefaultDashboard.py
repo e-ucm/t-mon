@@ -86,7 +86,7 @@ def _layout(value, where, path):
     return cleaned
 
 
-def _filter(value, where, path):
+def _filter(value, where, path, is_tab_filter=False):
     if not isinstance(value, dict):
         _fail(path, where, "filter must be an object")
     identifier = _string(value.get("id"), f"{where}.id", path)
@@ -103,13 +103,17 @@ def _filter(value, where, path):
     values = [str(item) for item in raw_values if item is not None and item != ""]
     if mode == "single":
         values = values[:1]
-    return {
+    result = {
         "id": identifier,
         "label": label,
         "column": column,
         "mode": mode,
         "values": values,
     }
+    # For tab filters, also store the filter mode selection type
+    if is_tab_filter:
+        result["filter_mode_selection"] = value.get("filter_mode_selection", "single")
+    return result
 
 
 def _filters(value, where, path):
@@ -188,7 +192,7 @@ def _page(value, where, path, seen_ids):
     }
 
 
-def _tab(value, where, path, seen_ids, seen_filter_ids):
+def _tab(value, where, path, seen_ids, seen_filter_ids, is_root_tab=False):
     if not isinstance(value, dict):
         _fail(path, where, "tab must be an object")
     identifier = _string(value.get("id"), f"{where}.id", path)
@@ -202,6 +206,27 @@ def _tab(value, where, path, seen_ids, seen_filter_ids):
         if spec["id"] in seen_filter_ids:
             _fail(path, where, f"duplicate filter id {spec['id']!r}")
         seen_filter_ids.add(spec["id"])
+    # Parse per-tab filter configuration (ADR 0026)
+    tab_filter_config = value.get("tab_filter_config")
+    if tab_filter_config is not None:
+        if not isinstance(tab_filter_config, dict):
+            _fail(path, where, "tab_filter_config must be an object")
+        # Validate filter_mode_selection
+        filter_mode_selection = tab_filter_config.get("filter_mode_selection", "single")
+        if filter_mode_selection not in FILTER_MODES:
+            _fail(path, where, f"unknown filter_mode_selection {filter_mode_selection!r}")
+        # Validate and parse individual tab filters
+        tab_filters_raw = tab_filter_config.get("filters") or []
+        tab_filters = []
+        for index, spec in enumerate(_list(tab_filters_raw, f"{where}.tab_filter_config.filters", path, required=False)):
+            parsed = _filter(spec, f"{where}.tab_filter_config.filters[{index}]", path, is_tab_filter=True)
+            # Check for duplicate filter ids within this tab
+            if parsed["id"] in seen_filter_ids:
+                _fail(path, where, f"duplicate filter id {parsed['id']!r} within tab")
+            seen_filter_ids.add(parsed["id"])
+            tab_filters.append(parsed)
+    else:
+        tab_filters = []
     page_ids = set()
     pages = [_page(page, f"{where}.pages[{index}]", path, page_ids)
              for index, page in enumerate(_list(value.get("pages"),
@@ -219,6 +244,10 @@ def _tab(value, where, path, seen_ids, seen_filter_ids):
         "layout": _layout(value.get("layout"), f"{where}.layout", path),
         "general_filters": general,
         "pages": pages,
+        "tab_filter_config": {
+            "filter_mode_selection": tab_filter_config.get("filter_mode_selection", "single") if tab_filter_config else "single",
+            "filters": tab_filters,
+        } if tab_filter_config else {"filter_mode_selection": "single", "filters": []},
     }
 
 
@@ -242,6 +271,7 @@ def parse_definition(text, source="<definition>"):
     general = _filters(raw.get("general_filters"), "general_filters", source)
     seen_filter_ids = {spec["id"] for spec in general}
     seen_tab_ids = set()
+    # Parse per-tab filter configurations (ADR 0026)
     tabs = [_tab(tab, f"tabs[{index}]", source, seen_tab_ids, seen_filter_ids)
             for index, tab in enumerate(_list(raw.get("tabs"), "tabs", source))]
 
@@ -302,12 +332,15 @@ def find_tab(tab_id, dashboard=None):
 
 
 def filters_for(tab_id, page_id=None, dashboard=None):
-    """Filters that apply before a graph, in dashboard, tab then page order."""
+    """Filters that apply before a graph, in dashboard, tab then page order (ADR 0026)."""
     dashboard = dashboard if dashboard is not None else load()
     tab, page = find_tab(tab_id, dashboard)
     if tab is None:
         return []
     specs = list(dashboard.get("general_filters") or [])
+    # ADR 0026: tab-specific filters take highest priority
+    tab_specs = tab.get("tab_filter_config", {}).get("filters") or []
+    specs += tab_specs
     specs += list(tab.get("general_filters") or [])
     if page is not None and (page_id is None or page.get("id") == page_id):
         specs += list(page.get("filters") or [])
@@ -318,11 +351,29 @@ def with_selected_values(specs, selected):
     """Overlay the values chosen in the UI onto the definitions."""
     merged = []
     for spec in specs or []:
-        item = dict(spec)
-        values = (selected or {}).get(item["id"])
+        # Handle both old format (dict with id/label/column/mode/values) and new format
+        if isinstance(spec, dict):
+            item = dict(spec)
+            spec_id = item.get("id", "")
+        else:
+            # Old format: spec might be a list/tuple, convert to dict
+            item = {"id": spec[0] if len(spec) > 0 else "", 
+                    "label": spec[1] if len(spec) > 1 else "",
+                    "column": spec[2] if len(spec) > 2 else "",
+                    "mode": spec[3] if len(spec) > 3 else "multi",
+                    "values": spec[4] if len(spec) > 4 else []}
+            spec_id = item.get("id", "")
+        
+        values = (selected or {}).get(spec_id)
         if values is not None:
             item["values"] = (list(values) if isinstance(values, (list, tuple))
                               else [values])
+        # Ensure required keys exist
+        item.setdefault("id", spec_id)
+        item.setdefault("label", item.get("label", ""))
+        item.setdefault("column", item.get("column", ""))
+        item.setdefault("mode", item.get("mode", "multi"))
+        item.setdefault("values", item.get("values", []))
         merged.append(item)
     return merged
 
@@ -337,14 +388,19 @@ def apply_filters(df, specs, selected=None):
 
 
 def initial_filter_values(dashboard=None):
-    """The selected values a fresh dashboard starts with, keyed by filter id."""
+    """The selected values a fresh dashboard starts with, keyed by filter id (ADR 0026)."""
     dashboard = dashboard if dashboard is not None else load()
     specs = list(dashboard.get("general_filters") or [])
+    tab_modes = {}
     for tab in dashboard.get("tabs") or []:
-        specs += list(tab.get("general_filters") or [])
+        # Include tab-specific filters
+        tab_specs = tab.get("tab_filter_config", {}).get("filters") or []
+        tab_mode = tab.get("tab_filter_config", {}).get("filter_mode_selection", "single")
+        tab_modes[tab["id"]] = tab_mode
+        specs += tab_specs
         for page in tab.get("pages") or []:
             specs += list(page.get("filters") or [])
-    return {spec["id"]: list(spec.get("values") or []) for spec in specs}
+    return {spec["id"]: list(spec.get("values") or []) for spec in specs}, tab_modes
 
 
 def layout_for(layout=None, dashboard=None, tab=None):

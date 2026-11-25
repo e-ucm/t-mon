@@ -550,6 +550,56 @@ def init_storage(main, pathname, search=''):
         # replaces the whole layout, so styles written to the old components
         # on the same page load would be lost.
         name_style, chrome_style, panel_style = simlet_chrome_styles(browser.current_path)
+        
+        # Parse dashboard information from URL for auto-loading
+        shared_token = None
+        dashboard_name = None
+        compare_mode = False
+        
+        if pathname and '/dashboard' in pathname:
+            # Extract the segment after /dashboard
+            dash_segment = pathname.split('/dashboard', 1)[1]
+            # Check for shared token
+            shared_token = get_value_from_url(dash_segment, "shared=")
+            if shared_token:
+                # Clean the segment for dashboard name parsing
+                dash_segment_clean = dash_segment.split("&shared=", 1)[0]
+            else:
+                dash_segment_clean = dash_segment
+            
+            # Extract dashboard name
+            # URL format: /simlet/{id}/session/{session_id}/dashboard/{dashboard_name}
+            # or /simlet/{id}/session/{session_id}/dashboard/default
+            # or /simlet/{id}/session/{session_id}/dashboard/compare (comparison mode)
+            if dash_segment_clean:
+                # Remove any remaining query parameters for name extraction
+                dash_name_only = dash_segment_clean.split("&", 1)[0].split("?", 1)[0].strip()
+                if dash_name_only == "compare":
+                    compare_mode = True
+                    dashboard_name = None
+                else:
+                    dashboard_name = dash_name_only
+            
+            # Determine dashboardpath based on dashboard name
+            if compare_mode:
+                dashboardpath = '/dashboard/compare'
+                analysis_path = browser.current_path.replace(browser.base_path, '/').rstrip('/') if browser.current_path else ''
+            elif dashboard_name == "default":
+                dashboardpath = '/dashboard/tab=home_tab'
+                analysis_path = browser.current_path.replace(browser.base_path, '/').rstrip('/') if browser.current_path else ''
+            elif dashboard_name:
+                # Custom dashboard name - load the saved dashboard
+                dashboardpath = '/dashboard/' + dashboard_name
+                # For custom dashboards, we need to load the analysis first
+                analysis_path = browser.current_path.replace(browser.base_path, '/').rstrip('/') if browser.current_path else ''
+            else:
+                # No dashboard name or default - use home tab
+                dashboardpath = '/dashboard/tab=home_tab'
+                analysis_path = browser.current_path.replace(browser.base_path, '/').rstrip('/') if browser.current_path else ''
+        else:
+            dashboardpath = '/dashboard/tab=home_tab'
+            analysis_path = browser.current_path.replace(browser.base_path, '/').rstrip('/') if browser.current_path else ''
+        
         appLayout = html.Div([
             html.H3(id='current-path', children=browser.current_path, style={'display': 'none'}),
             html.H4(id='current-simlet', children=actual_simlet, style=name_style),
@@ -572,14 +622,6 @@ def init_storage(main, pathname, search=''):
         # /simlet/1/session/1/dashboard/default) should load the dashboard on
         # arrival, not wait for a button click.
         if getattr(browser, 'analysis_ready', False):
-            dashboardpath = '/dashboard/tab=home_tab'
-            if pathname and '/dashboard' in pathname:
-                segment = pathname.split('/dashboard', 1)[1]
-                if segment.strip('/'):
-                    dashboardpath = '/dashboard/' + segment.lstrip('/')
-            analysis_path = pathname.split('/dashboard', 1)[0].rstrip('/') if pathname else ''
-            if not analysis_path:
-                analysis_path = browser.current_path.replace(browser.base_path, '/').rstrip('/')
             try:
                 outputs = get_analysis_outputs(analysis_path, dashboardpath)
                 tmon_style = outputs[8]
