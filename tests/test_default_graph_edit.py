@@ -141,10 +141,10 @@ def test_edit_button_opens_the_floater_for_a_default_graph(monkeypatch):
     _ctx(monkeypatch,
          json.dumps({'index': KEY, 'type': 'default-graph-edit'}) + '.n_clicks')
     result = TMonWidget.toggle_edit_floater(
-        0, 0, 0, 0, 0, [], [], 0, 0, [], [1], 0, 'progress_tab', True)
-    assert result[6]['display'] == 'flex'
-    assert result[7] == 'create'
-    assert result[9] == {'index': f'default:{KEY}'}
+        0, 0, 0, 0, [], [], 0, 0, [], [1], 0, 'progress_tab', True)
+    assert result[5]['display'] == 'flex'
+    assert result[6] == 'create'
+    assert result[8] == {'index': f'default:{KEY}'}
 
 
 def test_prefill_reads_the_definition_and_any_override():

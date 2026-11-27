@@ -2519,7 +2519,7 @@ def edit_floater_pages_panel():
     return html.Div(
         id='edit-floater-pages', style={'display': 'none'},
         children=[
-            html.H3(I18n.t('edit.pages'), style={'marginTop': 0}),
+            html.H3(I18n.t('edit.page'), style={'marginTop': 0}),
             html.Div([
                 html.Span(I18n.t('page.name'), style={'marginRight': '6px'}),
                 dcc.Input(id='page-name-input', type='text',
@@ -2845,9 +2845,9 @@ TMonBody=html.Div([
                             'margin': '5px 0'}),
             html.Div([
                 html.Button(I18n.t('edit.mode.enable'), id='edit-toggle', n_clicks=0),
-                html.Button(I18n.t('edit.pages'), id='edit-pages-button', n_clicks=0,
-                            style={'marginLeft': '6px', 'display': 'none'}),
-                html.Button(I18n.t('edit.layout'), id='edit-layout-button', n_clicks=0,
+                # Page name, icon and layout are one panel, so one button opens it
+                # for both adding/renaming a page and rearranging its graphs.
+                html.Button(I18n.t('edit.page'), id='edit-page-button', n_clicks=0,
                             style={'marginLeft': '6px', 'display': 'none'}),
                 html.Button(I18n.t('edit.config'), id='edit-config-button', n_clicks=0,
                             style={'marginLeft': '6px', 'display': 'none'}),
@@ -3019,8 +3019,7 @@ def update_definition_filter_values(values, current):
         # write the same output (ADR 0024).
         Output('edit-mode', 'data'),
         Output('edit-toggle', 'children'),
-        Output('edit-pages-button', 'style'),
-        Output('edit-layout-button', 'style'),
+        Output('edit-page-button', 'style'),
         Output('edit-config-button', 'style'),
         Output(NEW_TAB_ADD_ID, 'style'),
         Output('edit-floater', 'style'),
@@ -3032,8 +3031,7 @@ def update_definition_filter_values(values, current):
     [
         Input('edit-toggle', 'n_clicks'),
         Input('edit-floater-close', 'n_clicks'),
-        Input('edit-pages-button', 'n_clicks'),
-        Input('edit-layout-button', 'n_clicks'),
+        Input('edit-page-button', 'n_clicks'),
         Input('edit-config-button', 'n_clicks'),
         Input({'type': 'item-add-slot', 'index': dash.dependencies.ALL}, 'n_clicks'),
         Input({'type': 'filter-add-slot', 'index': dash.dependencies.ALL}, 'n_clicks'),
@@ -3047,7 +3045,7 @@ def update_definition_filter_values(values, current):
     ],
     [State('edit-mode', 'data')],
 )
-def toggle_edit_floater(edit_n, close_n, pages_n, layout_n, config_n,
+def toggle_edit_floater(edit_n, close_n, page_n, config_n,
                         slot_clicks, filter_clicks, cancel_n, add_n, edit_clicks,
                         default_edit_clicks, new_tab_n, tab, enabled):
     """Edit mode and the floater are controlled separately here.
@@ -3101,13 +3099,13 @@ def toggle_edit_floater(edit_n, close_n, pages_n, layout_n, config_n,
         # and the tab (+), then reveal the floater.
         return (True,
                 I18n.t('edit.mode.disable'),
-                btn_style(True), btn_style(True), btn_style(True),
+                btn_style(True), btn_style(True),
                 tab_style(True), _FLOATER_VISIBLE, mode, None, None, kind)
 
     def close_panel():
         # Closing the floater keeps edit mode on but hides the window; buttons
         # and tab reflect the current edit mode.
-        return (on, no_update, btn_style(on), btn_style(on), btn_style(on),
+        return (on, no_update, btn_style(on), btn_style(on),
                 tab_style(on), _FLOATER_HIDDEN, None, None, None, None)
 
     if clicked('edit-toggle.n_clicks'):
@@ -3116,7 +3114,7 @@ def toggle_edit_floater(edit_n, close_n, pages_n, layout_n, config_n,
         on = not on
         return (on,
                 I18n.t('edit.mode.disable' if on else 'edit.mode.enable'),
-                btn_style(on), btn_style(on), btn_style(on),
+                btn_style(on), btn_style(on),
                 tab_style(on), _FLOATER_HIDDEN, None, None, None, None)
     if (clicked('edit-floater-close.n_clicks') and int(close_n or 0) > 0
             or clicked('item-cancel.n_clicks') and int(cancel_n or 0) > 0):
@@ -3127,9 +3125,7 @@ def toggle_edit_floater(edit_n, close_n, pages_n, layout_n, config_n,
     if clicked('t-mon-tabs.value'):
         # Visiting a tab never opens the floater.
         return close_panel()
-    if clicked('edit-pages-button.n_clicks') and int(pages_n or 0) > 0:
-        return open_panel('pages')
-    if clicked('edit-layout-button.n_clicks') and int(layout_n or 0) > 0:
+    if clicked('edit-page-button.n_clicks') and int(page_n or 0) > 0:
         return open_panel('pages')
     if clicked('edit-config-button.n_clicks') and int(config_n or 0) > 0:
         return open_panel('config')
@@ -3140,26 +3136,26 @@ def toggle_edit_floater(edit_n, close_n, pages_n, layout_n, config_n,
         target = str(raw_target) if raw_target else page_key(tab)
         if target and not target.startswith(PAGE_TAB_PREFIX):
             target = PAGE_TAB_PREFIX + target
-        return (on, no_update, no_update, no_update, no_update,
+        return (on, no_update, no_update, no_update,
                 no_update, _FLOATER_VISIBLE, 'create', target, None,
                 'filter-multi')
     if clicked('item-add-slot') and clicked_n('item-add-slot'):
         raw_target = _pattern_index(trigger_prop('item-add-slot'), '.n_clicks')
         target = str(raw_target).rsplit('|', 1)[0] if raw_target else ''
-        return (on, no_update, no_update, no_update, no_update,
+        return (on, no_update, no_update, no_update,
                 no_update, _FLOATER_VISIBLE, 'create', target or page_key(tab), None, None)
     if clicked('item-edit') and clicked_n('item-edit'):
-        return (on, no_update, no_update, no_update, no_update,
+        return (on, no_update, no_update, no_update,
                 no_update, _FLOATER_VISIBLE, 'create', page_key(tab),
                 {'index': _pattern_index(trigger_prop('item-edit'), '.n_clicks')},
                 None)
     if clicked('default-graph-edit') and clicked_n('default-graph-edit'):
-        return (on, no_update, no_update, no_update, no_update,
+        return (on, no_update, no_update, no_update,
                 no_update, _FLOATER_VISIBLE, 'create', no_update,
                 {'index': f"default:{_pattern_index(trigger_prop('default-graph-edit'), '.n_clicks')}"},
                 None)
     if clicked('item-add.n_clicks') and int(add_n or 0) > 0:
-        return (on, no_update, no_update, no_update, no_update,
+        return (on, no_update, no_update, no_update,
                 no_update, _FLOATER_VISIBLE, 'create', no_update, None, None)
     raise PreventUpdate
 

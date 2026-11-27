@@ -133,7 +133,7 @@
   "visual.mode.absolute": "Temps absolu",
   "visual.mode.relative": "Temps relatif",
   "edit.visualisation": "Modifier la visualisation",
-  "edit.pages": "Ajouter/modifier une page",
+  "edit.page": "Modifier la page",
   "edit.layout": "Modifier la disposition",
   "edit.config": "Configuration",
   "filter.add": "Ajouter un filtre",
