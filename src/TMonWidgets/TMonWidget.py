@@ -638,51 +638,94 @@ def render_dashboard_tiles(dashboards, simlet_id=None, session_id=None):
         else:
             href = f"/dashboard/{name}"
 
-        tile = html.A(
-            html.Div([
-                html.Div(
-                    name,
-                    style={
-                        'fontFamily': INTER_FONT,
-                        'fontSize': 14,
-                        'fontWeight': '500',
-                        'color': DARK_BACKGROUND,
-                        'padding': '12px',
-                        'height': '44px',
-                        'boxSizing': 'border-box',
-                        'display': 'flex',
-                        'alignItems': 'center',
-                        'whiteSpace': 'nowrap',
-                        'overflow': 'hidden',
-                        'textOverflow': 'ellipsis',
-                        'borderBottom': '1px solid rgba(0,0,0,0.1)',
-                    }
-                ),
-                html.Div(
-                    I18n.t('dashboard.open'),
-                    style={
-                        'fontFamily': INTER_FONT,
-                        'fontSize': 12,
-                        'color': TEXT_SECONDARY,
-                        'padding': '8px 12px',
-                    }
-                ),
-            ],
+        # Remove button on non-default tiles (ADR 0025).
+        remove_button = None
+        if name != 'default':
+            remove_index = (
+                f"simlet_id:{simlet_id or ''}|session_id:{session_id or ''}|name:{name}"
+                if (simlet_id is not None or session_id is not None)
+                else f"name:{name}"
+            )
+            remove_button = html.Button(
+                '×',
+                id={'type': 'dashboard-remove', 'index': remove_index},
+                n_clicks=0,
+                title=I18n.t('dashboard.remove'),
+                className='dashboard-remove-btn',
                 style={
-                    'backgroundColor': LIGHT_CARD,
-                    'border': '1px solid rgba(0,0,0,0.1)',
-                    'borderRadius': 8,
-                    'width': f'{SIMLET_TILE_WIDTH}px',
-                    'height': '120px',
+                    'background': 'rgba(240, 118, 103, 0.1)', 'border': 'none',
+                    'color': '#f07667', 'cursor': 'pointer',
+                    'fontSize': 20, 'fontWeight': 'bold',
+                    'padding': '0',
+                    'width': '24px', 'height': '24px',
+                    'display': 'flex', 'alignItems': 'center', 'justifyContent': 'center',
+                    'position': 'absolute', 'top': '8px', 'right': '8px',
+                    'zIndex': 10,
+                    'borderRadius': '4px',
+                    'lineHeight': '1',
+                })
+
+        tile_content = html.Div([
+            html.Div(
+                name,
+                style={
+                    'fontFamily': INTER_FONT,
+                    'fontSize': 14,
+                    'fontWeight': '500',
+                    'color': DARK_BACKGROUND,
+                    'padding': '12px',
+                    'height': '44px',
                     'boxSizing': 'border-box',
-                    'margin': f'{SIMLET_TILE_MARGIN}px',
-                    'display': 'inline-block',
-                    'verticalAlign': 'top',
+                    'display': 'flex',
+                    'alignItems': 'center',
+                    'whiteSpace': 'nowrap',
+                    'overflow': 'hidden',
+                    'textOverflow': 'ellipsis',
+                    'borderBottom': '1px solid rgba(0,0,0,0.1)',
                 }
             ),
-            href=href,
-            style={'textDecoration': 'none', 'color': 'inherit'},
+            html.Div(
+                I18n.t('dashboard.open'),
+                style={
+                    'fontFamily': INTER_FONT,
+                    'fontSize': 12,
+                    'color': TEXT_SECONDARY,
+                    'padding': '8px 12px',
+                }
+            ),
+        ],
+            style={
+                'backgroundColor': LIGHT_CARD,
+                'border': '1px solid rgba(0,0,0,0.1)',
+                'borderRadius': 8,
+                'width': f'{SIMLET_TILE_WIDTH}px',
+                'height': '120px',
+                'boxSizing': 'border-box',
+            }
         )
+
+        if remove_button is not None:
+            tile = html.Div([
+                html.A(
+                    tile_content,
+                    href=href,
+                    style={'textDecoration': 'none', 'color': 'inherit', 'height': '100%', 'display': 'block'},
+                ),
+                remove_button,
+            ],
+                style={
+                    'display': 'inline-block',
+                    'verticalAlign': 'top',
+                    'margin': f'{SIMLET_TILE_MARGIN}px',
+                    'position': 'relative',
+                })
+        else:
+            tile = html.A(
+                tile_content,
+                href=href,
+                style={'textDecoration': 'none', 'color': 'inherit', 'height': '100%', 'display': 'inline-block',
+                       'verticalAlign': 'top', 'margin': f'{SIMLET_TILE_MARGIN}px'},
+            )
         tiles.append(tile)
 
         if (i + 1) % 4 == 0 and i < len(dashboards) - 1:
@@ -843,7 +886,8 @@ def update_tab(style, config_command, stateUrl, app_path=None):
 
 
 @callback(
-    Output('dashboard-create-modal', 'style'),
+    [Output('dashboard-create-modal', 'style'),
+     Output('dashboard-redirect', 'href')],
     [Input({'type': 'dashboard-add', 'index': dash.dependencies.ALL}, 'n_clicks'),
      Input('dashboard-create-cancel', 'n_clicks'),
      Input('dashboard-create-submit', 'n_clicks')],
@@ -874,61 +918,75 @@ def handle_dashboard_create_modal(add_clicks, cancel_n, submit_n, name, pathname
                            simlet_id=simlet_id, session_id=session_id)
             except Exception:
                 pass
-        return hidden
+            if simlet_id is not None and session_id is not None:
+                return hidden, f"/simlet/{simlet_id}/session/{session_id}/dashboard/{str(name).strip()}"
+            elif simlet_id is not None:
+                return hidden, f"/simlet/{simlet_id}/dashboard/{str(name).strip()}"
+            else:
+                return hidden, f"/dashboard/{str(name).strip()}"
+        return hidden, dash.no_update
     if 'dashboard-create-cancel' in triggered:
-        return hidden
+        return hidden, dash.no_update
     if any(int(click or 0) > 0 for click in (add_clicks or [])):
-        return visible
+        return visible, dash.no_update
     raise PreventUpdate
 
 
-
 @callback(
-    Output('dashboard-manager-tooltip', 'children'),
-    Input('save-dashboard-button', 'n_clicks'),
-    [State('dashboard-selector', 'value'),
-     State('dashboard-pages', 'data'),
-     State('page-filters', 'data'),
-     State('created-charts', 'data'),
-     State('definition-filters', 'data'),
-     State('activity-filter-hidden', 'data'),
-     State('t-mon-tabs', 'value'),
-     State('users-multi-dynamic-dropdown', 'value'),
-     State('object-multi-dynamic-dropdown', 'value'),
-     State('graph-layout', 'value'),
-     State('graph-rows', 'value'),
-     State('graph-columns', 'value'),
-     State('graph-page', 'value'),
-     State('graph-split-x', 'value'),
-     State('graph-split-y', 'value'),
-     State('url-t-mon', 'pathname')],
+    Output('dashboard-redirect', 'href', allow_duplicate=True),
+    Input({'type': 'dashboard-remove', 'index': dash.dependencies.ALL}, 'n_clicks'),
+    [State('url-t-mon', 'pathname'),
+     State('url', 'pathname')],
     prevent_initial_call=True,
 )
-def save_current_dashboard(n_clicks, name, pages, page_filters, charts, def_filters,
-                           hidden, tab, users, objs, layout, rows, cols, page, sx, sy,
-                           pathname):
-    if not n_clicks:
+def delete_dashboard(remove_n_clicks, pathname, url_pathname):
+    """Delete a saved dashboard from its tile and refresh the page."""
+    if not any(int(click or 0) > 0 for click in remove_n_clicks):
         raise PreventUpdate
-    name = (name or 'default').strip() or 'default'
-    document = current_config(
-        charts or [], page_filters or [], pages or [],
-        {'graph-layout': layout, 'graph-rows': rows, 'graph-columns': cols,
-         'graph-page': page, 'graph-split-x': sx, 'graph-split-y': sy},
-        {'actor.name': users or [], 'object.id': objs or []},
-        hidden or [], tab)
+
+    triggered = (dash.callback_context.triggered or [{}])[0].get('prop_id', '')
+    try:
+        btn_id = __import__('json').loads(triggered.rsplit('.n_clicks', 1)[0])
+        idx = btn_id.get('index', '')
+    except Exception:
+        raise PreventUpdate
+
     simlet_id = None
     session_id = None
-    if pathname and '/simlet/' in pathname:
-        parts = pathname.strip('/').split('/')
-        if len(parts) >= 2 and parts[0] == 'simlet':
-            simlet_id = parts[1]
-            if len(parts) >= 4 and parts[2] == 'session':
-                session_id = parts[3]
+    dname = None
+    if isinstance(idx, str) and '|' in idx:
+        for part in idx.split('|'):
+            if ':' in part:
+                k, v = part.split(':', 1)
+                if v:
+                    if k == 'simlet_id':
+                        simlet_id = v
+                    elif k == 'session_id':
+                        session_id = v
+                    elif k == 'name':
+                        dname = v
+    elif isinstance(idx, str) and idx.startswith('name:'):
+        dname = idx[len('name:'):]
+
+    if not dname:
+        raise PreventUpdate
+
     try:
-        save_named(name, document, simlet_id=simlet_id, session_id=session_id)
-        return I18n.t('dashboard.saved')
-    except Exception as error:
-        return str(error)
+        delete_named(dname, simlet_id=simlet_id, session_id=session_id)
+    except Exception:
+        pass
+
+    effective_path = pathname if (pathname and '/simlet/' in pathname) else url_pathname
+    if not effective_path:
+        effective_path = '/'
+    if simlet_id is not None and session_id is not None:
+        redirect = f"/simlet/{simlet_id}/session/{session_id}"
+    elif simlet_id is not None:
+        redirect = f"/simlet/{simlet_id}"
+    else:
+        redirect = "/dashboard/"
+    return redirect
+
 
 
 # Make studies available to the dashboard
@@ -1772,6 +1830,19 @@ def update_output(tab, user_search_value, user_value, object_search_value, objec
             or 'page-filters' in triggered_prop_id or 'dashboard-pages' in triggered_prop_id
             or 'definition-filters' in triggered_prop_id or 'edit-mode' in triggered_prop_id
             or 'default-graph-overrides' in triggered_prop_id):
+        # Default empty values when no statements are available.
+        df = pd.DataFrame()
+        filtered_df = pd.DataFrame()
+        activity_ids = []
+        user_unique_options = []
+        object_unique_options = []
+        active_charts, active_filters = [], []
+        tab_def, page_def = None, None
+        selected = (definition_filter_values
+                    if isinstance(definition_filter_values, dict) else {})
+        chart_df = pd.DataFrame()
+        has_data = False
+
         if len(TMonWidgets.xapiData) > 0:
             df = pd.json_normalize(TMonWidgets.xapiData)
             df = resolve_actor_name_column(df)
@@ -1800,130 +1871,131 @@ def update_output(tab, user_search_value, user_value, object_search_value, objec
                 chart_df = apply_page_filters(filtered_df, active_filters)
             else:
                 chart_df = filtered_df
-            if len(df) == 0:
-                # Deactivating the last activity empties the view on purpose. Say so
-                # rather than opening a tab of empty charts with no hint why. The link
-                # still carries the choice, since that is what brings the view back.
-                new_query_params = {'tab': tab}
-                if hidden_activities:
-                    new_query_params[HIDDEN_ACTIVITIES_PARAM] = ",".join(hidden_activities)
-                return (
-                    publish_url(urlencode(new_query_params)),
-                    user_unique_options,
-                    object_unique_options,
-                    html.Div(html.Div([
-                        html.H3('No activity is on'),
-                        html.P(
-                            f"All {len(activity_ids)} activities of this session are deactivated, so there "
-                            "is nothing to plot. Use the All button above to bring them back."
-                        ),
-                    ])),
-                )
-            if tab == 'home_tab':
-                # The simlet grid lives in the SIMVA browser's studies list,
-                # never in a dashboard. A local upload has no SimVA studies.
-                tab_content = html.Div(render_homepage_content())
-            elif tab_def is not None and tab_def['id'] == DefaultDashboard.XAPI_TAB_ID:
-                # The audit tab ignores dashboard filters: it shows the full set
-                # of statements the header and activity controls left in view.
-                tab_content = render_xapi_data_tab(tab_def, filtered_df)
-            elif tab_def is not None and tab_def['id'] == 'create_tab':
-                # The Create tab and every user-defined page share one renderer:
-                # a row of filters, the named charts, and one + slot to add more.
-                tab_content = html.Div([
-                    html.H3('Your visualisations'),
+            has_data = True
+
+        if tab == 'home_tab':
+            # The simlet grid lives in the SIMVA browser's studies list,
+            # never in a dashboard. A local upload has no SimVA studies.
+            tab_content = html.Div(render_homepage_content())
+        elif len(df) == 0 and has_data:
+            # Deactivating the last activity empties the view on purpose. Say so
+            # rather than opening a tab of empty charts with no hint why. The link
+            # still carries the choice, since that is what brings the view back.
+            new_query_params = {'tab': tab}
+            if hidden_activities:
+                new_query_params[HIDDEN_ACTIVITIES_PARAM] = ",".join(hidden_activities)
+            return (
+                publish_url(urlencode(new_query_params)),
+                user_unique_options,
+                object_unique_options,
+                html.Div(html.Div([
+                    html.H3('No activity is on'),
                     html.P(
-                        "Every chart you create is listed here and drawn from the statements the "
-                        "filters leave in the view. Add one with the + button below."
+                        f"All {len(activity_ids)} activities of this session are deactivated, so there "
+                        "is nothing to plot. Use the All button above to bring them back."
                     ),
-                ] + render_page_items(chart_df, active_charts, active_filters,
-                                      CREATE_TAB_KEY, edit_mode,
-                                      show_filters=False))
-            elif tab_def is not None and page_def is not None:
-                tab_content = render_default_page(
-                    tab_def, page_def, filtered_df, chart_df, selected,
-                    edit_mode=edit_mode, admin=is_admin(),
-                    overrides=default_overrides, show_filters=False)
-            elif tab == 'data_tab':
-                # Legacy link to the data tab when running on the fallback tabs.
-                tab_content = render_xapi_data_tab(
-                    {'markdown': ''}, filtered_df)
-            elif tab == 'create_tab':
-                # The Create tab and every user-defined page share one renderer:
-                # a row of filters, the named charts, and one + slot to add more.
-                # They all draw from chart_df, which the page filters narrowed.
-                tab_content=html.Div([
-                    html.H3('Your visualisations'),
-                    html.P(
-                        "Every chart you create is listed here and drawn from the statements the "
-                        "filters leave in the view. Add one with the + button below."
-                    ),
-                ] + render_page_items(chart_df, active_charts, active_filters,
-                                      CREATE_TAB_KEY, edit_mode,
-                                      show_filters=False))
-            elif tab.startswith(PAGE_TAB_PREFIX):
-                page = page_by_key(dashboard_pages, tab)
-                name = str((page or {}).get('name') or I18n.t('page.unnamed'))
-                tab_content=html.Div([html.H3(name)] + render_page_items(
-                    chart_df, active_charts, active_filters, tab, edit_mode,
-                    show_filters=False))
-            else:
-                tab_content = html.Div()
-            new_query_params = { 'tab': tab }
-            if user_value and len(user_value)>0:
-                new_query_params["actor.name"]=",".join(user_value)
-            if object_value and len(object_value)>0:
-                new_query_params["object.id"]=",".join(object_value)
-            if hidden_activities and len(hidden_activities)>0:
-                # Only written when something is hidden, so a link to a whole session
-                # stays the short one it is without the parameter.
-                new_query_params[HIDDEN_ACTIVITIES_PARAM]=",".join(hidden_activities)
-            if active_charts:
-                # The charts a link carries, in the order they are drawn.
-                encoded = [encode_spec(spec) for spec in active_charts]
-                described = [value for value in encoded if value]
-                if described:
-                    new_query_params[CREATED_CHARTS_PARAM]=",".join(described)
-            filters_in_url = encode_filters(active_filters)
-            if filters_in_url:
-                # The definition and the selected values travel in the link so
-                # a shared page opens with the same narrowed view.
-                new_query_params[PAGE_FILTER_PARAM]=filters_in_url
-            print(f"Query param url:{new_query_params}")
-            # Construct a new query string with unique parameters
-            new_query_string = urlencode(new_query_params, safe=" ")
-            print(f"new_query_string: {new_query_string}")
-            if tab_def is not None and page_def is not None:
-                # A definition page carries its own arrangement, or inherits it
-                # from its tab and then the dashboard. The UI controls keep their
-                # values for user-created pages, where they are the author's tool.
-                arrangement = DefaultDashboard.layout_for(
-                    page_def.get('layout'), DASHBOARD_DEFINITION, tab_def)
-                graph_layout = arrangement['graph-layout']
-                graph_rows = arrangement['graph-rows']
-                graph_columns = arrangement['graph-columns']
-                graph_page = arrangement['graph-page']
-                split_x = arrangement['graph-split-x']
-                split_y = arrangement['graph-split-y']
-            tab_content = arrange_graphs(
-                tab_content, graph_layout, graph_rows, graph_columns, graph_page,
-                split_x, split_y)
-            # Changing tabs in edit mode must not churn the URL: publishing a new
-            # query string here would re-run the URL sync and drop the tab the
-            # user just chose, which made the dashboard look stuck on the previous
-            # tab.
-            if 't-mon-tabs' in triggered_prop_id:
-                published_url = no_update
-            else:
-                published_url = publish_url(new_query_string)
-            return (published_url, user_unique_options,
-                    object_unique_options, tab_content)
+                ])),
+            )
+        elif tab_def is not None and tab_def['id'] == DefaultDashboard.XAPI_TAB_ID:
+            # The audit tab ignores dashboard filters: it shows the full set
+            # of statements the header and activity controls left in view.
+            tab_content = render_xapi_data_tab(tab_def, filtered_df)
+        elif tab_def is not None and tab_def['id'] == 'create_tab':
+            # The Create tab and every user-defined page share one renderer:
+            # a row of filters, the named charts, and one + slot to add more.
+            tab_content = html.Div([
+                html.H3('Your visualisations'),
+                html.P(
+                    "Every chart you create is listed here and drawn from the statements the "
+                    "filters leave in the view. Add one with the + button below."
+                ),
+            ] + render_page_items(chart_df, active_charts, active_filters,
+                                  CREATE_TAB_KEY, edit_mode,
+                                  show_filters=False))
+        elif tab == 'data_tab':
+            # Legacy link to the data tab when running on the fallback tabs.
+            tab_content = render_xapi_data_tab(
+                {'markdown': ''}, filtered_df)
+        elif tab == 'create_tab':
+            # The Create tab and every user-defined page share one renderer:
+            # a row of filters, the named charts, and one + slot to add more.
+            # They all draw from chart_df, which the page filters narrowed.
+            tab_content=html.Div([
+                html.H3('Your visualisations'),
+                html.P(
+                    "Every chart you create is listed here and drawn from the statements the "
+                    "filters leave in the view. Add one with the + button below."
+                ),
+            ] + render_page_items(chart_df, active_charts, active_filters,
+                                  CREATE_TAB_KEY, edit_mode,
+                                  show_filters=False))
+        elif tab_def is not None:
+            # A default definition tab (progress, video, etc.) uses the
+            # render_default_page renderer with its own graphs and filters.
+            tab_content = render_default_page(
+                tab_def, page_def, filtered_df, chart_df, selected,
+                edit_mode=edit_mode, admin=is_admin(),
+                overrides=default_overrides, show_filters=False)
+        elif tab.startswith(PAGE_TAB_PREFIX):
+            page = page_by_key(dashboard_pages, tab)
+            name = str((page or {}).get('name') or I18n.t('page.unnamed'))
+            tab_content=html.Div([html.H3(name)] + render_page_items(
+                chart_df, active_charts, active_filters, tab, edit_mode,
+                show_filters=False))
         else:
-            return (publish_url("tab=home_tab"), [], [],
-                    html.Div(render_homepage_content()))
+            tab_content = html.Div()
+        new_query_params = { 'tab': tab }
+        if user_value and len(user_value)>0:
+            new_query_params["actor.name"]=",".join(user_value)
+        if object_value and len(object_value)>0:
+            new_query_params["object.id"]=",".join(object_value)
+        if hidden_activities and len(hidden_activities)>0:
+            # Only written when something is hidden, so a link to a whole session
+            # stays the short one it is without the parameter.
+            new_query_params[HIDDEN_ACTIVITIES_PARAM]=",".join(hidden_activities)
+        if active_charts:
+            # The charts a link carries, in the order they are drawn.
+            encoded = [encode_spec(spec) for spec in active_charts]
+            described = [value for value in encoded if value]
+            if described:
+                new_query_params[CREATED_CHARTS_PARAM]=",".join(described)
+        filters_in_url = encode_filters(active_filters)
+        if filters_in_url:
+            # The definition and the selected values travel in the link so
+            # a shared page opens with the same narrowed view.
+            new_query_params[PAGE_FILTER_PARAM]=filters_in_url
+        print(f"Query param url:{new_query_params}")
+        # Construct a new query string with unique parameters
+        new_query_string = urlencode(new_query_params, safe=" ")
+        print(f"new_query_string: {new_query_string}")
+        if tab_def is not None and page_def is not None:
+            # A definition page carries its own arrangement, or inherits it
+            # from its tab and then the dashboard. The UI controls keep their
+            # values for user-created pages, where they are the author's tool.
+            arrangement = DefaultDashboard.layout_for(
+                page_def.get('layout'), DASHBOARD_DEFINITION, tab_def)
+            graph_layout = arrangement['graph-layout']
+            graph_rows = arrangement['graph-rows']
+            graph_columns = arrangement['graph-columns']
+            graph_page = arrangement['graph-page']
+            split_x = arrangement['graph-split-x']
+            split_y = arrangement['graph-split-y']
+        tab_content = arrange_graphs(
+            tab_content, graph_layout, graph_rows, graph_columns, graph_page,
+            split_x, split_y)
+        # Changing tabs in edit mode must not churn the URL: publishing a new
+        # query string here would re-run the URL sync and drop the tab the
+        # user just chose, which made the dashboard look stuck on the previous
+        # tab.
+        if 't-mon-tabs' in triggered_prop_id:
+            published_url = no_update
+        else:
+            published_url = publish_url(new_query_string)
+        return (published_url, user_unique_options,
+                object_unique_options, tab_content)
     else:
         raise PreventUpdate
-    
+
 # Design tokens from TMON.figcraft
 # Brand colors
 BRAND_PRIMARY = "#078493"
@@ -2135,17 +2207,7 @@ def tab_icon(path):
 # targeting a stable id.
 DASHBOARD_TABS = [
     ('home_tab', 'HomePage', 'M3 11l9-8 9 8v9a1 1 0 0 1-1 1h-5v-6H9v6H4a1 1 0 0 1-1-1z'),
-    ('progress_tab', 'Progress', 'M4 19V9m6 10V5m6 14v-7m4 7H2'),
-    ('video_tab', 'Videos', 'M4 5h12v14H4zM16 10l5-3v10l-5-3'),
-    ('completable_tab', 'Completable', 'M9 11l3 3 8-8M5 12l3 3 3-3'),
-    ('alternative_tab', 'Alternatives', 'M6 6h12v12H6zM10 10h4v4h-4z'),
-    ('interaction_tab', 'Interactions',
-     'M8 12a3 3 0 100-6 3 3 0 000 6zm8 0a3 3 0 100-6 3 3 0 000 6M2 20v-2a4 4 0 014-4h4a4 4 0 014 4v2'),
-    ('accessible_tab', 'Accessible',
-     'M12 2a2 2 0 110 4 2 2 0 010-4zm-5 7h10l2 6h-3l2 7m-10-7h3l2 7'),
-    ('menu_tab', 'Menu', 'M4 6h16M4 12h16M4 18h16'),
-    ('data_tab', 'xAPI Data', 'M4 4h16v16H4zM4 10h16M10 4v16'),
-    ('create_tab', 'Create', 'M12 5v14M5 12h14'),
+    ('data_tab', 'xAPI Data', 'M4 4h16v16H4zM4 10h16M10 4v16')
 ]
 
 # The deployed JSON file is the sole source of the default dashboard's graphs.
@@ -2699,6 +2761,7 @@ def dashboard_create_modal_layout():
 
 TMonBody=html.Div([
     dcc.Location(id='url-t-mon', refresh=False), # Location component for URL handling
+    dcc.Location(id='dashboard-redirect', refresh=True),
     # Written only when the header language changes; the reload picks up lng.
     dcc.Location(id='i18n-location', refresh=True),
     # Standalone simva-front-style overlay at the app level: it lives outside
@@ -2767,42 +2830,6 @@ TMonBody=html.Div([
                      style={'display': 'flex', 'flexWrap': 'wrap',
                             'alignItems': 'center', 'gap': '8px',
                             'margin': '5px 0'}),
-            # Dashboard management (ADR 0025/0026): select, save, create, share
-            # and compare sessions. Styled as a compact tool row on the right.
-            html.Div(id='dashboard-manager',
-                     style={'display': 'flex', 'alignItems': 'center',
-                            'gap': '8px', 'marginLeft': 'auto',
-                            'flexWrap': 'wrap'},
-                     children=[
-                         dcc.Dropdown(id='dashboard-selector', options=[],
-                                     placeholder=I18n.t('dashboard.select'),
-                                     style={'width': '200px'}),
-                         html.Button(I18n.t('dashboard.save'),
-                                     id='save-dashboard-button', n_clicks=0,
-                                     style={'background': 'none', 'border': 'none',
-                                            'color': BRAND_PRIMARY, 'cursor': 'pointer',
-                                            'fontSize': '13px'}),
-                         html.Button(I18n.t('dashboard.new'),
-                                     id='new-dashboard-button', n_clicks=0,
-                                     style={'background': 'none', 'border': 'none',
-                                            'color': BRAND_PRIMARY, 'cursor': 'pointer',
-                                            'fontSize': '13px'}),
-                         html.Button(I18n.t('dashboard.share'),
-                                     id='dashboard-share-button', n_clicks=0,
-                                     style={'background': 'none', 'border': 'none',
-                                            'color': BRAND_PRIMARY, 'cursor': 'pointer',
-                                            'fontSize': '13px'}),
-                         html.Button(I18n.t('dashboard.compare'),
-                                     id='dashboard-compare-toggle', n_clicks=0,
-                                     style={'background': 'none', 'border': 'none',
-                                            'color': BRAND_PRIMARY, 'cursor': 'pointer',
-                                            'fontSize': '13px'}),
-                         html.Span(id='dashboard-read-only',
-                                   children='',
-                                   style={'color': TEXT_SECONDARY, 'fontSize': 12}),
-                         dcc.Tooltip(id='dashboard-manager-tooltip',
-                                     children=I18n.t('dashboard.tooltip')),
-                     ]),
             html.Div([
                 html.Button(I18n.t('edit.mode.enable'), id='edit-toggle', n_clicks=0),
                 html.Button(I18n.t('edit.pages'), id='edit-pages-button', n_clicks=0,

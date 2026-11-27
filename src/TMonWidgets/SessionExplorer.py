@@ -245,6 +245,9 @@ def render_session_cards(page, simlet_id=None):
         activities = _session_value(session, 'activities', default=[]) or []
         participants = _session_value(session, 'participants',
                                       'completeParticipants', default=[]) or []
+        # Saved dashboards for this session appear as tiles alongside 'default'.
+        dashboard_names = ['default'] + list(
+            __import__('TMonWidgets').TMonWidget.list_saved(simlet_id, session_id))
 
         cards.append(html.Div([
             html.Div([
@@ -277,7 +280,7 @@ def render_session_cards(page, simlet_id=None):
                       'textAlign': 'left', 'boxShadow': '0 1px 3px rgba(0,0,0,.3)'}),
             # Multidashboard tiles for this session (ADR 0025).
             __import__('TMonWidgets').TMonWidget.render_dashboard_tiles(
-                ['default'], simlet_id=simlet_id, session_id=session_id),
+                dashboard_names, simlet_id=simlet_id, session_id=session_id),
         ]))
     return html.Div(cards, style={'padding': '10px 20px'})
 

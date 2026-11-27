@@ -1,0 +1,8 @@
+/* Dashboard remove button hover effect */
+.dashboard-remove-btn:hover {
+    background: rgba(240, 118, 103, 0.2) !important;
+    transform: scale(1.1);
+}
+.dashboard-remove-btn:active {
+    background: rgba(240, 118, 103, 0.3) !important;
+}

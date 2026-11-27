@@ -165,6 +165,7 @@ def get_analysis_outputs(pathname, dashboardpath):
     publish_session_activities()
     out=[]
     err=[]
+    has_error=False
     current_file_path, content_string = browser.get_analysis_content()
     if content_string is None:
         # Report why the LRS gave nothing: a failed request and a genuinely empty
@@ -176,13 +177,14 @@ def get_analysis_outputs(pathname, dashboardpath):
             "Statements are read from the LRS only; the trace store is used as a "
             f"fallback on legacy servers. Checked: {source}."
         )
+        has_error = True
     else:
         load_from_string(
             content_string, TMonWidgets.xapiData, out, err
         )
         if len(TMonWidgets.xapiData) == 0:
-            # An empty result is a valid answer, not a failure: say so instead of
-            # opening the dashboard on a blank set of charts.
+            # An empty result is a valid answer, not a failure: show the dashboard
+            # with an informational message instead of hiding it.
             err.append(
                 f"The LRS holds no statements yet for {browser.current_path}. "
                 "Statements appear here once the activity produces them; "
@@ -197,7 +199,7 @@ def get_analysis_outputs(pathname, dashboardpath):
     actual_simlet=browser._get_id_from_object(browser.actual_simlet, 'simlet', 'name') if browser.actual_simlet is not None else I18n.t('browser.select_simlet')
     actual_test=browser._get_id_from_object(browser.actual_test, 'session', 'name') if browser.actual_test is not None else I18n.t('browser.select_test')
     actual_activity=browser._get_id_from_object(browser.actual_activity, 'activity', 'name') if browser.actual_activity is not None else I18n.t('browser.select_activity')
-    tmon_style = {'display': 'none'} if len(err) > 0 else {'display': 'block'}
+    tmon_style = {'display': 'none'} if has_error else {'display': 'block'}
     return browser.current_path, actual_simlet, actual_test, actual_activity, [], [], run_analyse_style, html.Div(div_list), tmon_style, f"{pathname}{dashboardpath}"
 
 

@@ -152,6 +152,7 @@
   "dashboard.read_only": "Read only",
   "dashboard.no_dashboards": "No dashboards available",
   "dashboard.open": "Open dashboard",
+  "dashboard.remove": "Remove",
   "dashboard.name": "Dashboard name",
   "dashboard.create": "Create",
   "dashboard.saved": "Dashboard saved"
