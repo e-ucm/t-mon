@@ -92,6 +92,28 @@ def test_page_filters_encode_and_decode_with_selected_values():
     encoded = encode_filters(filters)
     decoded = decode_filters(encoded)
     assert decoded == filters
+    assert encode_filters(filters) == (
+        "multi|actor.name|WyJhIiwiYiJd,single|object.id|"
+        "WyJodHRwczovL3czaWQub3JnL3hhcGkvc2VyaW91c2dhbWVzL2FjdGl2aXRpZXMvZ2FtZS0xIl0="
+    )
+
+
+def test_filter_metadata_round_trips_through_links_and_config():
+    spec = normalise_filter({
+        "column": "actor.name", "mode": "single", "values": ["a"],
+        "name": "Player", "hidden": True, "target_tab": "progress",
+    })
+    assert decode_filters(encode_filters([spec])) == [spec]
+    document = build_document(filters=[spec])
+    assert parse_document(serialize(document))["filters"] == [spec]
+
+
+def test_legacy_filter_url_shape_is_still_supported():
+    import base64
+    encoded_values = base64.b64encode(b'["a"]').decode("ascii")
+    assert decode_filters(f"single|actor.name|{encoded_values}") == [{
+        "column": "actor.name", "mode": "single", "values": ["a"],
+    }]
 
 
 def test_page_filters_narrow_every_chart_source():
@@ -187,6 +209,48 @@ def test_custom_tabs_are_built_from_named_pages():
     ])
     assert any(getattr(tab, "value", None) == "page:abc" for tab in tabs)
     assert any("My page" in str(tab.label) for tab in tabs)
+
+
+def test_filter_is_available_on_its_assigned_tab_only():
+    pages = [
+        {"id": "one", "name": "One", "charts": [], "filters": [
+            normalise_filter({"column": "actor.name", "mode": "single",
+                              "values": ["a"], "target_tab": "two"}),
+        ]},
+        {"id": "two", "name": "Two", "charts": [], "filters": []},
+    ]
+    assert TMonWidget.filters_for_tab("page:one", pages, []) == []
+    entries = TMonWidget.filters_for_tab("page:two", pages, [])
+    assert len(entries) == 1
+    assert entries[0][0] == "page:one"
+    assert entries[0][2]["target_tab"] == "two"
+
+
+def test_orphan_filter_target_is_not_reassigned():
+    pages = [{"id": "one", "name": "One", "charts": [], "filters": [
+        normalise_filter({"column": "actor.name", "target_tab": "deleted"}),
+    ]}]
+    assert TMonWidget.filters_for_tab("page:one", pages, []) == []
+
+
+def test_hidden_filter_has_no_dropdown_but_remains_applied():
+    from TMonWidgets.MultiSelector import apply_page_filters
+    spec = normalise_filter({"column": "actor.name", "mode": "single",
+                             "values": ["a"], "hidden": True,
+                             "name": "Player", "target_tab": "one"})
+    row = TMonWidget.render_filter_controls(
+        [spec], "page:one", progress_df(), edit_mode=False)
+    assert not any(isinstance(node, dcc.Dropdown) for node in _walk(row))
+    filtered = apply_page_filters(progress_df(), [spec])
+    assert set(filtered["actor.name"]) == {"a"}
+
+
+def test_filter_editor_displays_target_and_selected_value_controls():
+    ids = [getattr(node, "id", None)
+           for node in _walk(TMonWidget.TMonBody)]
+    for expected in ("item-filter-name", "item-filter-hidden",
+                     "item-filter-target-tab", "item-filter-values"):
+        assert expected in ids
 
 
 def test_page_rendering_has_filter_row_charts_and_one_add_slot():
@@ -307,7 +371,8 @@ def test_new_labels_exist_in_every_language():
         "visual.open", "visual.add", "visual.game", "visual.mode.single",
         "page.add", "page.rename", "page.delete", "config.export",
         "config.import", "config.save", "config.load", "config.confirm",
-        "config.replace", "config.append",
+        "config.replace", "config.append", "filter.values", "filter.hidden",
+        "filter.name", "filter.target_tab",
     ]
     for language in ("en", "es", "fr"):
         for key in keys:

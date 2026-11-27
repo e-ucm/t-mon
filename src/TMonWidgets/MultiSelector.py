@@ -57,6 +57,7 @@ def normalise_filter(spec, df=None):
     mode = spec.get("mode") if spec.get("mode") in FILTER_MODES else "multi"
     if not column:
         return None
+    column = str(column)
     if df is not None and not df.empty and column not in df.columns:
         return None
     values = spec.get("values") or []
@@ -70,7 +71,19 @@ def normalise_filter(spec, df=None):
         values = [value for value in values if value in present]
     if mode == "single":
         values = values[:1]
-    return {"column": column, "mode": mode, "values": values[:MAX_PAGE_FILTERS]}
+    normalised = {
+        "column": column,
+        "mode": mode,
+        "values": values[:MAX_PAGE_FILTERS],
+    }
+    if "name" in spec:
+        normalised["name"] = str(spec.get("name") or "").strip()[:80]
+    if "hidden" in spec:
+        normalised["hidden"] = bool(spec.get("hidden"))
+    if "target_tab" in spec:
+        target_tab = spec.get("target_tab")
+        normalised["target_tab"] = str(target_tab).strip()[:160] if target_tab else ""
+    return normalised
 
 
 def apply_page_filters(df, filters):
@@ -102,8 +115,12 @@ def encode_filter(spec):
     normalised = normalise_filter(spec)
     if normalised is None:
         return None
-    values = json.dumps(normalised["values"], separators=(",", ":"))
-    encoded = base64.b64encode(values.encode("utf-8")).decode("ascii")
+    metadata = {key: normalised[key] for key in ("name", "hidden", "target_tab")
+                if key in normalised}
+    payload = {"values": normalised["values"], **metadata} if metadata else normalised["values"]
+    encoded = base64.b64encode(
+        json.dumps(payload, separators=(",", ":"), ensure_ascii=False).encode("utf-8")
+    ).decode("ascii")
     return "|".join([normalised["mode"], normalised["column"], encoded])
 
 
@@ -125,8 +142,16 @@ def decode_filters(value):
             values = json.loads(base64.b64decode(encoded).decode("utf-8"))
         except (ValueError, UnicodeDecodeError):
             continue
+        if isinstance(values, dict):
+            payload = values
+            values = payload.get("values")
+        else:
+            # Legacy links encoded only the selected values as a JSON array.
+            payload = {}
         if isinstance(values, list):
-            spec = normalise_filter({"mode": mode, "column": column, "values": values})
+            spec = normalise_filter({
+                **payload, "mode": mode, "column": column, "values": values,
+            })
             if spec is not None:
                 specs.append(spec)
     return specs[:MAX_PAGE_FILTERS]

@@ -1085,18 +1085,50 @@ def page_by_key(pages, key):
 
 
 def items_for_key(key, pages, charts, filters):
-    """Return the charts and filters held by the active page.
-
-    A store may hold a scalar instead of a list if a config was hand-edited or
-    imported from an older version; coerce to a list so unpacking never fails on
-    an ``int`` or other scalar.
-    """
+    """Return the charts and filters held by the active page."""
     def as_list(value):
         return list(value) if isinstance(value, list) else []
     page = page_by_key(pages, key)
     if page is not None:
         return as_list(page.get("charts")), as_list(page.get("filters"))
     return as_list(charts), as_list(filters)
+
+
+def filters_for_tab(tab, pages, filters):
+    """Collect user filters assigned to a tab, retaining their owning store key."""
+    target_id = str(tab or '').removeprefix(PAGE_TAB_PREFIX)
+    available = {str(page.get('id')) for page in pages or []
+                 if isinstance(page, dict) and page.get('id')}
+    if DASHBOARD_DEFINITION:
+        available.update(
+            str(tab_def.get('id')) for tab_def in DASHBOARD_DEFINITION.get('tabs', [])
+            if isinstance(tab_def, dict) and tab_def.get('id')
+            and tab_def.get('id') != DefaultDashboard.XAPI_TAB_ID
+        )
+    owned = []
+    for page in pages or []:
+        if not isinstance(page, dict):
+            continue
+        owner = f"{PAGE_TAB_PREFIX}{page.get('id')}"
+        for index, spec in enumerate(page.get('filters') or []):
+            if not isinstance(spec, dict):
+                continue
+            target = spec.get('target_tab')
+            if not target:
+                target = str(page.get('id'))
+            target = str(target).removeprefix(PAGE_TAB_PREFIX)
+            if target == target_id and target in available:
+                owned.append((owner, index, spec))
+    # Filters in the shared store are either legacy Create-tab filters or
+    # filters restored from a shared URL, which carry an explicit target ID.
+    for index, spec in enumerate(filters or []):
+        if not isinstance(spec, dict):
+            continue
+        target = spec.get('target_tab') or 'create_tab'
+        target = str(target).removeprefix(PAGE_TAB_PREFIX)
+        if target == target_id:
+            owned.append(('create_tab', index, spec))
+    return owned
 
 
 def default_graph_key(tab_id, page_id, graph_id):
@@ -1164,55 +1196,61 @@ def _default_edit_key(edit_index):
 
 
 def render_filter_controls(filters, target, df, edit_mode=True,
-                           include_add_slot=True):
+                           include_add_slot=True, filter_entries=None):
     """The row of page filters above a page's visualisations."""
     controls = []
-    for index, spec in enumerate(filters or []):
+    entries = filter_entries or [(target, index, spec)
+                                 for index, spec in enumerate(filters or [])]
+    target_id = str(target or '').removeprefix(PAGE_TAB_PREFIX)
+    for owner, index, spec in entries:
         normalised = normalise_filter(spec, df)
         if normalised is None:
             continue
-        options = filter_options(df, normalised["column"])
-        controls.append(html.Div([
-            html.Span(f"{normalised['column']}: ", style={'marginRight': '6px'}),
-            dcc.Dropdown(
-                id={'type': 'page-filter', 'index': f"{target}:{index}"},
-                options=options,
+        assigned = normalised.get('target_tab')
+        if assigned and str(assigned).removeprefix(PAGE_TAB_PREFIX) != target_id:
+            continue
+        label = normalised.get('name') or normalised['column']
+        row = [html.Span(f"{label}: ", style={'marginRight': '6px'})]
+        if not normalised.get('hidden'):
+            row.append(dcc.Dropdown(
+                id={'type': 'page-filter', 'index': f"{owner}:{index}"},
+                options=filter_options(df, normalised["column"]),
                 value=normalised["values"] if normalised["mode"] == "multi"
                 else (normalised["values"][0] if normalised["values"] else None),
-                multi=normalised["mode"] == "multi",
-                clearable=True,
+                multi=normalised["mode"] == "multi", clearable=True,
                 style={'width': '260px', 'display': 'inline-block',
                        'marginRight': '12px'},
-            ),
-            html.Button('×', id={'type': 'item-remove', 'index': f'filter:{index}'},
+            ))
+        row.extend([
+            html.Button('×', id={'type': 'item-remove',
+                                 'index': f'{owner}:filter:{index}'},
                         n_clicks=0, title=I18n.t('edit.remove'),
                         style={'background': 'none', 'border': 'none',
                                'cursor': 'pointer', 'fontSize': '16px',
                                'display': 'inline-block' if edit_mode else 'none'}),
             html.Button(I18n.t('edit.item'), id={'type': 'item-edit',
-                                               'index': f'filter:{index}'},
+                                                'index': f'filter:{owner}:{index}'},
                         n_clicks=0, title=I18n.t('edit.filter'),
                         style=edit_button_style(edit_mode)),
-        ], style={'display': 'inline-block', 'marginBottom': '8px'}))
+        ])
+        controls.append(html.Div(row, style={'display': 'inline-block',
+                                             'marginBottom': '8px'}))
     if edit_mode and include_add_slot:
-        controls = list(controls) + [html.Button('+', id={'type': 'item-add-slot',
-                                                          'index': target},
-                                                  n_clicks=0,
-                                                  title=I18n.t('visual.open'),
-                                                  style={'width': '32px',
-                                                         'height': '32px',
-                                                         'fontSize': '18px',
-                                                         'border': f'2px dashed {BRAND_PRIMARY}',
-                                                         'background': LIGHT_CARD,
-                                                         'color': BRAND_PRIMARY,
-                                                         'cursor': 'pointer',
-                                                         'borderRadius': '6px',
-                                                         'display': 'block'})]
+        controls.append(html.Button('+', id={'type': 'item-add-slot',
+                                              'index': target},
+                                    n_clicks=0, title=I18n.t('visual.open'),
+                                    style={'width': '32px', 'height': '32px',
+                                           'fontSize': '18px',
+                                           'border': f'2px dashed {BRAND_PRIMARY}',
+                                           'background': LIGHT_CARD,
+                                           'color': BRAND_PRIMARY,
+                                           'cursor': 'pointer',
+                                           'borderRadius': '6px',
+                                           'display': 'block'}))
     return html.Div(controls, style={
         'display': 'flex', 'flexWrap': 'wrap', 'alignItems': 'center',
         'gap': '8px', 'marginBottom': '10px',
     }) if controls else html.Div()
-
 
 def render_item(spec, index, target, df, is_filter=False, edit_mode=True):
     """One created chart or filter, with its remove and edit buttons."""
@@ -1489,14 +1527,16 @@ def render_top_filter_bar(tab, pages, filters, selected, hidden, lrs_version,
     tab_def, page_def = default_tab_page(tab)
     definition_specs = definition_filters(tab_def, page_def, selected or {})
     key = page_key(tab)
-    user_filters = items_for_key(key, pages, [], filters)[1]
+    filter_entries = filters_for_tab(tab, pages, filters)
+    user_filters = [spec for _, _, spec in filter_entries]
     controls = []
     if definition_specs:
         controls.extend(render_definition_filter_controls(
             definition_specs, df).children)
     if user_filters:
         controls.append(render_filter_controls(
-            user_filters, key, df, bool(edit_mode), include_add_slot=False))
+            user_filters, tab, df, bool(edit_mode), include_add_slot=False,
+            filter_entries=filter_entries))
     if edit_mode and key and (len(definition_specs) + len(user_filters)
                       < MAX_TOTAL_FILTERS):
         controls.append(html.Button(
@@ -1565,6 +1605,10 @@ def _pattern_index(prop_id, suffix):
         State('item-ylabel', 'value'),
         State('item-y', 'value'),
         State('item-aggregation', 'value'),
+        State('item-filter-name', 'value'),
+        State('item-filter-hidden', 'value'),
+        State('item-filter-target-tab', 'value'),
+        State('item-filter-values', 'value'),
     ]
 )
 def update_page_state(page_add_n, page_rename_n, page_delete_n, item_add_n,
@@ -1578,7 +1622,9 @@ def update_page_state(page_add_n, page_rename_n, page_delete_n, item_add_n,
                       pages, charts, filters, pathname,
                       pending_remove=None, item_edit_index=None,
                       item_title=None, item_xlabel=None, item_ylabel=None,
-                      item_y=None, item_aggregation=None):
+                      item_y=None, item_aggregation=None, item_filter_name=None,
+                       item_filter_hidden=None, item_filter_target_tab=None,
+                       item_filter_values=None):
     """
     The single writer of the page, chart and filter stores.
 
@@ -1591,9 +1637,12 @@ def update_page_state(page_add_n, page_rename_n, page_delete_n, item_add_n,
     pages = [dict(page) for page in (pages or []) if isinstance(page, dict)]
     charts = [spec for spec in (charts or []) if isinstance(spec, dict)]
     filters = [spec for spec in (filters or []) if isinstance(spec, dict)]
-    # The tab that is open owns the items, whether or not the popup was used.
-    # The modal target is only a hint for where an added item belongs.
+    # Ordinary tab interactions belong to the active tab. The editor target is
+    # used only while saving a created/edited item, since it may refer to the
+    # filter's owner even when displayed on a different tab.
     key = page_key(tab)
+    if 'item-add' in triggered_prop_id and int(item_add_n or 0) > 0:
+        key = page_key(target) or key
     target_charts, target_filters = items_for_key(key, pages, charts, filters)
     status = ''
     has_data = False
@@ -1668,21 +1717,39 @@ def update_page_state(page_add_n, page_rename_n, page_delete_n, item_add_n,
             index = int(parts[1])
             if 0 <= index < len(target_charts):
                 target_charts = target_charts[:index] + target_charts[index + 1:]
-        elif len(parts) == 2 and parts[0] == 'filter':
-            index = int(parts[1])
-            if 0 <= index < len(target_filters):
-                target_filters = target_filters[:index] + target_filters[index + 1:]
-    elif 'page-filter' in triggered_prop_id and filter_values:
+        elif len(parts) >= 3 and parts[-2] == 'filter':
+            index = int(parts[-1])
+            owner_key = ':'.join(parts[:-2])
+            if owner_key and owner_key != 'create_tab' and not owner_key.startswith(PAGE_TAB_PREFIX):
+                owner_key = f'{PAGE_TAB_PREFIX}{owner_key}'
+            owner_page = page_by_key(pages, owner_key)
+            owner_filters = owner_page.get('filters', []) if owner_page else filters
+            if 0 <= index < len(owner_filters):
+                owner_filters = owner_filters[:index] + owner_filters[index + 1:]
+                if owner_page:
+                    owner_page['filters'] = owner_filters
+                else:
+                    filters = owner_filters
+    elif 'page-filter' in triggered_prop_id:
         raw_index = _pattern_index(triggered_prop_id, '.value')
         parts = str(raw_index or '').split(':')
-        if len(parts) == 2 and parts[0] == key:
-            index = int(parts[1])
-            if 0 <= index < len(target_filters):
-                spec = dict(target_filters[index])
+        owner_key = ':'.join(parts[:-1])
+        if len(parts) >= 2 and owner_key:
+            if owner_key != 'create_tab' and not owner_key.startswith(PAGE_TAB_PREFIX):
+                owner_key = f'{PAGE_TAB_PREFIX}{owner_key}'
+            index = int(parts[-1])
+            owner_page = page_by_key(pages, owner_key)
+            owner_filters = owner_page.get('filters', []) if owner_page else filters
+            if 0 <= index < len(owner_filters):
+                spec = dict(owner_filters[index])
                 spec['values'] = ([value for value in filter_values or [] if value]
                                   if isinstance(filter_values, list)
                                   else [filter_values] if filter_values else [])
-                target_filters[index] = normalise_filter(spec) or spec
+                owner_filters[index] = normalise_filter(spec) or spec
+                if owner_page:
+                    owner_page['filters'] = owner_filters
+                else:
+                    filters = owner_filters
     elif ('item-add' in triggered_prop_id and int(item_add_n or 0) > 0
           and not _default_edit_key(item_edit_index)):
         # A default graph is edited into the override store, not into the page's
@@ -1690,12 +1757,65 @@ def update_page_state(page_add_n, page_rename_n, page_delete_n, item_add_n,
         kind = item_kind or 'generic'
         labels = {'title': item_title, 'x_label': item_xlabel,
                   'y_label': item_ylabel}
+        filter_was_edited = False
         if kind in ('filter-multi', 'filter-single'):
+            edited_filter = (str((item_edit_index or {}).get('index') or '')
+                             if isinstance(item_edit_index, dict) else '')
+            filter_owner = None
+            old_filter = {}
+            filter_index = None
+            if edited_filter.startswith('filter:'):
+                owner_and_index = edited_filter[len('filter:'):]
+                owner_id, separator, raw_filter_index = owner_and_index.rpartition(':')
+                if separator:
+                    filter_owner = None if owner_id == 'create_tab' else owner_id
+                else:
+                    raw_filter_index = owner_and_index
+                try:
+                    filter_index = int(raw_filter_index)
+                    owner_page = page_by_key(pages, filter_owner) if filter_owner else None
+                    owner_filters = owner_page.get('filters', []) if owner_page else filters
+                    old_filter = owner_filters[filter_index]
+                except (ValueError, IndexError):
+                    filter_index = None
+                    owner_page = None
+                    owner_filters = []
+            filter_values = (item_filter_values if isinstance(item_filter_values, list)
+                             else [item_filter_values] if item_filter_values else [])
             spec = normalise_filter({
+                **old_filter,
                 'column': item_column,
                 'mode': 'multi' if kind == 'filter-multi' else 'single',
+                'name': item_filter_name,
+                'hidden': bool(item_filter_hidden and 'hidden' in item_filter_hidden),
+                'target_tab': (str(item_filter_target_tab).removeprefix(PAGE_TAB_PREFIX)
+                               if item_filter_target_tab else
+                               str(target or '').removeprefix(PAGE_TAB_PREFIX)),
+                'values': filter_values,
             })
+            if spec is not None and filter_index is not None:
+                owner_filters[filter_index] = spec
+                if owner_page:
+                    owner_page['filters'] = owner_filters
+                else:
+                    filters = owner_filters
+                if not filter_owner or filter_owner == key:
+                    target_filters = owner_filters
+                status = I18n.t('visual.added')
+                filter_was_edited = True
+            elif spec is not None:
+                target_tab_id = spec.get('target_tab') or str(key or '').removeprefix(PAGE_TAB_PREFIX)
+                assigned_count = len(filters_for_tab(
+                    target_tab_id, pages, filters)) if target_tab_id else len(target_filters)
+                if assigned_count >= MAX_TOTAL_FILTERS or len(target_filters) >= MAX_PAGE_FILTERS:
+                    status = I18n.t('visual.max_filters')
+                else:
+                    target_filters = target_filters + [spec]
+                    status = I18n.t('visual.added')
+                    filter_was_edited = True
         else:
+            spec = None
+        if kind not in ('filter-multi', 'filter-single'):
             # The floater's chosen chart type is the kind itself. The hidden
             # item-chart-type keeps the other creation paths working.
             chart_kind = kind if kind in CHART_TYPES else (item_chart_type or 'bar')
@@ -1705,43 +1825,44 @@ def update_page_state(page_add_n, page_rename_n, page_delete_n, item_add_n,
                 'aggregation': item_aggregation or 'count',
                 **labels,
             })
-        if spec is None:
-            status = I18n.t('visual.no_column')
-        else:
-            is_filter = 'column' in spec and 'mode' in spec
-            current = target_filters if is_filter else target_charts
-            limit = MAX_PAGE_FILTERS if is_filter else MAX_CREATED_CHARTS
-            edit = item_edit_index if isinstance(item_edit_index, dict) else {}
-            edit_kind, separator, raw_index = str(edit.get('index') or '').partition(':')
-            if separator and edit_kind in ('chart', 'filter'):
-                # Editing replaces the item in place; the cap that applies to an
-                # add does not reject changing one that is already there.
-                try:
-                    index = int(raw_index)
-                except ValueError:
-                    index = -1
-                if 0 <= index < len(current):
-                    current[index] = spec
+        if not filter_was_edited:
+            if spec is None:
+                status = I18n.t('visual.no_column')
+            else:
+                is_filter = 'column' in spec and 'mode' in spec
+                current = target_filters if is_filter else target_charts
+                limit = MAX_PAGE_FILTERS if is_filter else MAX_CREATED_CHARTS
+                edit = item_edit_index if isinstance(item_edit_index, dict) else {}
+                edit_kind, separator, raw_index = str(edit.get('index') or '').partition(':')
+                if separator and edit_kind in ('chart', 'filter'):
+                    # Editing replaces the item in place; the cap that applies to an
+                    # add does not reject changing one that is already there.
+                    try:
+                        index = int(raw_index)
+                    except ValueError:
+                        index = -1
+                    if 0 <= index < len(current):
+                        current[index] = spec
+                        status = I18n.t('visual.added')
+                    else:
+                        status = I18n.t('visual.no_column')
+                    if is_filter:
+                        target_filters = current
+                    else:
+                        target_charts = current
+                elif is_filter and (len(current) + len(definition_filters(
+                        *default_tab_page(tab), {})) >= MAX_TOTAL_FILTERS):
+                    # Definition filters (all-tabs and this-tab) count towards the
+                    # same per-page cap as the ones a user adds.
+                    status = I18n.t('visual.max_filters')
+                elif len(current) >= limit:
+                    status = I18n.t('visual.max_filters' if is_filter else 'visual.max_charts')
+                elif is_filter:
+                    target_filters = current + [spec]
                     status = I18n.t('visual.added')
                 else:
-                    status = I18n.t('visual.no_column')
-                if is_filter:
-                    target_filters = current
-                else:
-                    target_charts = current
-            elif is_filter and (len(current) + len(definition_filters(
-                    *default_tab_page(tab), {})) >= MAX_TOTAL_FILTERS):
-                # Definition filters (all-tabs and this-tab) count towards the
-                # same per-page cap as the ones a user adds.
-                status = I18n.t('visual.max_filters')
-            elif len(current) >= limit:
-                status = I18n.t('visual.max_filters' if is_filter else 'visual.max_charts')
-            elif is_filter:
-                target_filters = current + [spec]
-                status = I18n.t('visual.added')
-            else:
-                target_charts = current + [spec]
-                status = I18n.t('visual.added')
+                    target_charts = current + [spec]
+                    status = I18n.t('visual.added')
 
     page = page_by_key(pages, key)
     if page is not None:
@@ -1750,6 +1871,9 @@ def update_page_state(page_add_n, page_rename_n, page_delete_n, item_add_n,
     else:
         charts = target_charts[:MAX_CREATED_CHARTS]
         filters = target_filters[:MAX_PAGE_FILTERS]
+    for page in pages:
+        if isinstance(page, dict):
+            page['filters'] = (page.get('filters') or [])[:MAX_PAGE_FILTERS]
     print(f"Pages: {len(pages)} - charts: {len(charts)} - filters: {len(filters)} "
           f"- triggered={triggered_prop_id}")
     return (pages[:12], charts[:MAX_CREATED_CHARTS],
@@ -1878,6 +2002,9 @@ def update_output(tab, lrs_data_version=None, hidden_activities=None, created_ch
             # page while the header dropdowns still offer the whole session.
             active_charts, active_filters = items_for_key(
                 page_key(tab), dashboard_pages, created_charts, page_filters)
+            if tab.startswith(PAGE_TAB_PREFIX):
+                active_filters = [spec for _, _, spec in filters_for_tab(
+                    tab, dashboard_pages, page_filters)]
             tab_def, page_def = default_tab_page(tab)
             selected = (definition_filter_values
                         if isinstance(definition_filter_values, dict) else {})
@@ -1887,7 +2014,9 @@ def update_output(tab, lrs_data_version=None, hidden_activities=None, created_ch
                 chart_df = DefaultDashboard.apply_filters(
                     filtered_df, definition_filters(tab_def, page_def, selected))
             elif tab.startswith(PAGE_TAB_PREFIX):
-                chart_df = apply_page_filters(filtered_df, active_filters)
+                assigned_filters = [spec for _, _, spec in filters_for_tab(
+                    tab, dashboard_pages, page_filters)]
+                chart_df = apply_page_filters(filtered_df, assigned_filters)
             else:
                 chart_df = filtered_df
             has_data = True
@@ -1953,8 +2082,10 @@ def update_output(tab, lrs_data_version=None, hidden_activities=None, created_ch
         elif tab.startswith(PAGE_TAB_PREFIX):
             page = page_by_key(dashboard_pages, tab)
             name = str((page or {}).get('name') or I18n.t('page.unnamed'))
+            tab_filters = [spec for _, _, spec in filters_for_tab(
+                tab, dashboard_pages, page_filters)]
             tab_content=html.Div([html.H3(name)] + render_page_items(
-                chart_df, active_charts, active_filters, tab, edit_mode,
+                chart_df, active_charts, tab_filters, tab, edit_mode,
                 show_filters=False))
         else:
             tab_content = html.Div()
@@ -2476,6 +2607,26 @@ def edit_floater_create_panel():
             # User-authored wording lives on the graph spec, not in i18n. These
             # inputs are shown for charts (creation and editing alike) and hidden
             # for filters, which have no graph labels.
+            html.Div(id='item-filter-fields-div', children=[
+                html.Div([
+                    html.Span(I18n.t('filter.name'), style={'marginRight': '6px'}),
+                    dcc.Input(id='item-filter-name', type='text',
+                              placeholder=I18n.t('filter.name'),
+                              style={'width': '100%', 'marginBottom': '6px'}),
+                ]),
+                html.Div([
+                    html.Span(I18n.t('filter.target_tab'), style={'marginRight': '6px'}),
+                    dcc.Dropdown(id='item-filter-target-tab', options=[], clearable=False),
+                ], style={'marginBottom': '6px'}),
+                dcc.Checklist(
+                    id='item-filter-hidden',
+                    options=[{'label': I18n.t('filter.hidden'), 'value': 'hidden'}],
+                    value=[], style={'marginBottom': '6px'}),
+                html.Div([
+                    html.Span(I18n.t('filter.values'), style={'marginRight': '6px'}),
+                    dcc.Dropdown(id='item-filter-values', options=[], multi=False),
+                ], style={'marginBottom': '10px'}),
+            ], style={'display': 'none', 'marginBottom': '10px'}),
             html.Div(id='item-labels-div', children=[
                 html.Div([
                     html.Span(I18n.t('edit.label.title'),
@@ -3156,10 +3307,17 @@ def toggle_edit_floater(edit_n, close_n, page_n, config_n,
         return (on, no_update, no_update, no_update,
                 no_update, _FLOATER_VISIBLE, 'create', target or page_key(tab), None, None)
     if clicked('item-edit') and clicked_n('item-edit'):
+        raw_item = _pattern_index(trigger_prop('item-edit'), '.n_clicks')
+        raw_item = str(raw_item or '')
+        edit_target = page_key(tab)
+        if raw_item.startswith('filter:'):
+            owner = raw_item[len('filter:'):].rsplit(':', 1)[0]
+            edit_target = (None if owner == 'create_tab' else
+                           owner if owner.startswith(PAGE_TAB_PREFIX)
+                           else f'{PAGE_TAB_PREFIX}{owner}' if owner else edit_target)
         return (on, no_update, no_update, no_update,
-                no_update, _FLOATER_VISIBLE, 'create', page_key(tab),
-                {'index': _pattern_index(trigger_prop('item-edit'), '.n_clicks')},
-                None)
+                no_update, _FLOATER_VISIBLE, 'create', edit_target,
+                {'index': raw_item}, None)
     if clicked('default-graph-edit') and clicked_n('default-graph-edit'):
         return (on, no_update, no_update, no_update,
                 no_update, _FLOATER_VISIBLE, 'create', no_update,
@@ -3181,6 +3339,10 @@ def toggle_edit_floater(edit_n, close_n, page_n, config_n,
         Output('item-ylabel', 'value'),
         Output('item-y', 'value'),
         Output('item-aggregation', 'value'),
+        Output('item-filter-name', 'value'),
+        Output('item-filter-hidden', 'value'),
+        Output('item-filter-target-tab', 'value'),
+        Output('item-filter-values', 'value'),
     ],
     [Input('item-edit-index', 'data'), Input('floater-item-kind', 'data')],
     [
@@ -3189,16 +3351,24 @@ def toggle_edit_floater(edit_n, close_n, page_n, config_n,
         State('page-filters', 'data'),
         State('dashboard-pages', 'data'),
         State('default-graph-overrides', 'data'),
+        State('item-filter-target-tab', 'options'),
     ],
 )
 def prefill_item_modal(edit_index, floater_kind, target, charts, filters, pages,
-                       overrides=None):
-    """Fill the popup with the graph and labels being edited, not with defaults."""
+                       overrides=None, tab_options=None):
+    """Fill the popup with the graph and filter being edited."""
     if not isinstance(edit_index, dict) or not edit_index.get('index'):
-        # A fresh add starts with empty wording. The top-bar filter + chooses a
-        # filter kind; every other entry point starts with a bar chart so the
-        # column, value and label inputs are visible immediately.
-        return floater_kind or 'bar', None, no_update, '', '', '', None, no_update
+        # New filters default to the page that opened the editor.
+        kind = floater_kind or 'bar'
+        if kind in ('filter-multi', 'filter-single'):
+            target_id = str(target or '').removeprefix(PAGE_TAB_PREFIX)
+            default_value = (target_id if any(
+                option.get('value') == target_id for option in (tab_options or []))
+                else (tab_options[0]['value'] if tab_options else ''))
+            return (kind, None, no_update, '', '', '', None, no_update,
+                    '', [], default_value, [])
+        return (kind, None, no_update, '', '', '', None, no_update,
+                no_update, no_update, no_update, no_update)
     if str(edit_index['index']).startswith('default:'):
         key = str(edit_index['index'])[len('default:'):]
         spec = default_graph_spec(find_default_graph(key))
@@ -3212,24 +3382,39 @@ def prefill_item_modal(edit_index, floater_kind, target, charts, filters, pages,
         return (spec['type'], spec['x'], spec['type'],
                 spec.get('title') or '', spec.get('x_label') or '',
                 spec.get('y_label') or '', spec.get('y') or COUNT_LABEL,
-                spec.get('aggregation') or 'count')
+                spec.get('aggregation') or 'count',
+                no_update, no_update, no_update, no_update)
     kind, separator, raw_index = str(edit_index['index']).partition(':')
     if not separator:
         raise PreventUpdate
+    owner_key = None
+    if kind == 'filter':
+        owner_key, owner_separator, raw_index = raw_index.rpartition(':')
+        if not owner_separator or owner_key == 'create_tab':
+            owner_key = None
+        else:
+            owner_key = f'{PAGE_TAB_PREFIX}{owner_key}'
     try:
         index = int(raw_index)
     except ValueError:
         raise PreventUpdate
     target_charts, target_filters = items_for_key(
-        str(target), pages, charts, filters)
+        owner_key or str(target), pages, charts, filters)
+    if kind == 'filter' and owner_key is None and raw_index.isdigit():
+        target_filters = filters or []
     if kind == 'filter':
         if not (0 <= index < len(target_filters)):
             raise PreventUpdate
         spec = target_filters[index]
         mode = spec.get('mode') if isinstance(spec, dict) else None
+        values = spec.get('values') or []
         return ('filter-single' if mode == 'single' else 'filter-multi',
                 spec.get('column') if isinstance(spec, dict) else None,
-                no_update, '', '', '', None, no_update)
+                no_update, '', '', '', None, no_update,
+                spec.get('name') or '',
+                ['hidden'] if spec.get('hidden') else [],
+                spec.get('target_tab') or str(owner_key or target or '').removeprefix(PAGE_TAB_PREFIX),
+                values)
     if not (0 <= index < len(target_charts)):
         raise PreventUpdate
     spec = target_charts[index] if isinstance(target_charts[index], dict) else {}
@@ -3237,7 +3422,8 @@ def prefill_item_modal(edit_index, floater_kind, target, charts, filters, pages,
     return (chart_type, spec.get('x'), chart_type,
             spec.get('title') or '', spec.get('x_label') or '',
             spec.get('y_label') or '', spec.get('y') or COUNT_LABEL,
-            spec.get('aggregation') or 'count')
+            spec.get('aggregation') or 'count',
+            no_update, no_update, no_update, no_update)
 
 
 @callback(
@@ -3255,14 +3441,19 @@ def prefill_item_modal(edit_index, floater_kind, target, charts, filters, pages,
         Output('item-labels-div', 'style'),
         Output('item-y', 'options'),
         Output('item-value-div', 'style'),
+        Output('item-filter-fields-div', 'style'),
+        Output('item-filter-target-tab', 'options'),
+        Output('item-filter-values', 'options'),
     ],
     [
         Input('item-kind', 'value'),
         Input('lrs-data-version', 'data'),
         Input('output-t-mon', 'style'),
+        Input('dashboard-pages', 'data'),
+        Input('item-column', 'value'),
     ],
 )
-def update_item_modal_fields(kind, lrs_version, panel_style):
+def update_item_modal_fields(kind, lrs_version, panel_style, pages, column):
     """Offer the columns a generic chart or filter needs.
 
     The game, target and mode pickers belonged to the removed named-visual
@@ -3271,7 +3462,7 @@ def update_item_modal_fields(kind, lrs_version, panel_style):
     if panel_style != {'display': 'block'} or not TMonWidgets.xapiData:
         return ([], [], [], None, [], None,
                 _MODAL_HIDDEN, _MODAL_HIDDEN, _MODAL_HIDDEN, _MODAL_HIDDEN,
-                _MODAL_HIDDEN, [], _MODAL_HIDDEN)
+                _MODAL_HIDDEN, [], _MODAL_HIDDEN, _MODAL_HIDDEN, [], [])
     df = pd.json_normalize(TMonWidgets.xapiData)
     df = resolve_actor_name_column(df)
     columns = [{'label': column, 'value': column}
@@ -3279,11 +3470,31 @@ def update_item_modal_fields(kind, lrs_version, panel_style):
     column_style = (_MODAL_VISIBLE if kind in CHART_TYPES
                     or kind in ('filter-multi', 'filter-single') else _MODAL_HIDDEN)
     labels_style = _MODAL_VISIBLE if kind in CHART_TYPES else _MODAL_HIDDEN
+    filter_style = (_MODAL_VISIBLE if kind in ('filter-multi', 'filter-single')
+                    else _MODAL_HIDDEN)
+    tab_options = [
+        {'label': page.get('name') or page.get('id'), 'value': str(page.get('id'))}
+        for page in pages or []
+        if isinstance(page, dict) and page.get('id')
+        and str(page.get('id')) not in ('home_tab', DefaultDashboard.XAPI_TAB_ID)
+    ]
+    if DASHBOARD_DEFINITION:
+        known_targets = {option['value'] for option in tab_options}
+        tab_options.extend(
+            {'label': tab_def.get('title') or tab_def.get('id'),
+             'value': str(tab_def.get('id'))}
+            for tab_def in DASHBOARD_DEFINITION.get('tabs', [])
+            if isinstance(tab_def, dict) and tab_def.get('id')
+            and tab_def.get('id') not in known_targets
+            and tab_def.get('id') != DefaultDashboard.XAPI_TAB_ID
+        )
+    selected_values = filter_options(df, column) if column else []
     y_options = ([{'label': COUNT_LABEL, 'value': COUNT_LABEL}] + [
         {'label': column, 'value': column} for column in numeric_columns(df)])
     return ([], columns, [], None, [], None,
             _MODAL_HIDDEN, column_style, _MODAL_HIDDEN, _MODAL_HIDDEN,
-            labels_style, y_options, labels_style)
+            labels_style, y_options, labels_style, filter_style,
+            tab_options, selected_values)
 
 
 @callback(

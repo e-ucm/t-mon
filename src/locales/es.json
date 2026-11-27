@@ -154,5 +154,9 @@
   "dashboard.open": "Abrir panel",
   "dashboard.name": "Nombre del panel",
   "dashboard.create": "Crear",
-  "dashboard.saved": "Panel guardado"
+  "dashboard.saved": "Panel guardado",
+  "filter.values": "Valores seleccionados",
+  "filter.hidden": "Oculto",
+  "filter.name": "Nombre",
+  "filter.target_tab": "Aplicar a la pestaña"
 }

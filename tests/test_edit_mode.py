@@ -412,6 +412,27 @@ def test_filter_add_slot_opens_create_panel_with_a_filter(monkeypatch):
     assert result[9] == 'filter-multi'
 
 
+def test_filter_prefill_restores_metadata_and_default_target():
+    pages = [
+        {'id': 'p1', 'name': 'First', 'charts': [], 'filters': [
+            {'column': 'actor.name', 'mode': 'single', 'values': ['a'],
+             'name': 'Player', 'hidden': True, 'target_tab': 'p2'},
+        ]},
+        {'id': 'p2', 'name': 'Second', 'charts': [], 'filters': []},
+    ]
+    options = [{'label': 'First', 'value': 'p1'},
+               {'label': 'Second', 'value': 'p2'}]
+    edited = TMonWidget.prefill_item_modal(
+        {'index': 'filter:p1:0'}, 'filter-single', 'page:p1', [], [], pages,
+        tab_options=options)
+    assert edited[0] == 'filter-single'
+    assert edited[1] == 'actor.name'
+    assert edited[8:] == ('Player', ['hidden'], 'p2', ['a'])
+    fresh = TMonWidget.prefill_item_modal(
+        None, 'filter-multi', 'page:p2', [], [], pages, tab_options=options)
+    assert fresh[10] == 'p2'
+
+
 def test_popup_is_prefilled_with_the_graph_and_its_labels():
     spec = _spec(title='Title', x_label='X', y_label='Y')
     result = TMonWidget.prefill_item_modal(

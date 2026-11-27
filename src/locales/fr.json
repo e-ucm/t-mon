@@ -154,5 +154,9 @@
   "dashboard.open": "Ouvrir le tableau",
   "dashboard.name": "Nom du tableau",
   "dashboard.create": "Créer",
-  "dashboard.saved": "Tableau enregistré"
+  "dashboard.saved": "Tableau enregistré",
+  "filter.values": "Valeurs sélectionnées",
+  "filter.hidden": "Masqué",
+  "filter.name": "Nom",
+  "filter.target_tab": "Appliquer à l’onglet"
 }

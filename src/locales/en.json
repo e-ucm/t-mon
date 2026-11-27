@@ -155,5 +155,9 @@
   "dashboard.remove": "Remove",
   "dashboard.name": "Dashboard name",
   "dashboard.create": "Create",
-  "dashboard.saved": "Dashboard saved"
+  "dashboard.saved": "Dashboard saved",
+  "filter.values": "Selected values",
+  "filter.hidden": "Hidden",
+  "filter.name": "Name",
+  "filter.target_tab": "Apply to tab"
 }
