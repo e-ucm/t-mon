@@ -1121,7 +1121,7 @@ def filters_for_tab(tab, pages, filters):
                 owned.append((owner, index, spec))
     # Filters in the shared store are either legacy Create-tab filters or
     # filters restored from a shared URL, which carry an explicit target ID.
-    for index, spec in enumerate(filters or []):
+    for index, spec in enumerate(filters if isinstance(filters, list) else []):
         if not isinstance(spec, dict):
             continue
         target = spec.get('target_tab') or 'create_tab'
@@ -1518,6 +1518,9 @@ def render_top_filter_bar(tab, pages, filters, selected, hidden, lrs_version,
     user filters belong to the open page. They share one row so a reader can
     see exactly what narrows the charts, with a filter + at the end in edit
     mode while the page has fewer than MAX_TOTAL_FILTERS filters.
+
+    The player and activity general filters are shown ONLY in the xAPI data tab,
+    and hidden on all other tabs.
     """
     if not TMonWidgets.xapiData or not tab:
         return html.Div()
@@ -1529,6 +1532,13 @@ def render_top_filter_bar(tab, pages, filters, selected, hidden, lrs_version,
     key = page_key(tab)
     filter_entries = filters_for_tab(tab, pages, filters)
     user_filters = [spec for _, _, spec in filter_entries]
+    # Show player and activity general filters ONLY in the xAPI data tab.
+    # Remove them from definition_specs when on any other tab.
+    if tab != DefaultDashboard.XAPI_TAB_ID:
+        definition_specs = [
+            spec for spec in definition_specs
+            if spec.get('id') not in ('player', 'activity')
+        ]
     controls = []
     if definition_specs:
         controls.extend(render_definition_filter_controls(
