@@ -200,7 +200,19 @@ def get_analysis_outputs(pathname, dashboardpath):
     actual_test=browser._get_id_from_object(browser.actual_test, 'session', 'name') if browser.actual_test is not None else I18n.t('browser.select_test')
     actual_activity=browser._get_id_from_object(browser.actual_activity, 'activity', 'name') if browser.actual_activity is not None else I18n.t('browser.select_activity')
     tmon_style = {'display': 'none'} if has_error else {'display': 'block'}
-    return browser.current_path, actual_simlet, actual_test, actual_activity, [], [], run_analyse_style, html.Div(div_list), tmon_style, f"{pathname}{dashboardpath}"
+    # Build the dashboard URL using simlet/session ids from the browser state,
+    # not the browser-internal analysis_path (which is like /1/1/Analysis and
+    # would produce /1/1/Analysis/dashboard/s instead of
+    # /simlet/1/session/1/dashboard/s).
+    simlet_id = browser._get_id_from_object(browser.actual_simlet, 'simlet', 'id') if browser.actual_simlet is not None else None
+    session_id = browser._get_id_from_object(browser.actual_test, 'session', 'id') if browser.actual_test is not None else None
+    if simlet_id is not None and session_id is not None:
+        redirect_url = f"/simlet/{simlet_id}/session/{session_id}{dashboardpath}"
+    elif simlet_id is not None:
+        redirect_url = f"/simlet/{simlet_id}{dashboardpath}"
+    else:
+        redirect_url = f"{pathname}{dashboardpath}"
+    return browser.current_path, actual_simlet, actual_test, actual_activity, [], [], run_analyse_style, html.Div(div_list), tmon_style, redirect_url
 
 
 def reload_xapi_data_from_selection():

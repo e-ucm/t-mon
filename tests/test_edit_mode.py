@@ -170,7 +170,8 @@ def test_edit_toggle_only_switches_edit_mode(monkeypatch):
     _ctx(monkeypatch, 'edit-toggle.n_clicks')
     result = TMonWidget.toggle_edit_floater(
         1, 0, 0, 0, 0, [], [], 0, 0, [], [], 0, None, False)
-    enabled, label, tab_style, floater_style, mode, target, edit, kind = result
+    enabled, label, tab_style, floater_style, mode, target, edit, kind, \
+        pages_style, layout_style, config_style = result
     assert enabled is True
     assert label == I18n.t('edit.mode.disable')
     assert tab_style['display'] == 'block'
@@ -181,7 +182,8 @@ def test_edit_toggle_only_switches_edit_mode(monkeypatch):
 
     result = TMonWidget.toggle_edit_floater(
         1, 0, 0, 0, 0, [], [], 0, 0, [], [], 0, None, True)
-    enabled, label, tab_style, floater_style, mode, target, edit, kind = result
+    enabled, label, tab_style, floater_style, mode, target, edit, kind, \
+        pages_style, layout_style, config_style = result
     assert enabled is False
     assert label == I18n.t('edit.mode.enable')
     assert tab_style['display'] == 'none'

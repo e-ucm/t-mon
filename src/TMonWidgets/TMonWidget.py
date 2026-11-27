@@ -1285,14 +1285,16 @@ def dashboard_tab_children(pages, edit_mode=False):
     tabs = []
     # Built-in system tabs that are always available (not from the definition file).
     tabs.append(dcc.Tab(id='dashboard-tab-home_tab', value='home_tab',
-                        label=dashboard_tab_label('HomePage', DEFAULT_TAB_ICON_PATH)))
+                        label=dashboard_tab_label('HomePage',
+                            'M3 11l9-8 9 8v9a1 1 0 0 1-1 1h-5v-6H9v6H4a1 1 0 0 1-1-1z')))
     # The xAPI data table is always available in edit mode so administrators can
     # inspect raw statements.
     if edit_mode:
         tabs.append(dcc.Tab(id='dashboard-tab-xapi_data',
                             value=DefaultDashboard.XAPI_TAB_ID,
                             label=dashboard_tab_label(
-                                'xAPI Data', DEFAULT_TAB_ICON_PATH)))
+                                'xAPI Data',
+                                'M4 4h16v16H4zM4 10h16M10 4v16')))
     for page in pages or []:
         if not isinstance(page, dict) or not page.get("id"):
             continue
@@ -1504,7 +1506,7 @@ def render_top_filter_bar(tab, pages, filters, selected, hidden, lrs_version,
     if user_filters:
         controls.append(render_filter_controls(
             user_filters, key, df, bool(edit_mode), include_add_slot=False))
-    if edit_mode and (len(definition_specs) + len(user_filters)
+    if edit_mode and key and (len(definition_specs) + len(user_filters)
                       < MAX_TOTAL_FILTERS):
         controls.append(html.Button(
             '+', id={'type': 'filter-add-slot', 'index': key}, n_clicks=0,
@@ -1603,6 +1605,7 @@ def update_page_state(page_add_n, page_rename_n, page_delete_n, item_add_n,
     key = page_key(tab)
     target_charts, target_filters = items_for_key(key, pages, charts, filters)
     status = ''
+    has_data = False
 
     if 'config-command' in triggered_prop_id and (config_command or {}).get('config'):
         config = config_command['config']
@@ -1751,11 +1754,13 @@ def update_page_state(page_add_n, page_rename_n, page_delete_n, item_add_n,
 
     page = page_by_key(pages, key)
     if page is not None:
-        page['charts'] = target_charts[:MAX_CREATED_CHARTS]
-        page['filters'] = target_filters[:MAX_PAGE_FILTERS]
+        if has_data:
+            page['charts'] = target_charts[:MAX_CREATED_CHARTS]
+            page['filters'] = target_filters[:MAX_PAGE_FILTERS]
     else:
-        charts = target_charts[:MAX_CREATED_CHARTS]
-        filters = target_filters[:MAX_PAGE_FILTERS]
+        if has_data:
+            charts = target_charts[:MAX_CREATED_CHARTS]
+            filters = target_filters[:MAX_PAGE_FILTERS]
     print(f"Pages: {len(pages)} - charts: {len(charts)} - filters: {len(filters)} "
           f"- triggered={triggered_prop_id}")
     return (pages[:12], charts[:MAX_CREATED_CHARTS],
@@ -1869,6 +1874,12 @@ def update_output(tab, user_search_value, user_value, object_search_value, objec
                     if isinstance(definition_filter_values, dict) else {})
         chart_df = pd.DataFrame()
         has_data = False
+
+        if app_path:
+            # Even when no data is available yet, parse charts/filters from URL
+            # so they persist in the page for when data arrives later.
+            active_charts = created_charts_from_url(app_path)
+            active_filters = page_filters_from_url(app_path)
 
         if len(TMonWidgets.xapiData) > 0:
             df = pd.json_normalize(TMonWidgets.xapiData)
@@ -2869,11 +2880,11 @@ TMonBody=html.Div([
             html.Div([
                 html.Button(I18n.t('edit.mode.enable'), id='edit-toggle', n_clicks=0),
                 html.Button(I18n.t('edit.pages'), id='edit-pages-button', n_clicks=0,
-                            style={'marginLeft': '6px'}),
+                            style={'marginLeft': '6px', 'display': 'none'}),
                 html.Button(I18n.t('edit.layout'), id='edit-layout-button', n_clicks=0,
-                            style={'marginLeft': '6px'}),
+                            style={'marginLeft': '6px', 'display': 'none'}),
                 html.Button(I18n.t('edit.config'), id='edit-config-button', n_clicks=0,
-                            style={'marginLeft': '6px'}),
+                            style={'marginLeft': '6px', 'display': 'none'}),
             ], style={'margin': '4px 0'}),
         ], style={'padding': '8px 20px', 'borderBottom': '1px solid #ddd'}),
         # The tab bar is a sidebar for the dashboard; the visualisations sit to
@@ -3042,6 +3053,9 @@ def update_definition_filter_values(values, current):
         # write the same output (ADR 0024).
         Output('edit-mode', 'data'),
         Output('edit-toggle', 'children'),
+        Output('edit-pages-button', 'style'),
+        Output('edit-layout-button', 'style'),
+        Output('edit-config-button', 'style'),
         Output(NEW_TAB_ADD_ID, 'style'),
         Output('edit-floater', 'style'),
         Output('edit-floater-mode', 'data'),
@@ -3113,13 +3127,18 @@ def toggle_edit_floater(edit_n, close_n, pages_n, layout_n, config_n,
                 'background': LIGHT_CARD, 'color': BRAND_PRIMARY,
                 'fontSize': '18px', 'cursor': 'pointer'}
 
+    # Edit management buttons are hidden until edit mode is active.
+    edit_btn_style = {'display': 'none'} if not on else {'marginLeft': '6px'}
+
     def open_panel(mode, kind=None):
-        return (True, I18n.t('edit.mode.disable'), tab_style(True),
-                _FLOATER_VISIBLE, mode, no_update, None, kind)
+        return (True,
+                I18n.t('edit.mode.disable'),
+                edit_btn_style, edit_btn_style, edit_btn_style,
+                no_update, _FLOATER_VISIBLE, mode, None, None, kind)
 
     def close_panel():
-        return (on, no_update, no_update, _FLOATER_HIDDEN, None,
-                no_update, None, no_update)
+        return (on, no_update, no_update, no_update, no_update,
+                no_update, _FLOATER_HIDDEN, None, None, None, None)
 
     if clicked('edit-toggle.n_clicks'):
         if int(edit_n or 0) <= 0:
@@ -3127,7 +3146,8 @@ def toggle_edit_floater(edit_n, close_n, pages_n, layout_n, config_n,
         on = not on
         return (on,
                 I18n.t('edit.mode.disable' if on else 'edit.mode.enable'),
-                tab_style(on), _FLOATER_HIDDEN, None, no_update, None, None)
+                tab_style(on), tab_style(on), tab_style(on),
+                no_update, _FLOATER_HIDDEN, None, None, None, None)
     if (clicked('edit-floater-close.n_clicks') and int(close_n or 0) > 0
             or clicked('item-cancel.n_clicks') and int(cancel_n or 0) > 0):
         return close_panel()
@@ -3147,26 +3167,28 @@ def toggle_edit_floater(edit_n, close_n, pages_n, layout_n, config_n,
         raise PreventUpdate
     if clicked('filter-add-slot') and clicked_n('filter-add-slot'):
         raw_target = _pattern_index(trigger_prop('filter-add-slot'), '.n_clicks')
-        return (on, no_update, no_update, _FLOATER_VISIBLE, 'create',
+        return (on, no_update, no_update, no_update, no_update,
+                _FLOATER_VISIBLE, 'create',
                 str(raw_target) if raw_target else page_key(tab), None,
                 'filter-multi')
     if clicked('item-add-slot') and clicked_n('item-add-slot'):
         raw_target = _pattern_index(trigger_prop('item-add-slot'), '.n_clicks')
         target = str(raw_target).rsplit('|', 1)[0] if raw_target else ''
-        return (on, no_update, no_update, _FLOATER_VISIBLE, 'create',
-                target or page_key(tab), None, None)
+        return (on, no_update, no_update, no_update, no_update,
+                _FLOATER_VISIBLE, 'create', target or page_key(tab), None, None)
     if clicked('item-edit') and clicked_n('item-edit'):
-        return (on, no_update, no_update, _FLOATER_VISIBLE, 'create',
-                page_key(tab),
+        return (on, no_update, no_update, no_update, no_update,
+                _FLOATER_VISIBLE, 'create', page_key(tab),
                 {'index': _pattern_index(trigger_prop('item-edit'), '.n_clicks')},
                 None)
     if clicked('default-graph-edit') and clicked_n('default-graph-edit'):
-        return (on, no_update, no_update, _FLOATER_VISIBLE, 'create', no_update,
+        return (on, no_update, no_update, no_update, no_update,
+                _FLOATER_VISIBLE, 'create', no_update,
                 {'index': f"default:{_pattern_index(trigger_prop('default-graph-edit'), '.n_clicks')}"},
                 None)
     if clicked('item-add.n_clicks') and int(add_n or 0) > 0:
-        return (on, no_update, no_update, _FLOATER_VISIBLE, 'create',
-                no_update, None, no_update)
+        return (on, no_update, no_update, no_update, no_update,
+                _FLOATER_VISIBLE, 'create', no_update, None, None)
     raise PreventUpdate
 
 
