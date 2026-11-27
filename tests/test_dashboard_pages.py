@@ -197,7 +197,6 @@ def test_page_rendering_has_filter_row_charts_and_one_add_slot():
         "page:abc",
     )
     ids = [getattr(child, "id", None) for child in _walk(html.Div(items))]
-    assert any(isinstance(i, dict) and i.get("type") == "page-filter" for i in ids)
     assert any(isinstance(i, dict) and i.get("type") == "item-add-slot" for i in ids)
     assert any(isinstance(child, dcc.Graph) for child in _walk(html.Div(items)))
 

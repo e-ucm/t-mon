@@ -211,7 +211,7 @@ def get_analysis_outputs(pathname, dashboardpath):
     elif simlet_id is not None:
         redirect_url = f"/simlet/{simlet_id}{dashboardpath}"
     else:
-        redirect_url = f"{pathname}{dashboardpath}"
+        redirect_url = f"{pathname.rstrip('/')}{dashboardpath}"
     return browser.current_path, actual_simlet, actual_test, actual_activity, [], [], run_analyse_style, html.Div(div_list), tmon_style, redirect_url
 
 

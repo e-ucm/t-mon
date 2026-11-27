@@ -170,8 +170,8 @@ def test_edit_toggle_only_switches_edit_mode(monkeypatch):
     _ctx(monkeypatch, 'edit-toggle.n_clicks')
     result = TMonWidget.toggle_edit_floater(
         1, 0, 0, 0, 0, [], [], 0, 0, [], [], 0, None, False)
-    enabled, label, tab_style, floater_style, mode, target, edit, kind, \
-        pages_style, layout_style, config_style = result
+    enabled, label, pages_style, layout_style, config_style, \
+        tab_style, floater_style, mode, target, edit, kind = result
     assert enabled is True
     assert label == I18n.t('edit.mode.disable')
     assert tab_style['display'] == 'block'
@@ -182,8 +182,8 @@ def test_edit_toggle_only_switches_edit_mode(monkeypatch):
 
     result = TMonWidget.toggle_edit_floater(
         1, 0, 0, 0, 0, [], [], 0, 0, [], [], 0, None, True)
-    enabled, label, tab_style, floater_style, mode, target, edit, kind, \
-        pages_style, layout_style, config_style = result
+    enabled, label, pages_style, layout_style, config_style, \
+        tab_style, floater_style, mode, target, edit, kind = result
     assert enabled is False
     assert label == I18n.t('edit.mode.enable')
     assert tab_style['display'] == 'none'
@@ -196,9 +196,9 @@ def test_close_only_closes_the_floater(monkeypatch):
     result = TMonWidget.toggle_edit_floater(
         0, 1, 0, 0, 0, [], [], 0, 0, [], [], 0, None, True)
     assert result[0] is True  # still in edit mode; Edit/Done exits it
-    assert result[3]['display'] == 'none'
-    assert result[3]['position'] == 'fixed'
-    assert result[4] is None
+    assert result[6]['display'] == 'none'
+    assert result[6]['position'] == 'fixed'
+    assert result[7] is None
 
 
 def test_section_buttons_open_their_own_panel(monkeypatch):
@@ -211,18 +211,18 @@ def test_section_buttons_open_their_own_panel(monkeypatch):
         result = TMonWidget.toggle_edit_floater(
             0, 0, *values, [], [], 0, 0, [], [], 0, None, False)
         assert result[0] is True
-        assert result[2]['display'] == 'block'
-        assert result[3]['display'] == 'flex'
-        assert result[3]['position'] == 'fixed'
-        assert result[4] == expected
+        assert result[5]['display'] == 'block'
+        assert result[6]['display'] == 'flex'
+        assert result[6]['position'] == 'fixed'
+        assert result[7] == expected
 
 
 def test_new_tab_opens_the_combined_page_panel(monkeypatch):
     _ctx(monkeypatch, 'new-tab-add.n_clicks')
     result = TMonWidget.toggle_edit_floater(
         0, 0, 0, 0, 0, [], [], 0, 0, [], [], 1, None, True)
-    assert result[3]['display'] == 'flex'
-    assert result[4] == 'pages'
+    assert result[6]['display'] == 'flex'
+    assert result[7] == 'pages'
 
 
 def test_new_slots_appearing_do_not_open_the_create_panel(monkeypatch):
@@ -247,8 +247,8 @@ def test_switching_tabs_does_not_show_the_floater(monkeypatch):
     result = TMonWidget.toggle_edit_floater(
         0, 0, 0, 0, 0, [], [], 0, 0, [], [], 0, 'page:p2', True)
     assert result[0] is True  # edit mode unchanged
-    assert result[3]['display'] == 'none'
-    assert result[4] is None
+    assert result[6]['display'] == 'none'
+    assert result[7] is None
 
 
 def test_cancel_closes_the_floater(monkeypatch):
@@ -256,9 +256,9 @@ def test_cancel_closes_the_floater(monkeypatch):
     result = TMonWidget.toggle_edit_floater(
         0, 0, 0, 0, 0, [], [], 1, 0, [], [], 0, None, True)
     assert result[0] is True  # still in edit mode
-    assert result[3]['display'] == 'none'
-    assert result[3]['position'] == 'fixed'
-    assert result[4] is None
+    assert result[6]['display'] == 'none'
+    assert result[6]['position'] == 'fixed'
+    assert result[7] is None
 
 
 def test_close_wins_even_when_another_input_triggered_too(monkeypatch):
@@ -271,8 +271,8 @@ def test_close_wins_even_when_another_input_triggered_too(monkeypatch):
     monkeypatch.setattr(dash, 'callback_context', Ctx())
     result = TMonWidget.toggle_edit_floater(
         0, 1, 0, 0, 0, [1], [], 0, 0, [], [], 0, None, True)
-    assert result[3]['display'] == 'none'
-    assert result[4] is None
+    assert result[6]['display'] == 'none'
+    assert result[7] is None
 
 
 def test_floater_shows_only_the_panel_for_its_mode():
@@ -327,19 +327,19 @@ def test_edit_button_opens_the_floater_create_panel_for_an_existing_item(monkeyp
     _ctx(monkeypatch, '{"index":"chart:0","type":"item-edit"}.n_clicks')
     result = TMonWidget.toggle_edit_floater(
         0, 0, 0, 0, 0, [], [], 0, 0, [1], [], 0, 'page:p1', True)
-    assert result[3]['display'] == 'flex'
-    assert result[4] == 'create'
-    assert result[5] == 'page:p1'
-    assert result[6] == {'index': 'chart:0'}
+    assert result[6]['display'] == 'flex'
+    assert result[7] == 'create'
+    assert result[8] == 'page:p1'
+    assert result[9] == {'index': 'chart:0'}
 
 
 def test_add_slot_switches_the_floater_to_create_mode(monkeypatch):
     _ctx(monkeypatch, '{"index":"page:p1","type":"item-add-slot"}.n_clicks')
     result = TMonWidget.toggle_edit_floater(
         0, 0, 0, 0, 0, [1], [], 0, 0, [], [], 0, 'page:p1', True)
-    assert result[4] == 'create'
-    assert result[5] == 'page:p1'
-    assert result[6] is None
+    assert result[7] == 'create'
+    assert result[8] == 'page:p1'
+    assert result[9] is None
 
 
 def test_layout_slot_click_targets_its_page(monkeypatch):
@@ -347,9 +347,9 @@ def test_layout_slot_click_targets_its_page(monkeypatch):
          '{"index":"page:p1|1","type":"item-add-slot"}.n_clicks')
     result = TMonWidget.toggle_edit_floater(
         0, 0, 0, 0, 0, [1], [], 0, 0, [], [], 0, None, True)
-    assert result[4] == 'create'
-    assert result[5] == 'page:p1'
-    assert result[6] is None
+    assert result[7] == 'create'
+    assert result[8] == 'page:p1'
+    assert result[9] is None
 
 
 def test_top_bar_shows_all_filters_and_the_filter_add_slot(monkeypatch):
@@ -387,19 +387,18 @@ def test_filter_add_slot_is_hidden_at_the_total_limit(monkeypatch):
 
 
 def test_add_filter_is_rejected_at_the_total_limit(monkeypatch):
-    from TMonWidgets.MultiSelector import normalise_filter
+    from TMonWidgets.MultiSelector import MAX_TOTAL_FILTERS, normalise_filter
 
     _ctx(monkeypatch, 'item-add.n_clicks')
-    # A page with enough filters to reach the total limit
+    # A page at the total filter limit rejects an additional filter
     filters = [normalise_filter({'column': 'actor.name', 'mode': 'single'})
-               for _ in range(3)]
+               for _ in range(MAX_TOTAL_FILTERS)]
     result = TMonWidget.update_page_state(
         None, None, None, 1, None, None, {'display': 'block'}, None,
-        None, None, None, 'page:p1', None, None,
+        None, None, None, 'page:p1', None, None, None,
         'filter-multi', None, 'actor.name', None, None, None,
-        [{'id': 'p1', 'name': 'Page', 'charts': [], 'filters': filters}], [], [], None,
-        None)
-    assert len(result[0][0]['filters']) == 3
+        [{'id': 'p1', 'name': 'Page', 'charts': [], 'filters': filters}], [], [], None)
+    assert len(result[0][0]['filters']) == MAX_TOTAL_FILTERS
     assert result[3] == I18n.t('visual.max_filters')
 
 
@@ -408,10 +407,10 @@ def test_filter_add_slot_opens_create_panel_with_a_filter(monkeypatch):
          '{"index":"p1","type":"filter-add-slot"}.n_clicks')
     result = TMonWidget.toggle_edit_floater(
         0, 0, 0, 0, 0, [], [1], 0, 0, [], [], 0, 'page:p1', True)
-    assert result[4] == 'create'
-    assert result[5] == 'page:p1'
-    assert result[6] is None
-    assert result[7] == 'filter-multi'
+    assert result[7] == 'create'
+    assert result[8] == 'page:p1'
+    assert result[9] is None
+    assert result[10] == 'filter-multi'
 
 
 def test_popup_is_prefilled_with_the_graph_and_its_labels():
@@ -430,7 +429,7 @@ def test_new_tab_button_creates_an_empty_page(monkeypatch):
         {'display': 'block'}, None, None, None, 1,
         'create_tab', None, 'From the tab',
         None, None, None, None, None, None,
-        [], [], [], None)
+        [], [], [], None, None)
     assert len(pages) == 1
     assert pages[0]['name'] == 'From the tab'
     assert pages[0]['charts'] == []
@@ -446,7 +445,7 @@ def test_confirming_a_tab_removal_deletes_that_page(monkeypatch):
         None, None, None, None, None, None,
         {'display': 'block'}, None, None, 1, None,
         'create_tab', None, None,
-        None, None, None, None, None, None,
+        None, None, None, None, None, None, None,
         pages, [], [], None,
         pending_remove='p1')
     assert [page['id'] for page in result[0]] == ['p2']
@@ -458,7 +457,7 @@ def test_editing_a_graph_replaces_the_spec_with_its_labels(monkeypatch):
     _, charts, _, _ = TMonWidget.update_page_state(
         None, None, None, 1, None, None,
         {'display': 'block'}, None, None, None, None,
-        'create_tab', None, None,
+        'create_tab', None, None, None,
         'bar', None, 'actor.name', None, None, None,
         [], [original], [], None,
         item_edit_index={'index': 'chart:0'},

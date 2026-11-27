@@ -235,14 +235,12 @@ def test_dashboard_tabs_are_vertical_with_svg_icons():
     assert tabs.vertical is True
     assert tabs.value is None
     tab_ids = [tab.id for tab in tabs.children]
-    # T-Mon no longer ships default dashboard tabs. Only home_tab and
-    # create_tab are built-in; the rest are user-defined pages.
-    expected = {'dashboard-tab-home_tab', 'dashboard-tab-create_tab',
-                'new-tab-add-tab'}
+    # T-Mon no longer ships default dashboard tabs. HomePage is the only
+    # built-in; the rest are user-defined pages.
+    expected = {'dashboard-tab-home_tab', 'new-tab-add-tab'}
     assert set(tab_ids) == expected
     assert tab_ids[-1] == 'new-tab-add-tab'
     assert 'dashboard-tab-home_tab' in tab_ids
-    assert 'dashboard-tab-create_tab' in tab_ids
     for tab in tabs.children:
         if tab.id == 'new-tab-add-tab':
             continue
@@ -380,15 +378,14 @@ def test_session_dashboard_has_no_default_tab(monkeypatch):
     # The URL has no `tab=` parameter, but the session dashboard still must not
     # fall back to HomePage.
     # A session URL with no dashboard name keeps the no-tab view.
-    value, users, objects, _ = TMonWidget.update_tab(
+    value, _ = TMonWidget.update_tab(
         {'display': 'block'}, None,
         '/simlet/1/session/11/dashboard/',
         '/simlet/1/session/11/dashboard/')
     assert value is None
-    assert users == [] and objects == []
 
     # An explicit `/dashboard/default` opens the default dashboard instead.
-    value, users, objects, _ = TMonWidget.update_tab(
+    value, _ = TMonWidget.update_tab(
         {'display': 'block'}, None,
         '/simlet/1/session/11/dashboard/default',
         '/simlet/1/session/11/dashboard/default')
@@ -411,10 +408,10 @@ def test_upload_dashboard_never_shows_simlet_tiles(monkeypatch):
         {'id': '1', 'name': 'a simlet'},
     ])
     result = TMonWidget.update_output(
-        'home_tab', None, [], None, [],
+        'home_tab',
         panel_style={'display': 'block'}, app_path='/dashboard/upload')
-    links = [child for child in _walk(result[3]) if isinstance(child, dcc.Link)]
-    anchors = [child for child in _walk(result[3]) if isinstance(child, html.A)]
+    links = [child for child in _walk(result[1]) if isinstance(child, dcc.Link)]
+    anchors = [child for child in _walk(result[1]) if isinstance(child, html.A)]
     assert not links
     assert all(not str(getattr(link, 'href', '')).startswith('/simlet/')
                for link in anchors)
@@ -434,10 +431,10 @@ def test_upload_dashboard_tab_shows_its_content(monkeypatch):
     }
     monkeypatch.setattr(TMonWidgets, 'xapiData', [statement])
     result = TMonWidget.update_output(
-        'create_tab', None, [], None, [],
+        'create_tab',
         panel_style={'display': 'block'}, app_path='/dashboard/upload')
     assert result[0] is no_update  # local upload must not rewrite the URL
-    texts = [child for child in _walk(result[3]) if isinstance(child, str)]
+    texts = [child for child in _walk(result[1]) if isinstance(child, str)]
     assert any('Your visualisations' in text for text in texts)
     assert not any('no tab selected' in text for text in texts)
 
@@ -448,9 +445,9 @@ def test_no_tab_state_shows_the_selection_and_a_hint(monkeypatch):
         dash, 'callback_context',
         type('Ctx', (), {'triggered': [{'prop_id': 't-mon-tabs.value'}]})())
     result = TMonWidget.update_output(
-        None, None, [], None, [], panel_style={'display': 'block'},
+        None, panel_style={'display': 'block'},
         simlet_name='test', session_name='survey')
-    content = result[3]
+    content = result[1]
     texts = [child for child in _walk(content) if isinstance(child, str)]
     assert 'T-Mon Home Page.' in texts
     assert 'no tab selected, select one tab.' in texts
@@ -478,8 +475,6 @@ def test_dashboard_layout_puts_content_to_the_right_of_the_tabs():
     body = TMonWidget.TMonBody
     header = find(body, 'dashboard-header')
     assert find(header, 'dashboard-title') is not None
-    assert find(header, 'users-multi-dynamic-dropdown') is not None
-    assert find(header, 'object-multi-dynamic-dropdown') is not None
     assert find(header, 'activity-filter-div') is not None
     tabs = find(body, 'dashboard-tabs-wrapper')
     content = find(body, 'dashboard-content')

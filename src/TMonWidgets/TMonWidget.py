@@ -38,7 +38,6 @@ from TMonWidgets.MultiSelector import (
     filter_options,
     filterable_columns,
     normalise_filter,
-    searchValueFromMultiSelector,
 )
 from TMonWidgets.PageConfig import (
     LAYOUT_KEYS,
@@ -627,9 +626,9 @@ def render_dashboard_tiles(dashboards, simlet_id=None, session_id=None):
     tiles = []
     for i, dashboard in enumerate(dashboards):
         name = _dashboard_name(dashboard)
-        if simlet_id is not None and session_id is not None:
+        if simlet_id and session_id:
             href = f"/simlet/{simlet_id}/session/{session_id}/dashboard/{name}"
-        elif simlet_id is not None:
+        elif simlet_id:
             href = f"/simlet/{simlet_id}/dashboard/{name}"
         else:
             href = f"/dashboard/{name}"
@@ -802,8 +801,6 @@ def update_dashboard_title(style, simlet_name, session_name):
 @callback(
     [
         Output('t-mon-tabs', 'value'),
-        Output("users-multi-dynamic-dropdown", "value"),
-        Output("object-multi-dynamic-dropdown", "value"),
         Output('config-command', 'data', allow_duplicate=True),
     ],
     Input('output-t-mon', 'style'),
@@ -818,8 +815,6 @@ def update_tab(style, config_command, stateUrl, app_path=None):
         header = config.get('header') or {}
         return (
             config.get('active_tab') or None,
-            list(header.get('actor.name') or []),
-            list(header.get('object.id') or []),
             no_update,
         )
     if style == {"display":"block"} :
@@ -834,8 +829,6 @@ def update_tab(style, config_command, stateUrl, app_path=None):
             dashboard_data=True
         config_command_value = no_update
         if dashboard_data and urlValues:
-            users = get_value_from_url(urlValues, "actor.name=")
-            obj = get_value_from_url(urlValues, "object.id=")
             if urlValues == "default":
                 # The default dashboard keeps its tab selected even for a session,
                 # so `/dashboard/default` opens the default dashboard rather than
@@ -852,11 +845,6 @@ def update_tab(style, config_command, stateUrl, app_path=None):
                     parsed = None
                 if isinstance(parsed, dict):
                     new_tab = parsed.get("active_tab") or "home_tab"
-                    header = parsed.get("header") or {}
-                    if users is None:
-                        users = ",".join(header.get("actor.name") or [])
-                    if obj is None:
-                        obj = ",".join(header.get("object.id") or [])
                     config_command_value = {
                         "action": "replace", "config": parsed,
                         "nonce": uuid.uuid4().hex,
@@ -865,23 +853,16 @@ def update_tab(style, config_command, stateUrl, app_path=None):
                     new_tab = "home_tab"
         else:
             new_tab = "home_tab"
-            users = None
-            obj = None
         # A session dashboard with no dashboard name in the URL opens with no
         # tab selected: the page shows the simlet/session names first. An
         # explicit name (`default` or a saved dashboard) opens that dashboard.
         if (app_path and '/session/' in app_path and '/dashboard' in app_path
                 and (not urlValues or urlValues == "")):
-            tab = None
-            user_value = []
-            object_value = []
             print(f"Session dashboard: no tab selected ({app_path})")
-            return tab, user_value, object_value, no_update
+            return None, no_update
         tab = new_tab
-        user_value = users.split(",") if users else []
-        object_value = obj.split(",") if obj else []
-        print(f"Tab: {tab} - URL : {urlValues} - user_value : {user_value} - object_value: {object_value}")
-        return tab, user_value, object_value, config_command_value
+        print(f"Tab: {tab} - URL : {urlValues}")
+        return tab, config_command_value
     else:
         raise PreventUpdate
 
@@ -923,9 +904,9 @@ def handle_dashboard_create_modal(add_clicks, cancel_n, submit_n, name, context,
                            simlet_id=simlet_id, session_id=session_id)
             except Exception:
                 pass
-            if simlet_id is not None and session_id is not None:
+            if simlet_id and session_id:
                 return hidden, {}, f"/simlet/{simlet_id}/session/{session_id}/dashboard/{str(name).strip()}"
-            elif simlet_id is not None:
+            elif simlet_id:
                 return hidden, {}, f"/simlet/{simlet_id}/dashboard/{str(name).strip()}"
             else:
                 return hidden, {}, f"/dashboard/{str(name).strip()}"
@@ -1011,9 +992,9 @@ def delete_dashboard(remove_n_clicks, pathname, url_pathname):
     effective_path = pathname if (pathname and '/simlet/' in pathname) else url_pathname
     if not effective_path:
         effective_path = '/'
-    if simlet_id is not None and session_id is not None:
+    if simlet_id and session_id:
         redirect = f"/simlet/{simlet_id}/session/{session_id}"
-    elif simlet_id is not None:
+    elif simlet_id:
         redirect = f"/simlet/{simlet_id}"
     else:
         redirect = "/dashboard/"
@@ -1260,14 +1241,12 @@ def render_add_slot(target, edit_mode=True):
 
 def render_page_items(df, charts, filters, target, edit_mode=True,
                       show_filters=True):
-    """A page's contents: filter row, charts, then one + slot.
+    """A page's contents: charts, then one + slot.
 
-    Returned as a flat list so the layout controls can place each chart on the
-    grid instead of treating the whole page as one item. The filter row is
-    omitted by the app because filters live in the dashboard's top bar.
+    Filters are rendered in the dashboard's top bar (render_top_filter_bar),
+    not here.
     """
-    items = ([render_filter_controls(filters, target, df, edit_mode)]
-             if show_filters else [])
+    items = []
     for index, spec in enumerate(charts or []):
         items.append(render_item(spec, index, target, df, edit_mode=edit_mode))
     items.append(render_add_slot(target, edit_mode))
@@ -1275,15 +1254,17 @@ def render_page_items(df, charts, filters, target, edit_mode=True,
 
 
 def dashboard_tab_children(pages, edit_mode=False):
-    """User-defined tabs, the new-tab +, then home_tab as built-in.
+    """HomePage, the user-defined tabs, then the new-tab +.
 
-    The + is the last tab entry, after the built-ins and all user pages. It
+    The + is the last tab entry, after the built-in and all user pages. It
     stays in the DOM in view mode
     so its callback output always has a component to write to; the tab and its
     button are hidden until edit mode is on.
     """
     tabs = []
-    # Built-in system tabs that are always available (not from the definition file).
+    # HomePage is the only built-in system tab; every other tab is a page the
+    # user made (saved dashboard), so dashboards no longer open on an empty
+    # "Create" canvas.
     tabs.append(dcc.Tab(id='dashboard-tab-home_tab', value='home_tab',
                         label=dashboard_tab_label('HomePage',
                             'M3 11l9-8 9 8v9a1 1 0 0 1-1 1h-5v-6H9v6H4a1 1 0 0 1-1-1z')))
@@ -1754,13 +1735,11 @@ def update_page_state(page_add_n, page_rename_n, page_delete_n, item_add_n,
 
     page = page_by_key(pages, key)
     if page is not None:
-        if has_data:
-            page['charts'] = target_charts[:MAX_CREATED_CHARTS]
-            page['filters'] = target_filters[:MAX_PAGE_FILTERS]
+        page['charts'] = target_charts[:MAX_CREATED_CHARTS]
+        page['filters'] = target_filters[:MAX_PAGE_FILTERS]
     else:
-        if has_data:
-            charts = target_charts[:MAX_CREATED_CHARTS]
-            filters = target_filters[:MAX_PAGE_FILTERS]
+        charts = target_charts[:MAX_CREATED_CHARTS]
+        filters = target_filters[:MAX_PAGE_FILTERS]
     print(f"Pages: {len(pages)} - charts: {len(charts)} - filters: {len(filters)} "
           f"- triggered={triggered_prop_id}")
     return (pages[:12], charts[:MAX_CREATED_CHARTS],
@@ -1785,19 +1764,13 @@ def filterObjectIdDependingTab(df, value, tab):
 
 @callback(
     [
-        Output('url-t-mon', 'pathname'),        
-        Output("users-multi-dynamic-dropdown", "options"),
-        Output('object-multi-dynamic-dropdown', "options"),
+        Output('url-t-mon', 'pathname'),
         Output('tabs-content', 'children'),
      ],
-    Input('t-mon-tabs', 'value'),
-    Input("users-multi-dynamic-dropdown", "search_value"),
-    Input("users-multi-dynamic-dropdown", "value"),
-    Input("object-multi-dynamic-dropdown", "search_value"),
-    Input("object-multi-dynamic-dropdown", "value"),
-    # Bumped by the poller only when new statements arrived, so a tick with no new
-    # data leaves this untouched and nothing is redrawn.
-    Input("lrs-data-version", "data"),
+     Input('t-mon-tabs', 'value'),
+     # Bumped by the poller only when new statements arrived, so a tick with no new
+     # data leaves this untouched and nothing is redrawn.
+     Input("lrs-data-version", "data"),
     # The activities left out of the view, so clicking one of the buttons redraws
     # whatever tab is open with the statements of the remaining activities.
     Input("activity-filter-hidden", "data"),
@@ -1829,8 +1802,7 @@ def filterObjectIdDependingTab(df, value, tab):
     # definition's own figure without rewriting the deployed JSON file.
     Input('default-graph-overrides', 'data'),
 )
-def update_output(tab, user_search_value, user_value, object_search_value, object_value,
-                  lrs_data_version=None, hidden_activities=None, created_charts=None,
+def update_output(tab, lrs_data_version=None, hidden_activities=None, created_charts=None,
                   panel_style=None, simlet_name=None, session_name=None,
                   app_path=None, graph_layout='one', graph_rows=3,
                   graph_columns=2, graph_page=1, split_x=2, split_y=2,
@@ -1846,7 +1818,7 @@ def update_output(tab, user_search_value, user_value, object_search_value, objec
         # activity buttons stay above this panel. A chosen tab must always fall
         # through, including in the upload dashboard.
         content = html.Div(render_homepage_content(), style={'padding': '20px'})
-        return (no_update, [], [], content)
+        return (no_update, content)
 
     def publish_url(query):
         # An uploaded file is local to this page; writing a relative tab query
@@ -1856,8 +1828,7 @@ def update_output(tab, user_search_value, user_value, object_search_value, objec
             return no_update
         return url_output(panel_style, query)
     # Normalize the JSON data to a pandas DataFrame
-    if ('object-multi-dynamic-dropdown' in triggered_prop_id or 'users-multi-dynamic-dropdown' in triggered_prop_id
-            or 't-mon-tabs' in triggered_prop_id or 'lrs-data-version' in triggered_prop_id
+    if ('t-mon-tabs' in triggered_prop_id or 'lrs-data-version' in triggered_prop_id
             or 'activity-filter-hidden' in triggered_prop_id or 'created-charts' in triggered_prop_id
             or 'page-filters' in triggered_prop_id or 'dashboard-pages' in triggered_prop_id
             or 'definition-filters' in triggered_prop_id or 'edit-mode' in triggered_prop_id
@@ -1866,8 +1837,6 @@ def update_output(tab, user_search_value, user_value, object_search_value, objec
         df = pd.DataFrame()
         filtered_df = pd.DataFrame()
         activity_ids = []
-        user_unique_options = []
-        object_unique_options = []
         active_charts, active_filters = [], []
         tab_def, page_def = None, None
         selected = (definition_filter_values
@@ -1888,9 +1857,10 @@ def update_output(tab, user_search_value, user_value, object_search_value, objec
             # the charts, the table and the choice lists of the dropdowns all describe
             # the same view instead of the whole session.
             df, activity_ids = filter_df_by_activities(df, hidden_activities)
-            filtered_df, user_unique_options=searchValueFromMultiSelector(df, "actor.name", user_search_value, user_value)
-            filtered_df, object_unique_options=searchValueFromMultiSelector(filtered_df, "object.id", object_search_value, object_value)
-            object_unique_options=filterObjectIdDependingTab(df, object_unique_options, tab)
+            # The dashboard's own filters (definition filters and page filters)
+            # narrow the view from here on; there is no header selector dictating
+            # a second narrowing on the same columns.
+            filtered_df = df
             # A user-defined page keeps its own charts and filters in its store
             # entry; the built-in Create tab uses the two legacy stores. Both are
             # resolved here so the page-level filters narrow every chart on the
@@ -1924,8 +1894,6 @@ def update_output(tab, user_search_value, user_value, object_search_value, objec
                 new_query_params[HIDDEN_ACTIVITIES_PARAM] = ",".join(hidden_activities)
             return (
                 publish_url(urlencode(new_query_params)),
-                user_unique_options,
-                object_unique_options,
                 html.Div(html.Div([
                     html.H3('No activity is on'),
                     html.P(
@@ -1942,6 +1910,14 @@ def update_output(tab, user_search_value, user_value, object_search_value, objec
             # Legacy link to the data tab when running on the fallback tabs.
             tab_content = render_xapi_data_tab(
                 {'markdown': ''}, filtered_df)
+        elif tab == 'create_tab':
+            # The Create tab is an empty canvas: show the visualisations heading
+            # so the user knows where their charts appear, even with no data yet.
+            tab_content = html.Div(
+                [html.H3('Your visualisations')]
+                + render_page_items(
+                    chart_df, active_charts, active_filters, tab, edit_mode,
+                    show_filters=False))
         elif tab == DefaultDashboard.XAPI_TAB_ID:
             # xAPI data table is always available in edit mode so administrators
             # can inspect raw statements. Load the definition directly since
@@ -1972,10 +1948,6 @@ def update_output(tab, user_search_value, user_value, object_search_value, objec
         else:
             tab_content = html.Div()
         new_query_params = { 'tab': tab }
-        if user_value and len(user_value)>0:
-            new_query_params["actor.name"]=",".join(user_value)
-        if object_value and len(object_value)>0:
-            new_query_params["object.id"]=",".join(object_value)
         if hidden_activities and len(hidden_activities)>0:
             # Only written when something is hidden, so a link to a whole session
             # stays the short one it is without the parameter.
@@ -2018,8 +1990,7 @@ def update_output(tab, user_search_value, user_value, object_search_value, objec
             published_url = no_update
         else:
             published_url = publish_url(new_query_string)
-        return (published_url, user_unique_options,
-                object_unique_options, tab_content)
+        return (published_url, tab_content)
     else:
         raise PreventUpdate
 
@@ -2849,19 +2820,14 @@ TMonBody=html.Div([
         # own a tab, a hidden-activity list, a page or the layout listen to it.
         dcc.Store(id='config-command', data=None),
         dcc.Download(id='config-download'),
-        # Dashboard header: where the user is, the filters and the activity
-        # selector. This replaces the SIMVA browser while a dashboard is open,
-        # so those controls no longer depend on the browser being visible.
+        # Dashboard header: where the user is, the activity selector and the
+        # filters of the open page. This replaces the SIMVA browser while a
+        # dashboard is open, so those controls no longer depend on the browser
+        # being visible.
         html.Div(id='dashboard-header', children=[
             html.H3(id='dashboard-title',
                     style={'fontFamily': INTER_FONT, 'fontSize': 16,
                            'margin': '0 0 6px'}),
-            html.Div([
-                dcc.Dropdown(id='users-multi-dynamic-dropdown', multi=True,
-                             style={'width': '260px'}),
-                dcc.Dropdown(id='object-multi-dynamic-dropdown', multi=True,
-                             style={'width': '260px'}),
-            ], style={'display': 'flex', 'gap': '10px', 'marginBottom': '6px'}),
             html.Div(id='activity-filter-controls', style={'display': 'none'}, children=[
                 html.Span('Activities: ', style={'marginRight': '10px'}),
                 html.Button('All', id='activity-filter-all', n_clicks=0,
@@ -3127,18 +3093,22 @@ def toggle_edit_floater(edit_n, close_n, pages_n, layout_n, config_n,
                 'background': LIGHT_CARD, 'color': BRAND_PRIMARY,
                 'fontSize': '18px', 'cursor': 'pointer'}
 
-    # Edit management buttons are hidden until edit mode is active.
-    edit_btn_style = {'display': 'none'} if not on else {'marginLeft': '6px'}
+    def btn_style(active):
+        return {'display': 'none'} if not active else {'marginLeft': '6px'}
 
     def open_panel(mode, kind=None):
+        # Turning a panel on also switches edit mode on: show the edit buttons
+        # and the tab (+), then reveal the floater.
         return (True,
                 I18n.t('edit.mode.disable'),
-                edit_btn_style, edit_btn_style, edit_btn_style,
-                no_update, _FLOATER_VISIBLE, mode, None, None, kind)
+                btn_style(True), btn_style(True), btn_style(True),
+                tab_style(True), _FLOATER_VISIBLE, mode, None, None, kind)
 
     def close_panel():
-        return (on, no_update, no_update, no_update, no_update,
-                no_update, _FLOATER_HIDDEN, None, None, None, None)
+        # Closing the floater keeps edit mode on but hides the window; buttons
+        # and tab reflect the current edit mode.
+        return (on, no_update, btn_style(on), btn_style(on), btn_style(on),
+                tab_style(on), _FLOATER_HIDDEN, None, None, None, None)
 
     if clicked('edit-toggle.n_clicks'):
         if int(edit_n or 0) <= 0:
@@ -3146,8 +3116,8 @@ def toggle_edit_floater(edit_n, close_n, pages_n, layout_n, config_n,
         on = not on
         return (on,
                 I18n.t('edit.mode.disable' if on else 'edit.mode.enable'),
-                tab_style(on), tab_style(on), tab_style(on),
-                no_update, _FLOATER_HIDDEN, None, None, None, None)
+                btn_style(on), btn_style(on), btn_style(on),
+                tab_style(on), _FLOATER_HIDDEN, None, None, None, None)
     if (clicked('edit-floater-close.n_clicks') and int(close_n or 0) > 0
             or clicked('item-cancel.n_clicks') and int(cancel_n or 0) > 0):
         return close_panel()
@@ -3167,28 +3137,30 @@ def toggle_edit_floater(edit_n, close_n, pages_n, layout_n, config_n,
         raise PreventUpdate
     if clicked('filter-add-slot') and clicked_n('filter-add-slot'):
         raw_target = _pattern_index(trigger_prop('filter-add-slot'), '.n_clicks')
+        target = str(raw_target) if raw_target else page_key(tab)
+        if target and not target.startswith(PAGE_TAB_PREFIX):
+            target = PAGE_TAB_PREFIX + target
         return (on, no_update, no_update, no_update, no_update,
-                _FLOATER_VISIBLE, 'create',
-                str(raw_target) if raw_target else page_key(tab), None,
+                no_update, _FLOATER_VISIBLE, 'create', target, None,
                 'filter-multi')
     if clicked('item-add-slot') and clicked_n('item-add-slot'):
         raw_target = _pattern_index(trigger_prop('item-add-slot'), '.n_clicks')
         target = str(raw_target).rsplit('|', 1)[0] if raw_target else ''
         return (on, no_update, no_update, no_update, no_update,
-                _FLOATER_VISIBLE, 'create', target or page_key(tab), None, None)
+                no_update, _FLOATER_VISIBLE, 'create', target or page_key(tab), None, None)
     if clicked('item-edit') and clicked_n('item-edit'):
         return (on, no_update, no_update, no_update, no_update,
-                _FLOATER_VISIBLE, 'create', page_key(tab),
+                no_update, _FLOATER_VISIBLE, 'create', page_key(tab),
                 {'index': _pattern_index(trigger_prop('item-edit'), '.n_clicks')},
                 None)
     if clicked('default-graph-edit') and clicked_n('default-graph-edit'):
         return (on, no_update, no_update, no_update, no_update,
-                _FLOATER_VISIBLE, 'create', no_update,
+                no_update, _FLOATER_VISIBLE, 'create', no_update,
                 {'index': f"default:{_pattern_index(trigger_prop('default-graph-edit'), '.n_clicks')}"},
                 None)
     if clicked('item-add.n_clicks') and int(add_n or 0) > 0:
         return (on, no_update, no_update, no_update, no_update,
-                _FLOATER_VISIBLE, 'create', no_update, None, None)
+                no_update, _FLOATER_VISIBLE, 'create', no_update, None, None)
     raise PreventUpdate
 
 
@@ -3411,8 +3383,6 @@ def apply_config_layout(command):
         State('graph-page', 'value'),
         State('graph-split-x', 'value'),
         State('graph-split-y', 'value'),
-        State('users-multi-dynamic-dropdown', 'value'),
-        State('object-multi-dynamic-dropdown', 'value'),
         State('activity-filter-hidden', 'data'),
         State('default-graph-overrides', 'data'),
     ],
@@ -3421,7 +3391,7 @@ def handle_config_actions(export_n, save_n, import_contents, load_n, delete_n,
                           refresh_n, replace_n, append_n, cancel_n, panel_style,
                           name, selected, pending, charts, filters, pages, tab,
                           graph_layout, graph_rows, graph_columns, graph_page,
-                          split_x, split_y, users, objects, hidden,
+                          split_x, split_y, hidden,
                           default_overrides=None):
     """Export, save, load, delete and import a dashboard configuration."""
     triggered = dash.callback_context.triggered
@@ -3439,7 +3409,7 @@ def handle_config_actions(export_n, save_n, import_contents, load_n, delete_n,
                 'graph-columns': graph_columns, 'graph-page': graph_page,
                 'graph-split-x': split_x, 'graph-split-y': split_y,
             },
-            {'actor.name': users or [], 'object.id': objects or []},
+            {'actor.name': [], 'object.id': []},
             hidden or [], tab, default_overrides,
         )
 
