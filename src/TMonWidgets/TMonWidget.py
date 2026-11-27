@@ -1,5 +1,6 @@
 import base64
 import logging
+import re
 import dash
 from dash import html, dash_table, dcc, callback, Output, Input, State, no_update
 from dash.exceptions import PreventUpdate
@@ -225,20 +226,22 @@ def render_xapi_data_tab(data_tab, df):
     return html.Div(children)
 
 
-def url_output(panel_style, query_string):
+def url_output(panel_style, query_string, current_pathname=None):
     """
     The URL to publish from the dashboard, or ``no_update`` while it is hidden.
 
-    The query string written to ``url-t-mon.pathname`` is relative on purpose:
-    once the dashboard is open, a new ``tab=...`` value replaces the previous
-    one in place. Doing that while the dashboard is still hidden would instead
-    resolve against the current path and overwrite its last segment, turning a
-    simlet tile link's ``/simlet/1`` into ``/simlet/tab=home_tab``. Until a
-    selection has been analysed the URL therefore belongs to the app, not the
-    dashboard, and is left untouched.
+    The query string is appended to the current pathname so a tab redirect
+    keeps the simlet/session path: ``/simlet/1/session/2/dashboard/ss`` becomes
+    ``/simlet/1/session/2/dashboard/ss?tab=home_tab`` instead of replacing the
+    last path segment with ``tab=home_tab``. Duplicate slashes in the base path
+    are collapsed so ``dashboard//s`` never leaks into the redirect.
     """
     if panel_style == {'display': 'block'}:
-        return query_string
+        base = current_pathname.split('?')[0] if current_pathname else ''
+        # Collapse duplicate slashes so ``dashboard//s`` never leaks into the
+        # redirect (e.g. /simlet/1/session/1/dashboard//s?tab=home_tab).
+        base = re.sub(r'/+', '/', base)
+        return base + '?' + query_string
     return no_update
 
 
@@ -1082,11 +1085,18 @@ def page_by_key(pages, key):
 
 
 def items_for_key(key, pages, charts, filters):
-    """Return the charts and filters held by the active page."""
+    """Return the charts and filters held by the active page.
+
+    A store may hold a scalar instead of a list if a config was hand-edited or
+    imported from an older version; coerce to a list so unpacking never fails on
+    an ``int`` or other scalar.
+    """
+    def as_list(value):
+        return list(value) if isinstance(value, list) else []
     page = page_by_key(pages, key)
     if page is not None:
-        return list(page.get("charts") or []), list(page.get("filters") or [])
-    return list(charts or []), list(filters or [])
+        return as_list(page.get("charts")), as_list(page.get("filters"))
+    return as_list(charts), as_list(filters)
 
 
 def default_graph_key(tab_id, page_id, graph_id):
@@ -1783,6 +1793,7 @@ def filterObjectIdDependingTab(df, value, tab):
     State('current-simlet', 'children'),
     State('current-test', 'children'),
     State('url', 'pathname'),
+    State('url-t-mon', 'pathname'),
     Input('graph-layout', 'value'),
     Input('graph-rows', 'value'),
     Input('graph-columns', 'value'),
@@ -1807,7 +1818,7 @@ def update_output(tab, lrs_data_version=None, hidden_activities=None, created_ch
                   app_path=None, graph_layout='one', graph_rows=3,
                   graph_columns=2, graph_page=1, split_x=2, split_y=2,
                   page_filters=None, dashboard_pages=None, definition_filter_values=None,
-                  edit_mode=False, default_overrides=None):
+                  edit_mode=False, default_overrides=None, current_pathname=None):
     ctx = dash.callback_context
     triggered=ctx.triggered
     triggered_prop_id = ctx.triggered[0]['prop_id']
@@ -1826,7 +1837,7 @@ def update_output(tab, lrs_data_version=None, hidden_activities=None, created_ch
         # next load. Leave the dashboard URL alone in that mode.
         if app_path and '/dashboard/upload' in app_path:
             return no_update
-        return url_output(panel_style, query)
+        return url_output(panel_style, query, current_pathname)
     # Normalize the JSON data to a pandas DataFrame
     if ('t-mon-tabs' in triggered_prop_id or 'lrs-data-version' in triggered_prop_id
             or 'activity-filter-hidden' in triggered_prop_id or 'created-charts' in triggered_prop_id

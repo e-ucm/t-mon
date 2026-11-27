@@ -116,8 +116,17 @@ def test_hidden_dashboard_does_not_rewrite_the_url():
     # the id with `tab=home_tab` instead of appending to it.
     assert TMonWidget.url_output({'display': 'none'}, 'tab=home_tab') is no_update
     assert TMonWidget.url_output(None, 'tab=home_tab') is no_update
-    # Once the dashboard is open, the URL is its business again.
-    assert TMonWidget.url_output({'display': 'block'}, 'tab=home_tab') == 'tab=home_tab'
+    # Once the dashboard is open, the tab= is appended as a query parameter to
+    # the current path instead of replacing the last path segment.
+    assert TMonWidget.url_output(
+        {'display': 'block'}, 'tab=home_tab',
+        '/simlet/1/session/2/dashboard/ss') == (
+        '/simlet/1/session/2/dashboard/ss?tab=home_tab')
+    # An existing query string on the path is replaced, not duplicated.
+    assert TMonWidget.url_output(
+        {'display': 'block'}, 'tab=home_tab',
+        '/simlet/1/session/2/dashboard/ss?hidden_activities=x') == (
+        '/simlet/1/session/2/dashboard/ss?tab=home_tab')
 
 
 def _texts(component):

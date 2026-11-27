@@ -1,5 +1,6 @@
 from flask import session
 import dash
+import re
 from dash import html, dcc, callback, no_update
 from dash.dependencies import Input, Output, State
 from dash.exceptions import PreventUpdate
@@ -212,6 +213,9 @@ def get_analysis_outputs(pathname, dashboardpath):
         redirect_url = f"/simlet/{simlet_id}{dashboardpath}"
     else:
         redirect_url = f"{pathname.rstrip('/')}{dashboardpath}"
+    # Collapse any duplicate slashes so a redirect such as
+    # /simlet/1/session/1/dashboard//s?tab=home_tab never leaves here.
+    redirect_url = re.sub(r'/+', '/', redirect_url)
     return browser.current_path, actual_simlet, actual_test, actual_activity, [], [], run_analyse_style, html.Div(div_list), tmon_style, redirect_url
 
 
