@@ -173,12 +173,12 @@ def test_config_endpoints(monkeypatch, tmp_path):
 
 
 def test_new_page_keys_and_lookups():
-    assert TMonWidget.page_key("create_tab") == "create_tab"
+    assert TMonWidget.page_key("create_tab") is None
     assert TMonWidget.page_key("page:abc") == "page:abc"
     pages = [{"id": "abc", "name": "Page", "charts": [1], "filters": [2]}]
     assert TMonWidget.page_by_key(pages, "page:abc") == pages[0]
     assert TMonWidget.items_for_key("page:abc", pages, [9], [8]) == ([1], [2])
-    assert TMonWidget.items_for_key("create_tab", pages, [9], [8]) == ([9], [8])
+    assert TMonWidget.items_for_key(None, pages, [9], [8]) == ([9], [8])
 
 
 def test_custom_tabs_are_built_from_named_pages():
@@ -215,9 +215,9 @@ def test_current_config_contains_everything_that_defines_a_page():
     parsed = parse_document(serialize(document))
     assert parsed["active_tab"] == "page:abc"
     assert parsed["tabs"]["custom"][0]["name"] == "My page"
-    assert parsed["create_tab"]["charts"][0]["type"] == "bar"
-    assert parsed["create_tab"]["charts"][0]["x"] == "actor.name"
-    assert parsed["create_tab"]["filters"][0]["column"] == "actor.name"
+    assert parsed["charts"][0]["type"] == "bar"
+    assert parsed["charts"][0]["x"] == "actor.name"
+    assert parsed["filters"][0]["column"] == "actor.name"
     assert parsed["layout"]["graph-layout"] == "one"
     assert parsed["header"]["actor.name"] == ["a"]
     assert parsed["hidden_activities"] == ["hidden"]
@@ -238,7 +238,7 @@ def test_page_state_loads_charts_and_filters_from_a_link(monkeypatch):
     pages, charts, filters, _ = TMonWidget.update_page_state(
         None, None, None, None, None, None,
         {'display': 'block'}, None, None, None, None,
-        'create_tab', None, None,
+        'create_tab', None, None, None,
         None, None, None, None, None, None,
         [], [], [], pathname)
     assert pages == []
@@ -265,7 +265,7 @@ def test_page_state_replaces_and_appends_imported_pages(monkeypatch):
         None, None, None, None, None, None,
         {'display': 'block'}, {'action': 'replace', 'config': document},
         None, None, None,
-        'create_tab', None, None, None, None, None, None, None, None,
+        'create_tab', None, None, None, None, None, None, None, None, None,
         existing, [], [], None)
     assert [page['id'] for page in result[0]] == ['one']
 
@@ -273,7 +273,7 @@ def test_page_state_replaces_and_appends_imported_pages(monkeypatch):
         None, None, None, None, None, None,
         {'display': 'block'}, {'action': 'append', 'config': document},
         None, None, None,
-        'create_tab', None, None, None, None, None, None, None, None,
+        'create_tab', None, None, None, None, None, None, None, None, None,
         existing, [], [], None)
     assert len(result[0]) == 2
     assert result[0][0]['id'] != result[0][1]['id']

@@ -83,7 +83,7 @@ def test_labels_travel_in_a_link_without_breaking_it():
 def test_config_documents_keep_labels():
     spec = _spec(title='Labelled')
     document = build_document(charts=[spec])
-    assert parse_document(serialize(document))['create_tab']['charts'] == [spec]
+    assert parse_document(serialize(document))['charts'] == [spec]
 
 
 # --- layout exposes edit-mode controls ------------------------------------
@@ -159,8 +159,8 @@ def test_page_state_arguments_follow_dash_input_then_state_order():
         'item_remove_n', 'filter_values', 'panel_style', 'config_command',
         'tab_remove_clicks', 'confirm_remove_n', 'new_tab_n',
     ]
-    assert params[11:24] == [
-        'tab', 'target', 'page_name', 'item_kind', 'item_chart_type',
+    assert params[11:25] == [
+        'tab', 'target', 'page_name', 'page_icon', 'item_kind', 'item_chart_type',
         'item_column', 'item_game', 'item_target', 'item_mode',
         'pages', 'charts', 'filters', 'pathname',
     ]
@@ -357,14 +357,13 @@ def test_top_bar_shows_all_filters_and_the_filter_add_slot(monkeypatch):
         {'actor': {'name': 'a'}, 'object': {'id': 'x'},
          'verb': {'id': 'http://example.com/verb'}},
     ])
-    pages = [{'id': 'p1', 'name': 'Page', 'charts': [], 'filters': []}]
     filters = [normalise_filter({'column': 'actor.name', 'mode': 'single'})]
+    pages = [{'id': 'p1', 'name': 'Page', 'charts': [], 'filters': filters}]
     bar = TMonWidget.render_top_filter_bar(
-        'progress_tab', pages, filters, {}, [], None, True, {'display': 'block'})
+        'page:p1', pages, [], {}, [], None, True, {'display': 'block'})
     ids = [getattr(node, 'id', None) for node in _walk(bar)]
-    assert {'type': 'definition-filter', 'index': 'player'} in ids
-    assert {'type': 'page-filter', 'index': 'create_tab:0'} in ids
-    assert {'type': 'filter-add-slot', 'index': 'create_tab'} in ids
+    assert {'type': 'page-filter', 'index': 'page:p1:0'} in ids
+    assert {'type': 'filter-add-slot', 'index': 'page:p1'} in ids
 
 
 def test_filter_add_slot_is_hidden_at_the_total_limit(monkeypatch):
@@ -374,11 +373,12 @@ def test_filter_add_slot_is_hidden_at_the_total_limit(monkeypatch):
         {'actor': {'name': 'a'}, 'object': {'id': 'x'},
          'verb': {'id': 'http://example.com/verb'}},
     ])
-    # The Create tab has the two dashboard-wide filters; add enough to pass 6.
+    # A page with enough filters to reach the total limit
     filters = [normalise_filter({'column': 'actor.name', 'mode': 'single'})
                for _ in range(MAX_TOTAL_FILTERS)]
     bar = TMonWidget.render_top_filter_bar(
-        'create_tab', [], filters, {}, [], None, True, {'display': 'block'})
+        'page:p1', [{'id': 'p1', 'name': 'Page', 'charts': [], 'filters': filters}],
+        filters, {}, [], None, True, {'display': 'block'})
     ids = [getattr(node, 'id', None) for node in _walk(bar)]
     assert not any(isinstance(i, dict) and i.get('type') == 'filter-add-slot'
                    for i in ids)
@@ -388,25 +388,26 @@ def test_add_filter_is_rejected_at_the_total_limit(monkeypatch):
     from TMonWidgets.MultiSelector import normalise_filter
 
     _ctx(monkeypatch, 'item-add.n_clicks')
-    # progress_tab has 3 definition filters; 3 user filters reach the cap of 6.
+    # A page with enough filters to reach the total limit
     filters = [normalise_filter({'column': 'actor.name', 'mode': 'single'})
                for _ in range(3)]
     result = TMonWidget.update_page_state(
         None, None, None, 1, None, None, {'display': 'block'}, None,
-        None, None, None, 'progress_tab', None, None,
+        None, None, None, 'page:p1', None, None,
         'filter-multi', None, 'actor.name', None, None, None,
-        [], [], filters, None)
-    assert len(result[2]) == 3
+        [{'id': 'p1', 'name': 'Page', 'charts': [], 'filters': filters}], [], [], None,
+        None)
+    assert len(result[0][0]['filters']) == 3
     assert result[3] == I18n.t('visual.max_filters')
 
 
 def test_filter_add_slot_opens_create_panel_with_a_filter(monkeypatch):
     _ctx(monkeypatch,
-         '{"index":"create_tab","type":"filter-add-slot"}.n_clicks')
+         '{"index":"p1","type":"filter-add-slot"}.n_clicks')
     result = TMonWidget.toggle_edit_floater(
-        0, 0, 0, 0, 0, [], [1], 0, 0, [], [], 0, 'create_tab', True)
+        0, 0, 0, 0, 0, [], [1], 0, 0, [], [], 0, 'page:p1', True)
     assert result[4] == 'create'
-    assert result[5] == 'create_tab'
+    assert result[5] == 'page:p1'
     assert result[6] is None
     assert result[7] == 'filter-multi'
 

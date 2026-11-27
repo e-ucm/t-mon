@@ -51,10 +51,8 @@ def build_document(charts=None, filters=None, pages=None, layout=None,
         "tabs": {
             "custom": list(pages or []),
         },
-        "create_tab": {
-            "charts": list(charts or []),
-            "filters": list(filters or []),
-        },
+        "charts": list(charts or []),
+        "filters": list(filters or []),
         # An administrator's edits of the default dashboard's graphs. Empty for
         # a document that never touched them, so old files stay the same shape.
         "default_graph_overrides": _clean_overrides(
@@ -140,7 +138,6 @@ def parse_document(text):
     if version != FORMAT_VERSION:
         raise ValueError(f"Unsupported configuration version: {version!r}.")
     tabs = raw.get("tabs") if isinstance(raw.get("tabs"), dict) else {}
-    create = raw.get("create_tab") if isinstance(raw.get("create_tab"), dict) else {}
     header = raw.get("header") if isinstance(raw.get("header"), dict) else {}
     hidden = raw.get("hidden_activities") if isinstance(raw.get("hidden_activities"), list) else []
     layout = raw.get("layout") if isinstance(raw.get("layout"), dict) else {}
@@ -148,10 +145,8 @@ def parse_document(text):
         "version": FORMAT_VERSION,
         "active_tab": str(raw.get("active_tab") or ""),
         "tabs": {"custom": _clean_pages(tabs.get("custom") or [])},
-        "create_tab": {
-            "charts": _clean_charts(create.get("charts") or []),
-            "filters": _clean_filters(create.get("filters") or []),
-        },
+        "charts": _clean_charts(raw.get("charts") or []),
+        "filters": _clean_filters(raw.get("filters") or []),
         "default_graph_overrides": _clean_overrides(
             raw.get("default_graph_overrides") or {}),
         "header": {

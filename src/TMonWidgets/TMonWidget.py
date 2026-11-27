@@ -1298,7 +1298,8 @@ def dashboard_tab_children(pages, edit_mode=False):
             continue
         identifier = str(page["id"])
         label = dashboard_tab_label(
-            str(page.get("name") or I18n.t('page.unnamed')), 'M12 5v14M5 12h14')
+            str(page.get("name") or I18n.t('page.unnamed')),
+            page.get("icon", DEFAULT_TAB_ICON_PATH))
         if edit_mode:
             label.children = list(label.children) + [
                 html.Button('×', id={'type': 'tab-remove', 'index': identifier},
@@ -1551,6 +1552,7 @@ def _pattern_index(prop_id, suffix):
         State('t-mon-tabs', 'value'),
         State('edit-floater-target', 'data'),
         State('page-name-input', 'value'),
+        State('page-icon-input', 'value'),
         State('item-kind', 'value'),
         State('item-chart-type', 'value'),
         State('item-column', 'value'),
@@ -1577,7 +1579,7 @@ def update_page_state(page_add_n, page_rename_n, page_delete_n, item_add_n,
                       # Dash passes every Input before every State. These three
                       # belong here, with the other Inputs, not after the States.
                       tab_remove_clicks, confirm_remove_n, new_tab_n,
-                      tab, target, page_name,
+                      tab, target, page_name, page_icon,
                       item_kind, item_chart_type, item_column, item_game,
                       item_target, item_mode,
                       pages, charts, filters, pathname,
@@ -1605,8 +1607,6 @@ def update_page_state(page_add_n, page_rename_n, page_delete_n, item_add_n,
     if 'config-command' in triggered_prop_id and (config_command or {}).get('config'):
         config = config_command['config']
         imported_pages = list((config.get('tabs') or {}).get('custom') or [])
-        imported_charts = list((config.get('create_tab') or {}).get('charts') or [])
-        imported_filters = list((config.get('create_tab') or {}).get('filters') or [])
         if config_command.get('action') == 'append':
             known_ids = {str(page.get('id')) for page in pages}
             for page in imported_pages:
@@ -1617,29 +1617,21 @@ def update_page_state(page_add_n, page_rename_n, page_delete_n, item_add_n,
                 page['id'] = identifier
                 known_ids.add(identifier)
                 pages.append(page)
-            charts = charts + imported_charts
             # Filters describe the view, not a chart: adding the same one twice
             # would narrow nothing twice and clutter the row.
             known_filters = {json.dumps(spec, sort_keys=True) for spec in filters}
-            for spec in imported_filters:
-                fingerprint = json.dumps(spec, sort_keys=True)
-                if fingerprint not in known_filters:
-                    filters.append(spec)
-                    known_filters.add(fingerprint)
         else:
             pages = imported_pages
-            charts = imported_charts
-            filters = imported_filters
         status = I18n.t('config.status')
         return (pages[:12], charts[:MAX_CREATED_CHARTS],
-                filters[:MAX_PAGE_FILTERS], status, status)
+                filters[:MAX_PAGE_FILTERS], status)
 
     if ('tab-remove-confirm' in triggered_prop_id
             and int(confirm_remove_n or 0) > 0 and pending_remove):
         # Only user-defined pages can be removed: built-in and reserved tabs have
         # no remove control, and the guard keeps a forged id from deleting them.
         removed = str(pending_remove)
-        if removed not in (CREATE_TAB_KEY, DefaultDashboard.XAPI_TAB_ID):
+        if removed not in (DefaultDashboard.XAPI_TAB_ID,):
             pages = [page for page in pages if str(page.get('id')) != removed]
             status = I18n.t('config.status')
         return (pages[:12], charts[:MAX_CREATED_CHARTS],
@@ -1659,6 +1651,7 @@ def update_page_state(page_add_n, page_rename_n, page_delete_n, item_add_n,
         pages.append({
             'id': identifier,
             'name': str(page_name or f"{I18n.t('page.unnamed')} {len(pages) + 1}"),
+            'icon': page_icon or DEFAULT_TAB_ICON_PATH,
             'charts': [], 'filters': [],
         })
         status = I18n.t('visual.added')
@@ -1756,11 +1749,10 @@ def update_page_state(page_add_n, page_rename_n, page_delete_n, item_add_n,
                 target_charts = current + [spec]
                 status = I18n.t('visual.added')
 
-    if key != CREATE_TAB_KEY:
-        page = page_by_key(pages, key)
-        if page is not None:
-            page['charts'] = target_charts[:MAX_CREATED_CHARTS]
-            page['filters'] = target_filters[:MAX_PAGE_FILTERS]
+    page = page_by_key(pages, key)
+    if page is not None:
+        page['charts'] = target_charts[:MAX_CREATED_CHARTS]
+        page['filters'] = target_filters[:MAX_PAGE_FILTERS]
     else:
         charts = target_charts[:MAX_CREATED_CHARTS]
         filters = target_filters[:MAX_PAGE_FILTERS]
@@ -1771,22 +1763,19 @@ def update_page_state(page_add_n, page_rename_n, page_delete_n, item_add_n,
 
 
 def filterObjectIdDependingTab(df, value, tab):
-    if tab == "progress_tab":
-        vals=df.loc[df["object.definition.type"]=="https://w3id.org/xapi/seriousgames/activity-types/serious-game"]["object.id"].unique()
-    elif tab == "video_tab":
-        vals=df.loc[df["object.definition.type"]=="https://w3id.org/xapi/seriousgames/activity-types/Cutscene"]["object.id"].unique()
-    elif tab == "completable_tab":
-        vals=df.loc[df["object.definition.type"]=="https://w3id.org/xapi/seriousgames/activity-types/level"]["object.id"].unique()
-    elif tab == "alternative_tab":
-        vals=df.loc[df["object.definition.type"]=="https://w3id.org/xapi/seriousgames/activity-types/Alternative"]["object.id"].unique()
-    elif tab == "interaction_tab":
-        vals=df.loc[df["object.definition.type"]=="https://w3id.org/xapi/seriousgames/activity-types/Screen"]["object.id"].unique()
-    elif tab == "accessible_tab":
-        vals=df.loc[df["object.definition.type"]=="https://w3id.org/xapi/seriousgames/activity-types/Screen"]["object.id"].unique()
-    elif tab == "menu_tab":
-        vals=df.loc[df["object.definition.type"]=="https://w3id.org/xapi/seriousgames/activity-types/Screen"]["object.id"].unique()
+    """Filter object ids by the activity type defined in the tab definition.
+
+    Reads the ``object_filter`` field from the tab definition in
+    DASHBOARD_DEFINITION instead of hardcoding tab ids to activity types.
+    """
+    tab_def, _ = default_tab_page(tab)
+    object_type = None
+    if tab_def is not None:
+        object_type = tab_def.get("object_filter")
+    if object_type is not None:
+        vals = df.loc[df["object.definition.type"] == object_type]["object.id"].unique()
     else:
-        vals=value
+        vals = value
     return vals
 
 @callback(
@@ -1905,7 +1894,7 @@ def update_output(tab, user_search_value, user_value, object_search_value, objec
                 # header selectors, dashboard filters, tab filters, page filters.
                 chart_df = DefaultDashboard.apply_filters(
                     filtered_df, definition_filters(tab_def, page_def, selected))
-            elif tab == CREATE_TAB_KEY or tab.startswith(PAGE_TAB_PREFIX):
+            elif tab.startswith(PAGE_TAB_PREFIX):
                 chart_df = apply_page_filters(filtered_df, active_filters)
             else:
                 chart_df = filtered_df
@@ -1938,35 +1927,10 @@ def update_output(tab, user_search_value, user_value, object_search_value, objec
             # The audit tab ignores dashboard filters: it shows the full set
             # of statements the header and activity controls left in view.
             tab_content = render_xapi_data_tab(tab_def, filtered_df)
-        elif tab_def is not None and tab_def['id'] == 'create_tab':
-            # The Create tab and every user-defined page share one renderer:
-            # a row of filters, the named charts, and one + slot to add more.
-            tab_content = html.Div([
-                html.H3('Your visualisations'),
-                html.P(
-                    "Every chart you create is listed here and drawn from the statements the "
-                    "filters leave in the view. Add one with the + button below."
-                ),
-            ] + render_page_items(chart_df, active_charts, active_filters,
-                                  CREATE_TAB_KEY, edit_mode,
-                                  show_filters=False))
         elif tab == 'data_tab':
             # Legacy link to the data tab when running on the fallback tabs.
             tab_content = render_xapi_data_tab(
                 {'markdown': ''}, filtered_df)
-        elif tab == 'create_tab':
-            # The Create tab and every user-defined page share one renderer:
-            # a row of filters, the named charts, and one + slot to add more.
-            # They all draw from chart_df, which the page filters narrowed.
-            tab_content=html.Div([
-                html.H3('Your visualisations'),
-                html.P(
-                    "Every chart you create is listed here and drawn from the statements the "
-                    "filters leave in the view. Add one with the + button below."
-                ),
-            ] + render_page_items(chart_df, active_charts, active_filters,
-                                  CREATE_TAB_KEY, edit_mode,
-                                  show_filters=False))
         elif tab == DefaultDashboard.XAPI_TAB_ID:
             # xAPI data table is always available in edit mode so administrators
             # can inspect raw statements. Load the definition directly since
@@ -2554,11 +2518,22 @@ def edit_floater_create_panel():
 def edit_floater_pages_panel():
     """Page title and layout together, used on create and on Edit page.
 
-    The page name (title) and the graph layout are one panel: a new page is
+    The page name (title), icon and the graph layout are one panel: a new page is
     created with the same controls used to rename and rearrange an existing one
     (ADR 0024).
     """
     label_style = {'fontSize': 12, 'marginRight': '4px'}
+    ICON_OPTIONS = [
+        ('M12 5v14M5 12h14', 'Document'),
+        ('M12 2L2 7l10 5 10-5-10-5z', 'Chart'),
+        ('M2 12h20l-5-5-5-5-5 5-5 5z', 'Bar Chart'),
+        ('M12 2L2 12l10 10 10-10z', 'Pie Chart'),
+        ('M2 3h20v14H2z', 'Table'),
+        ('M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2z', 'Chart Circle'),
+        ('M14 2H6c-1.1 0-1.99.9-1.99 2L4 14c0 1.1.89 2 1.99 2H18c1.1 0 2-.9 2-2V8l-6-6zm2 16H8v-2h8v2zm0-4H8v-2h8v2zm0-3h-3V6h2V5H8V3H6v6H2v2h18V8H6z', 'Dashboard'),
+        ('M19 3H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zm-1 16H6v-2h12v2zm0-4H6V8l6 4 6-4v6z', 'Board'),
+        ('M5 5h14v3H5zM5 9h14v5H5zM5 16h14v3H5z', 'Layers'),
+    ]
     return html.Div(
         id='edit-floater-pages', style={'display': 'none'},
         children=[
@@ -2568,6 +2543,14 @@ def edit_floater_pages_panel():
                 dcc.Input(id='page-name-input', type='text',
                           placeholder=I18n.t('page.name'),
                           style={'width': '200px', 'marginRight': '6px'}),
+                html.Span(I18n.t('page.icon'), style={'marginRight': '6px'}),
+                dcc.Dropdown(
+                    id='page-icon-input',
+                    options=[{'label': label, 'value': path}
+                             for path, label in ICON_OPTIONS],
+                    value=DEFAULT_TAB_ICON_PATH,
+                    clearable=False,
+                    style={'width': '160px', 'marginRight': '6px'}),
                 html.Button(I18n.t('page.add'), id='page-add', n_clicks=0,
                             style={'marginRight': '4px'}),
                 html.Button(I18n.t('page.rename'), id='page-rename', n_clicks=0,
@@ -3237,7 +3220,7 @@ def prefill_item_modal(edit_index, floater_kind, target, charts, filters, pages,
     except ValueError:
         raise PreventUpdate
     target_charts, target_filters = items_for_key(
-        str(target or CREATE_TAB_KEY), pages, charts, filters)
+        str(target), pages, charts, filters)
     if kind == 'filter':
         if not (0 <= index < len(target_filters)):
             raise PreventUpdate

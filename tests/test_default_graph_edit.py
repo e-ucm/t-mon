@@ -204,7 +204,7 @@ def test_editing_a_default_graph_does_not_add_a_page_chart(monkeypatch):
     _, charts, _, _ = TMonWidget.update_page_state(
         None, None, None, 1, None, None,
         {'display': 'block'}, None, None, None, None,
-        'progress_tab', None, None,
+        'progress_tab', None, None, None,
         'bar', None, 'actor.name', None, None, None,
         [], [], [], None,
         item_edit_index={'index': f'default:{KEY}'})

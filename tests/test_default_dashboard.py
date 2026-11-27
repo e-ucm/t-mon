@@ -332,7 +332,7 @@ def test_definition_filter_choice_is_saved(monkeypatch):
 def test_named_pages_are_appended_after_builtin_tabs():
     pages = [{"id": "mine", "name": "Mine", "charts": [], "filters": []}]
     ids = [tab.value for tab in TMonWidget.dashboard_tab_children(pages)]
-    assert ids[-3] == "create_tab"
+    assert ids[-3] == "home_tab"
     assert ids[-2] == "page:mine"
     assert ids[-1] == "__new_tab__"
 
