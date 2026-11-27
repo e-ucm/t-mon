@@ -329,20 +329,21 @@ def test_definition_filter_choice_is_saved(monkeypatch):
 # --- tab wiring and reserved data tab --------------------------------------
 
 
-def test_named_pages_are_appended_after_the_definition_tabs():
+def test_named_pages_are_appended_after_builtin_tabs():
     pages = [{"id": "mine", "name": "Mine", "charts": [], "filters": []}]
     ids = [tab.value for tab in TMonWidget.dashboard_tab_children(pages)]
-    assert ids[-3] == DefaultDashboard.XAPI_TAB_ID
+    assert ids[-3] == "create_tab"
     assert ids[-2] == "page:mine"
     assert ids[-1] == "__new_tab__"
 
 
-def test_legacy_tabs_remain_the_fallback():
+def test_legacy_tabs_are_no_longer_shown():
+    # T-Mon no longer ships default dashboard tabs. Users create their own.
     definition = TMonWidget.DASHBOARD_DEFINITION
     TMonWidget.DASHBOARD_DEFINITION = None
     try:
-        assert TMonWidget.dashboard_tabs() == TMonWidget.DASHBOARD_TABS
-        assert "dashboard-tab-data_tab" in [
+        assert TMonWidget.dashboard_tabs() == []
+        assert "dashboard-tab-data_tab" not in [
             tab.id for tab in TMonWidget.dashboard_tab_children([])]
     finally:
         TMonWidget.DASHBOARD_DEFINITION = definition

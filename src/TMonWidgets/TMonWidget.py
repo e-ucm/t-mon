@@ -61,9 +61,7 @@ import uuid
 HIDDEN_ACTIVITIES_PARAM = "hidden-activity"
 
 # A user-defined visualisation page is a tab whose value starts with this prefix;
-# the built-in Create tab keeps the plain ``create_tab`` value for old links.
 PAGE_TAB_PREFIX = "page:"
-CREATE_TAB_KEY = "create_tab"
 
 # Edit mode reveals the controls that change a dashboard: removing a tab or a
 # visualisation, adding a tab, and editing a graph with its labels. In view mode the
@@ -113,15 +111,13 @@ DEFAULT_TAB_ICON_PATH = 'M12 5v14M5 12h14'
 
 
 def dashboard_tabs():
-    """The tab bar of the deployed dashboard, or the compatibility tabs."""
-    definition = DASHBOARD_DEFINITION
-    if not definition:
-        return DASHBOARD_TABS
-    icons = {value: icon for value, _, icon in DASHBOARD_TABS}
-    return [
-        (tab['id'], tab['title'], icons.get(tab['id'], DEFAULT_TAB_ICON_PATH))
-        for tab in definition['tabs']
-    ]
+    """The tab bar of the deployed dashboard, or the compatibility tabs.
+
+    Returns an empty list: T-Mon no longer ships default dashboard tabs
+    (Progress, Videos, etc.). Users create their own tabs and pages.
+    Only home_tab and create_tab are available as built-in system tabs.
+    """
+    return []
 
 
 def default_tab_page(tab):
@@ -732,9 +728,14 @@ def render_dashboard_tiles(dashboards, simlet_id=None, session_id=None):
             tiles.append(html.Div(style={'clear': 'both'}))
 
     # [+] tile to create a new dashboard (ADR 0025).
+    add_index = (
+        f"simlet_id:{simlet_id or ''}|session_id:{session_id or ''}"
+        if (simlet_id is not None or session_id is not None)
+        else 'new'
+    )
     tiles.append(html.Button(
         '+',
-        id={'type': 'dashboard-add', 'index': 'new'},
+        id={'type': 'dashboard-add', 'index': add_index},
         n_clicks=0,
         title=I18n.t('dashboard.new'),
         style={
@@ -887,15 +888,17 @@ def update_tab(style, config_command, stateUrl, app_path=None):
 
 @callback(
     [Output('dashboard-create-modal', 'style'),
+     Output('dashboard-create-context', 'data'),
      Output('dashboard-redirect', 'href')],
     [Input({'type': 'dashboard-add', 'index': dash.dependencies.ALL}, 'n_clicks'),
      Input('dashboard-create-cancel', 'n_clicks'),
      Input('dashboard-create-submit', 'n_clicks')],
     [State('dashboard-create-name', 'value'),
+     State('dashboard-create-context', 'data'),
      State('url-t-mon', 'pathname')],
     prevent_initial_call=True,
 )
-def handle_dashboard_create_modal(add_clicks, cancel_n, submit_n, name, pathname):
+def handle_dashboard_create_modal(add_clicks, cancel_n, submit_n, name, context, pathname):
     triggered = (dash.callback_context.triggered or [{}])[0].get('prop_id', '')
     hidden = {'display': 'none', 'position': 'fixed', 'inset': 0,
               'zIndex': 10000, 'justifyContent': 'center',
@@ -905,9 +908,11 @@ def handle_dashboard_create_modal(add_clicks, cancel_n, submit_n, name, pathname
                'alignItems': 'center', 'backgroundColor': 'rgba(0,0,0,0.4)'}
     if 'dashboard-create-submit' in triggered:
         if submit_n and name:
-            simlet_id = None
-            session_id = None
-            if pathname and '/simlet/' in pathname:
+            # Read simlet_id/session_id from the store (set when "+" was clicked),
+            # falling back to the URL pathname.
+            simlet_id = (context or {}).get('simlet_id')
+            session_id = (context or {}).get('session_id')
+            if simlet_id is None and session_id is None and pathname and '/simlet/' in pathname:
                 parts = pathname.strip('/').split('/')
                 if len(parts) >= 2 and parts[0] == 'simlet':
                     simlet_id = parts[1]
@@ -919,16 +924,43 @@ def handle_dashboard_create_modal(add_clicks, cancel_n, submit_n, name, pathname
             except Exception:
                 pass
             if simlet_id is not None and session_id is not None:
-                return hidden, f"/simlet/{simlet_id}/session/{session_id}/dashboard/{str(name).strip()}"
+                return hidden, {}, f"/simlet/{simlet_id}/session/{session_id}/dashboard/{str(name).strip()}"
             elif simlet_id is not None:
-                return hidden, f"/simlet/{simlet_id}/dashboard/{str(name).strip()}"
+                return hidden, {}, f"/simlet/{simlet_id}/dashboard/{str(name).strip()}"
             else:
-                return hidden, f"/dashboard/{str(name).strip()}"
-        return hidden, dash.no_update
+                return hidden, {}, f"/dashboard/{str(name).strip()}"
+        return hidden, {}, dash.no_update
     if 'dashboard-create-cancel' in triggered:
-        return hidden, dash.no_update
+        return hidden, {}, dash.no_update
     if any(int(click or 0) > 0 for click in (add_clicks or [])):
-        return visible, dash.no_update
+        # Store the simlet_id/session_id from the clicked "+" button's index,
+        # so the dashboard is saved at the location nearest the closest session.
+        simlet_id = None
+        session_id = None
+        prop_id = (dash.callback_context.triggered or [{}])[0].get('prop_id', '')
+        if 'dashboard-add' in prop_id:
+            try:
+                btn_id = __import__('json').loads(prop_id.rsplit('.n_clicks', 1)[0])
+                idx = btn_id.get('index', '')
+                if isinstance(idx, str) and '|' in idx:
+                    for part in idx.split('|'):
+                        if ':' in part:
+                            k, v = part.split(':', 1)
+                            if v:
+                                if k == 'simlet_id':
+                                    simlet_id = v
+                                elif k == 'session_id':
+                                    session_id = v
+            except Exception:
+                pass
+        # Fall back to URL pathname if the button index didn't carry context.
+        if (simlet_id is None and session_id is None) and pathname and '/simlet/' in pathname:
+            parts = pathname.strip('/').split('/')
+            if len(parts) >= 2 and parts[0] == 'simlet':
+                simlet_id = parts[1]
+                if len(parts) >= 4 and parts[2] == 'session':
+                    session_id = parts[3]
+        return visible, {'simlet_id': simlet_id, 'session_id': session_id}, dash.no_update
     raise PreventUpdate
 
 
@@ -1054,7 +1086,7 @@ def page_key(tab):
     """The item-store key for a tab value."""
     if isinstance(tab, str) and tab.startswith(PAGE_TAB_PREFIX):
         return tab
-    return CREATE_TAB_KEY
+    return None
 
 
 def page_by_key(pages, key):
@@ -1243,18 +1275,24 @@ def render_page_items(df, charts, filters, target, edit_mode=True,
 
 
 def dashboard_tab_children(pages, edit_mode=False):
-    """Built-in tabs, the new-tab +, then the user's named pages.
+    """User-defined tabs, the new-tab +, then home_tab as built-in.
 
     The + is the last tab entry, after the built-ins and all user pages. It
     stays in the DOM in view mode
     so its callback output always has a component to write to; the tab and its
     button are hidden until edit mode is on.
     """
-    tabs = [
-        dcc.Tab(id=f'dashboard-tab-{value}', value=value,
-                label=dashboard_tab_label(label, icon))
-        for value, label, icon in dashboard_tabs()
-    ]
+    tabs = []
+    # Built-in system tabs that are always available (not from the definition file).
+    tabs.append(dcc.Tab(id='dashboard-tab-home_tab', value='home_tab',
+                        label=dashboard_tab_label('HomePage', DEFAULT_TAB_ICON_PATH)))
+    # The xAPI data table is always available in edit mode so administrators can
+    # inspect raw statements.
+    if edit_mode:
+        tabs.append(dcc.Tab(id='dashboard-tab-xapi_data',
+                            value=DefaultDashboard.XAPI_TAB_ID,
+                            label=dashboard_tab_label(
+                                'xAPI Data', DEFAULT_TAB_ICON_PATH)))
     for page in pages or []:
         if not isinstance(page, dict) or not page.get("id"):
             continue
@@ -1929,13 +1967,27 @@ def update_output(tab, user_search_value, user_value, object_search_value, objec
             ] + render_page_items(chart_df, active_charts, active_filters,
                                   CREATE_TAB_KEY, edit_mode,
                                   show_filters=False))
+        elif tab == DefaultDashboard.XAPI_TAB_ID:
+            # xAPI data table is always available in edit mode so administrators
+            # can inspect raw statements. Load the definition directly since
+            # DASHBOARD_DEFINITION may be None.
+            xapi_def = DefaultDashboard.load().get("xapi_data_tab", {})
+            tab_content = render_xapi_data_tab(xapi_def, filtered_df)
         elif tab_def is not None:
-            # A default definition tab (progress, video, etc.) uses the
-            # render_default_page renderer with its own graphs and filters.
-            tab_content = render_default_page(
-                tab_def, page_def, filtered_df, chart_df, selected,
-                edit_mode=edit_mode, admin=is_admin(),
-                overrides=default_overrides, show_filters=False)
+            # Only render default definition tabs that the user has saved
+            # in their dashboard pages. User-created dashboards start empty;
+            # default tabs (Progress, Videos, etc.) are not shown unless the
+            # user explicitly adds them.
+            saved_page_ids = {p.get("id") for p in (dashboard_pages or [])}
+            if tab_def.get("id") in saved_page_ids:
+                # A default definition tab (progress, video, etc.) uses the
+                # render_default_page renderer with its own graphs and filters.
+                tab_content = render_default_page(
+                    tab_def, page_def, filtered_df, chart_df, selected,
+                    edit_mode=edit_mode, admin=is_admin(),
+                    overrides=default_overrides, show_filters=False)
+            else:
+                tab_content = html.Div()
         elif tab.startswith(PAGE_TAB_PREFIX):
             page = page_by_key(dashboard_pages, tab)
             name = str((page or {}).get('name') or I18n.t('page.unnamed'))
@@ -2762,6 +2814,7 @@ def dashboard_create_modal_layout():
 TMonBody=html.Div([
     dcc.Location(id='url-t-mon', refresh=False), # Location component for URL handling
     dcc.Location(id='dashboard-redirect', refresh=True),
+    dcc.Store(id='dashboard-create-context', data={}),
     # Written only when the header language changes; the reload picks up lng.
     dcc.Location(id='i18n-location', refresh=True),
     # Standalone simva-front-style overlay at the app level: it lives outside
@@ -2995,7 +3048,7 @@ def update_definition_filter_values(values, current):
     value = triggered[0].get('value')
     selected = list(value) if isinstance(value, (list, tuple)) else (
         [value] if value else [])
-    updated = dict(current or {})
+    updated = dict(current if isinstance(current, dict) else {})
     updated[str(identifier)] = selected
     return updated
 

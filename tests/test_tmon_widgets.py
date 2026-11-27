@@ -235,16 +235,14 @@ def test_dashboard_tabs_are_vertical_with_svg_icons():
     assert tabs.vertical is True
     assert tabs.value is None
     tab_ids = [tab.id for tab in tabs.children]
-    # ADR 0017: the deployed JSON definition is the sole source of default tabs.
-    expected = {
-        f'dashboard-tab-{tab["id"]}'
-        for tab in TMonWidget.DASHBOARD_DEFINITION['tabs']
-    }
-    expected.add('new-tab-add-tab')
+    # T-Mon no longer ships default dashboard tabs. Only home_tab and
+    # create_tab are built-in; the rest are user-defined pages.
+    expected = {'dashboard-tab-home_tab', 'dashboard-tab-create_tab',
+                'new-tab-add-tab'}
     assert set(tab_ids) == expected
-    assert tab_ids[-2] == 'dashboard-tab-xapi_data'
     assert tab_ids[-1] == 'new-tab-add-tab'
     assert 'dashboard-tab-home_tab' in tab_ids
+    assert 'dashboard-tab-create_tab' in tab_ids
     for tab in tabs.children:
         if tab.id == 'new-tab-add-tab':
             continue
@@ -436,11 +434,11 @@ def test_upload_dashboard_tab_shows_its_content(monkeypatch):
     }
     monkeypatch.setattr(TMonWidgets, 'xapiData', [statement])
     result = TMonWidget.update_output(
-        'progress_tab', None, [], None, [],
+        'create_tab', None, [], None, [],
         panel_style={'display': 'block'}, app_path='/dashboard/upload')
     assert result[0] is no_update  # local upload must not rewrite the URL
     texts = [child for child in _walk(result[3]) if isinstance(child, str)]
-    assert any('Player Progress' in text for text in texts)
+    assert any('Your visualisations' in text for text in texts)
     assert not any('no tab selected' in text for text in texts)
 
 

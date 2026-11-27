@@ -364,7 +364,7 @@ def with_selected_values(specs, selected):
                     "values": spec[4] if len(spec) > 4 else []}
             spec_id = item.get("id", "")
         
-        values = (selected or {}).get(spec_id)
+        values = (selected if isinstance(selected, dict) else {}).get(spec_id)
         if values is not None:
             item["values"] = (list(values) if isinstance(values, (list, tuple))
                               else [values])
